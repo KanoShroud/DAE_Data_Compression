@@ -1,6 +1,4 @@
 # main.py
-# import os
-# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import torch
 import matplotlib.pyplot as plt
@@ -11,7 +9,7 @@ from evaluate import MonteCarloExperiment, plot_training_loss, plot_snr_comparis
 
 # 1. 配置参数
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-EPOCHS = 500
+EPOCHS = 100
 
 # 2. 模型训练 (调用 train.py)
 # 返回训练好的模型、信号模拟器(含配置参数)、Loss历史
