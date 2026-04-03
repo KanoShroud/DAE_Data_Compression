@@ -141,8 +141,9 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
         # 2. 频域图 (保持不变，计算双边谱)
         ax_f = axes[i, 1]
 
-        f_n, P_n = signal.periodogram(noisy_complex, fs=Fs, return_onesided=False, scaling='density')
-        f_r, P_r = signal.periodogram(recon_complex, fs=Fs, return_onesided=False, scaling='density')
+        # 增加 detrend=False，阻止 scipy 偷偷吃掉你的直流分量
+        f_n, P_n = signal.periodogram(noisy_complex, fs=Fs, return_onesided=False, scaling='density', detrend=False)
+        f_r, P_r = signal.periodogram(recon_complex, fs=Fs, return_onesided=False, scaling='density', detrend=False)
 
         f_n = np.fft.fftshift(f_n)
         P_n = np.fft.fftshift(P_n)

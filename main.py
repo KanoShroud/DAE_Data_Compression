@@ -9,7 +9,7 @@ from evaluate import MonteCarloExperiment, plot_training_loss, plot_snr_comparis
 
 # 1. 配置参数
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-EPOCHS = 100
+EPOCHS = 500
 
 # 2. 模型训练 (调用 train.py)
 # 返回训练好的模型、信号模拟器(含配置参数)、Loss历史
