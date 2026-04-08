@@ -176,7 +176,7 @@ def plot_monte_carlo(mc_data):
         plt.plot(snr_range, results['dae_16'], 'r-+', label='Data with CR=16', linewidth=1.5)
 
     plt.xlabel('SNR [dB]', fontsize=12)
-    plt.ylabel('TDOA RMSE', fontsize=12)
+    plt.ylabel('TDOA RMSE [Samples]', fontsize=12)
     plt.title('Comparison of localization performance at different CRs', fontsize=14)
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.5)
