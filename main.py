@@ -9,7 +9,7 @@ from evaluate import MonteCarloExperiment, plot_monte_carlo
 from signal_gen import SignalSimulator
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-EPOCHS = 100
+EPOCHS = 300
 CR_LIST = [4, 8, 16] # 目标验证的压缩率列表
 
 # 1. 统一生成全局数据集 (保证对比的绝对公平性)

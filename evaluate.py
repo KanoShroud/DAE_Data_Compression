@@ -18,7 +18,7 @@ class MonteCarloExperiment:
         self.sim = simulator
         self.device = device
         self.snr_range = np.arange(-10, 22, 2)
-        self.num_trials = 200
+        self.num_trials = 500
 
     def run(self):
         print("Running Monte Carlo Sweep across multiple CRs...")
@@ -29,30 +29,62 @@ class MonteCarloExperiment:
             self.models_dict[cr].eval()
 
         for snr in self.snr_range:
-            X, Y, src, delays = self.sim.generate_batch(self.num_trials, snr_db=snr)
-            X_dev = X.to(self.device)
-            raw_np = X.cpu().numpy()
+            # 1. 生成 UAV 1 (探测节点) 的数据
+            X1, Y1, src, delays1 = self.sim.generate_batch(self.num_trials, snr_db=snr)
 
-            # 1. 计算 Baseline (Raw)
+            # ================= 关键修正：合成 UAV 2 (参考节点) 的数据 =================
+            # 模拟另一个协同 UAV，接收相同的源信号，延迟固定为0（或随机），并叠加独立噪声
+            X2 = torch.zeros_like(X1)
+            for i in range(self.num_trials):
+                sig_p = np.mean(np.abs(src[i]) ** 2)
+                noise_p = sig_p / (10 ** (snr / 10))
+                # 独立的高斯白噪声
+                noise = (np.random.normal(0, 1, len(src[i])) + 1j * np.random.normal(0, 1, len(src[i]))) * np.sqrt(
+                    noise_p / 2)
+
+                # UAV 2 的接收信号 (此处简化为无多径的直达信号，仅作参考节点)
+                ref_noisy = src[i] + noise
+                X2[i, 0, :] = torch.tensor(ref_noisy.real)
+                X2[i, 1, :] = torch.tensor(ref_noisy.imag)
+            # =========================================================================
+
+            X1_dev = X1.to(self.device)
+            X2_dev = X2.to(self.device)
+            raw_np1 = X1.cpu().numpy()
+            raw_np2 = X2.cpu().numpy()
+
+            # 2. 计算 Baseline (Raw) TDOA: 两个含噪信号直接互相关
             se_raw = 0.0
             for i in range(self.num_trials):
-                sig_raw = raw_np[i, 0, :] + 1j * raw_np[i, 1, :]
-                corr_raw = signal.correlate(sig_raw, src[i], mode='same')
-                lags = signal.correlation_lags(len(sig_raw), len(src[i]), mode='same')
+                sig_raw1 = raw_np1[i, 0, :] + 1j * raw_np1[i, 1, :]
+                sig_raw2 = raw_np2[i, 0, :] + 1j * raw_np2[i, 1, :]
+
+                # 两个接收节点信号互相关 (真实的 TDOA)
+                corr_raw = signal.correlate(sig_raw1, sig_raw2, mode='same')
+                lags = signal.correlation_lags(len(sig_raw1), len(sig_raw2), mode='same')
                 delay_raw = lags[np.argmax(np.abs(corr_raw))]
-                se_raw += (delay_raw - delays[i]) ** 2
+
+                # 真实 TDOA 为 delays1[i] - 0
+                se_raw += (delay_raw - delays1[i]) ** 2
             results['raw'].append(np.sqrt(se_raw / self.num_trials))
 
-            # 2. 计算每个 CR 的 DAE 误差
+            # 3. 计算各个 DAE 的重构信号 TDOA
             for cr, model in self.models_dict.items():
                 se_dae = 0.0
                 with torch.no_grad():
-                    Y_rec = model(X_dev).cpu().numpy()
+                    # 分别对两个 UAV 的信号进行降维和去噪重构
+                    Y1_rec = model(X1_dev).cpu().numpy()
+                    Y2_rec = model(X2_dev).cpu().numpy()
+
                 for i in range(self.num_trials):
-                    sig_rec = Y_rec[i, 0, :] + 1j * Y_rec[i, 1, :]
-                    corr_dae = signal.correlate(sig_rec, src[i], mode='same')
+                    sig_rec1 = Y1_rec[i, 0, :] + 1j * Y1_rec[i, 1, :]
+                    sig_rec2 = Y2_rec[i, 0, :] + 1j * Y2_rec[i, 1, :]
+
+                    # 两个降噪后的信号互相关
+                    corr_dae = signal.correlate(sig_rec1, sig_rec2, mode='same')
                     delay_dae = lags[np.argmax(np.abs(corr_dae))]
-                    se_dae += (delay_dae - delays[i]) ** 2
+                    se_dae += (delay_dae - delays1[i]) ** 2
+
                 results[f'dae_{cr}'].append(np.sqrt(se_dae / self.num_trials))
 
         return results, self.snr_range
