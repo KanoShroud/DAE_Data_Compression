@@ -12,71 +12,50 @@ class MonteCarloExperiment:
     功能：在不同 SNR 下进行多次实验，统计 RMSE 和 Loss。
     """
 
-    def __init__(self, model, simulator, device):
-        self.model = model
+    def __init__(self, models_dict, simulator, device):
+        # models_dict: {16: model_cr16, 8: model_cr8, ...}
+        self.models_dict = models_dict
         self.sim = simulator
         self.device = device
-        # 论文设定：SNR范围 -10dB 到 20dB，步长 2dB
         self.snr_range = np.arange(-10, 22, 2)
-        # 论文设定：每个点 200 次独立实验
         self.num_trials = 200
 
     def run(self):
-        print(f"Running Monte Carlo Sweep (SNR -10 to 20dB)...")
-        tdoa_rmse_dae = []
-        tdoa_rmse_raw = []
-        recon_mse = []
+        print("Running Monte Carlo Sweep across multiple CRs...")
+        # 结果容器
+        results = {'raw': []}
+        for cr in self.models_dict.keys():
+            results[f'dae_{cr}'] = []
+            self.models_dict[cr].eval()
 
-        self.model.eval()
         for snr in self.snr_range:
-            mse_acc = 0.0
-            se_dae = 0.0
-            se_raw = 0.0
-
-            # 生成测试数据
             X, Y, src, delays = self.sim.generate_batch(self.num_trials, snr_db=snr)
-            X_dev, Y_dev = X.to(self.device), Y.to(self.device)
+            X_dev = X.to(self.device)
+            raw_np = X.cpu().numpy()
 
-            with torch.no_grad():
-                Y_rec = self.model(X_dev)
-                # 1. 记录信号恢复误差 (Reconstruction MSE)
-                mse_acc = nn.functional.mse_loss(Y_rec, Y_dev).item()
+            # 1. 计算 Baseline (Raw)
+            se_raw = 0.0
+            for i in range(self.num_trials):
+                sig_raw = raw_np[i, 0, :] + 1j * raw_np[i, 1, :]
+                corr_raw = signal.correlate(sig_raw, src[i], mode='same')
+                lags = signal.correlation_lags(len(sig_raw), len(src[i]), mode='same')
+                delay_raw = lags[np.argmax(np.abs(corr_raw))]
+                se_raw += (delay_raw - delays[i]) ** 2
+            results['raw'].append(np.sqrt(se_raw / self.num_trials))
 
-                # 转回 CPU 进行 SciPy 互相关计算
-                rec_np = Y_rec.cpu().numpy()
-                raw_np = X.cpu().numpy()
-
-                # 2. 计算 TDOA 误差 (复包络互相关)
+            # 2. 计算每个 CR 的 DAE 误差
+            for cr, model in self.models_dict.items():
+                se_dae = 0.0
+                with torch.no_grad():
+                    Y_rec = model(X_dev).cpu().numpy()
                 for i in range(self.num_trials):
-                    # 严谨的基带处理：将双通道张量还原为复数信号 (I + jQ)
-                    sig_rec = rec_np[i, 0, :] + 1j * rec_np[i, 1, :]
-                    sig_raw = raw_np[i, 0, :] + 1j * raw_np[i, 1, :]
-                    sig_src = src[i]  # signal_gen 中生成的 src 已经是复数
-
-                    true_d = delays[i]
-
-                    # --- DAE 方法 ---
-                    # 执行复数互相关
-                    corr_dae = signal.correlate(sig_rec, sig_src, mode='same')
-                    lags = signal.correlation_lags(len(sig_rec), len(sig_src), mode='same')
-                    # TDOA 估计的物理本质：寻找复互相关输出包络（模值）的峰值
+                    sig_rec = Y_rec[i, 0, :] + 1j * Y_rec[i, 1, :]
+                    corr_dae = signal.correlate(sig_rec, src[i], mode='same')
                     delay_dae = lags[np.argmax(np.abs(corr_dae))]
-                    se_dae += (delay_dae - true_d) ** 2
+                    se_dae += (delay_dae - delays[i]) ** 2
+                results[f'dae_{cr}'].append(np.sqrt(se_dae / self.num_trials))
 
-                    # --- 原始对比组 (Baseline) ---
-                    corr_raw = signal.correlate(sig_raw, sig_src, mode='same')
-                    delay_raw = lags[np.argmax(np.abs(corr_raw))]
-                    se_raw += (delay_raw - true_d) ** 2
-
-            # 计算 RMSE
-            rmse_dae = np.sqrt(se_dae / self.num_trials)
-            rmse_raw = np.sqrt(se_raw / self.num_trials)
-
-            tdoa_rmse_dae.append(rmse_dae)
-            tdoa_rmse_raw.append(rmse_raw)
-            recon_mse.append(mse_acc)
-
-        return tdoa_rmse_dae, tdoa_rmse_raw, recon_mse
+        return results, self.snr_range
 
 
 # --- 绘图函数 ---

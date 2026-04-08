@@ -49,8 +49,9 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         return self.act(x + self.net(x))
 
+
 class DAE(nn.Module):
-    def __init__(self):
+    def __init__(self, cr=16):  # 增加 cr 参数，默认 16
         super().__init__()
         # --- 编码器 (Encoder) ---
         self.enc = nn.Sequential(
@@ -62,17 +63,21 @@ class DAE(nn.Module):
 
         # --- 潜在空间 (Latent Space) ---
         self.feature_len = 43
-        self.fc_enc = nn.Linear(128 * 43, 128)
-        self.fc_dec = nn.Linear(128, 128 * 43)
+        # 动态计算压缩后的特征维度 (源数据双通道总长度2048)
+        self.latent_dim = 2048 // cr
+
+        self.fc_enc = nn.Linear(128 * 43, self.latent_dim)
+        self.fc_dec = nn.Linear(self.latent_dim, 128 * 43)
 
         # --- 解码器 (Decoder) ---
         self.dec_res = nn.Sequential(ResidualBlock(64), ResidualBlock(64))
         self.dec_conv = nn.Sequential(
             ComplexConvTranspose1d(64, 32, 5, 2, 2, output_padding=0), nn.GroupNorm(1, 64), nn.LeakyReLU(0.2),
             ComplexConvTranspose1d(32, 32, 5, 2, 2, output_padding=1), nn.GroupNorm(1, 64), nn.LeakyReLU(0.2),
-            ComplexConvTranspose1d(32, 1, 10, 6, 2, output_padding=4)  # 最后一层不加归一化和激活，保留绝对线性输出
+            ComplexConvTranspose1d(32, 1, 10, 6, 2, output_padding=4)
         )
 
+    # forward 函数保持不变
     def forward(self, x):
         b = x.size(0)
         z = self.fc_enc(self.enc(x).view(b, -1))
