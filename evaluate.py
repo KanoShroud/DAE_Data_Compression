@@ -162,32 +162,22 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
     plt.subplots_adjust(top=0.93)
 
 
-def plot_monte_carlo(exp_results):
-    tdoa_dae, tdoa_raw, recon_mse = exp_results
-    snr_range = np.arange(-10, 22, 2)
+def plot_monte_carlo(mc_data):
+    results, snr_range = mc_data
+    plt.figure(figsize=(10, 6))
 
-    plt.figure(3, figsize=(12, 5))
-    plt.suptitle("Figure 3: Monte Carlo Experiment Results (200 Trials)", fontsize=16)
+    # 颜色和标记配置，严格贴合论文 Fig. 5 的风格
+    plt.plot(snr_range, results['raw'], 'b-s', label='Original data', linewidth=1.5)
+    if 'dae_4' in results:
+        plt.plot(snr_range, results['dae_4'], 'm-*', label='Data with CR=4', linewidth=1.5)
+    if 'dae_8' in results:
+        plt.plot(snr_range, results['dae_8'], 'g-o', label='Data with CR=8', markerfacecolor='none', linewidth=1.5)
+    if 'dae_16' in results:
+        plt.plot(snr_range, results['dae_16'], 'r-+', label='Data with CR=16', linewidth=1.5)
 
-    # 1. TDOA RMSE 曲线
-    plt.subplot(1, 2, 1)
-    plt.plot(snr_range, tdoa_raw, 'k--o', label='Baseline (Raw)', markersize=5)
-    plt.plot(snr_range, tdoa_dae, 'r-s', label='Proposed (DAE)', markersize=5)
-    plt.xlabel('SNR [dB]')
-    plt.ylabel('TDOA RMSE [Samples]')
-    plt.title('TDOA Estimation Error vs SNR')
-    plt.legend()
-    plt.grid(True, which='both', alpha=0.3)
-    plt.xticks(np.arange(-10, 22, 5))
-
-    # 2. MSE 曲线
-    plt.subplot(1, 2, 2)
-    plt.plot(snr_range, recon_mse, 'b-^', label='Reconstruction MSE')
-    plt.xlabel('SNR [dB]')
-    plt.ylabel('MSE Loss')
-    plt.yscale('log')
-    plt.title('Signal Reconstruction Quality')
-    plt.grid(True, which='both', alpha=0.3)
-    plt.legend()
-
+    plt.xlabel('SNR [dB]', fontsize=12)
+    plt.ylabel('Location error (TDOA RMSE)', fontsize=12)
+    plt.title('Comparison of localization performance at different CRs', fontsize=14)
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.5)
     plt.tight_layout()
