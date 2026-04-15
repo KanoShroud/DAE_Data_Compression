@@ -29,50 +29,34 @@ class MonteCarloExperiment:
             self.models_dict[cr].eval()
 
         for snr in self.snr_range:
-            # 1. 生成 UAV 1 (探测节点) 的数据
-            X1, Y1, src, delays1 = self.sim.generate_batch(self.num_trials, snr_db=snr)
-
-            # ================= 关键修正：合成 UAV 2 (参考节点) 的数据 =================
-            # 模拟另一个协同 UAV，接收相同的源信号，延迟固定为0（或随机），并叠加独立噪声
-            X2 = torch.zeros_like(X1)
-            for i in range(self.num_trials):
-                sig_p = np.mean(np.abs(src[i]) ** 2)
-                noise_p = sig_p / (10 ** (snr / 10))
-                # 独立的高斯白噪声
-                noise = (np.random.normal(0, 1, len(src[i])) + 1j * np.random.normal(0, 1, len(src[i]))) * np.sqrt(
-                    noise_p / 2)
-
-                # UAV 2 的接收信号 (此处简化为无多径的直达信号，仅作参考节点)
-                ref_noisy = src[i] + noise
-                X2[i, 0, :] = torch.tensor(ref_noisy.real)
-                X2[i, 1, :] = torch.tensor(ref_noisy.imag)
-            # =========================================================================
+            # 1. 直接获取孪生双节点数据
+            X1, X2, delays1, delays2 = self.sim.generate_pair_batch(self.num_trials, snr_db=snr)
 
             X1_dev = X1.to(self.device)
             X2_dev = X2.to(self.device)
             raw_np1 = X1.cpu().numpy()
             raw_np2 = X2.cpu().numpy()
 
-            # 2. 计算 Baseline (Raw) TDOA: 两个含噪信号直接互相关
+            # 2. 计算 Baseline (Raw) TDOA
             se_raw = 0.0
             for i in range(self.num_trials):
                 sig_raw1 = raw_np1[i, 0, :] + 1j * raw_np1[i, 1, :]
                 sig_raw2 = raw_np2[i, 0, :] + 1j * raw_np2[i, 1, :]
 
-                # 两个接收节点信号互相关 (真实的 TDOA)
                 corr_raw = signal.correlate(sig_raw1, sig_raw2, mode='same')
                 lags = signal.correlation_lags(len(sig_raw1), len(sig_raw2), mode='same')
                 delay_raw = lags[np.argmax(np.abs(corr_raw))]
 
-                # 真实 TDOA 为 delays1[i] - 0
-                se_raw += (delay_raw - delays1[i]) ** 2
+                # 真实 TDOA 是两个接收端物理延迟的差值
+                true_tdoa = delays1[i] - delays2[i]
+                se_raw += (delay_raw - true_tdoa) ** 2
             results['raw'].append(np.sqrt(se_raw / self.num_trials))
 
             # 3. 计算各个 DAE 的重构信号 TDOA
             for cr, model in self.models_dict.items():
                 se_dae = 0.0
                 with torch.no_grad():
-                    # 分别对两个 UAV 的信号进行降维和去噪重构
+                    # DAE 对两路信道分别进行降噪和特征提取
                     Y1_rec = model(X1_dev).cpu().numpy()
                     Y2_rec = model(X2_dev).cpu().numpy()
 
@@ -80,10 +64,11 @@ class MonteCarloExperiment:
                     sig_rec1 = Y1_rec[i, 0, :] + 1j * Y1_rec[i, 1, :]
                     sig_rec2 = Y2_rec[i, 0, :] + 1j * Y2_rec[i, 1, :]
 
-                    # 两个降噪后的信号互相关
                     corr_dae = signal.correlate(sig_rec1, sig_rec2, mode='same')
                     delay_dae = lags[np.argmax(np.abs(corr_dae))]
-                    se_dae += (delay_dae - delays1[i]) ** 2
+
+                    true_tdoa = delays1[i] - delays2[i]
+                    se_dae += (delay_dae - true_tdoa) ** 2
 
                 results[f'dae_{cr}'].append(np.sqrt(se_dae / self.num_trials))
 
