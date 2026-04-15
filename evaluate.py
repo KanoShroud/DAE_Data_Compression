@@ -29,13 +29,13 @@ class MonteCarloExperiment:
             self.models_dict[cr].eval()
 
         for snr in self.snr_range:
-            # 1. 直接获取孪生双节点数据
-            X1, X2, delays1, delays2 = self.sim.generate_pair_batch(self.num_trials, snr_db=snr)
-
-            X1_dev = X1.to(self.device)
-            X2_dev = X2.to(self.device)
-            raw_np1 = X1.cpu().numpy()
-            raw_np2 = X2.cpu().numpy()
+            # 修改数据解包方式：提取双链路数据
+            X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2 = self.sim.generate_pair_batch(self.num_trials,
+                                                                                                    snr_db=snr)
+            X1_dev = X1_noisy.to(self.device)
+            X2_dev = X2_noisy.to(self.device)
+            raw_np1 = X1_noisy.cpu().numpy()
+            raw_np2 = X2_noisy.cpu().numpy()
 
             # 2. 计算 Baseline (Raw) TDOA
             se_raw = 0.0

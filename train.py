@@ -1,15 +1,22 @@
+# train.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from model import DAE
+from signal_gen import SignalSimulator
 
 
-def train_model(device, dataset, epochs, cr, batch_size=64, lr=0.001):
-    print(f"--- Training DAE Model (CR={cr}) on {device} ---")
+def train_model(device, epochs, cr, batch_size=64, steps_per_epoch=100, lr=0.0005):
+    """
+    流式训练引擎
+    不依赖静态数据集，通过实时调用发生器，提供无限的高熵样本流。
+    """
+    print(f"--- Training DAE (CR={cr}) on {device} with Infinite Dynamic Stream ---")
 
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    sim = SignalSimulator()
     model = DAE(cr=cr).to(device)
+
+    # 面对高熵动态数据，略微降低学习率以确保梯度下降稳定
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
     loss_hist = []
@@ -17,16 +24,30 @@ def train_model(device, dataset, epochs, cr, batch_size=64, lr=0.001):
     for ep in range(epochs):
         model.train()
         ep_loss = 0
-        for bx, by in loader:
-            bx, by = bx.to(device), by.to(device)
+
+        # 舍弃传统的 batch loader，按 step 实时生成数据
+        for step in range(steps_per_epoch):
+            # 实时生成全新数据。snr_db=None 表示使用混合 SNR [-5, 15]dB
+            X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2 = sim.generate_pair_batch(batch_size, snr_db=None)
+
+            # 【核心逻辑】：
+            # 我们训练模型时，只需使用链路 1 的数据。
+            # 网络输入：UAV 1 接收到的含噪、带限信号
+            # 网络目标：UAV 1 链路中不含噪声、但包含多径畸变的带限信号
+            bx = X1_noisy.to(device)
+            by = X1_clean.to(device)
+
             optimizer.zero_grad()
             output = model(bx)
+
+            # 计算重构损失并更新权重
             loss = criterion(output, by)
             loss.backward()
             optimizer.step()
+
             ep_loss += loss.item()
 
-        avg_loss = ep_loss / len(loader)
+        avg_loss = ep_loss / steps_per_epoch
         loss_hist.append(avg_loss)
 
         if (ep + 1) % 10 == 0:

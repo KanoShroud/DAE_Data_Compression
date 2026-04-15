@@ -12,18 +12,17 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 EPOCHS = 300
 CR_LIST = [4, 8, 16] # 目标验证的压缩率列表
 
-# 1. 统一生成全局数据集 (保证对比的绝对公平性)
-print("Generating shared dataset for all models...")
-sim = SignalSimulator()
-X, Y, _, _ = sim.generate_batch(5000)
-dataset = TensorDataset(X, Y)
-
+CR_LIST = [4, 8, 16]
 models_dict = {}
 
-# 2. 串行训练不同 CR 的网络
+# 1. 实例化一个公共的 Simulator，供后续评估使用
+sim = SignalSimulator()
+
+# 2. 串行流式训练各个压缩率下的网络
 for cr in CR_LIST:
     print(f"\n" + "="*40)
-    model, _ = train_model(DEVICE, dataset, epochs=EPOCHS, cr=cr)
+    # 直接调用流式训练，不需要传入 dataset
+    model, _ = train_model(DEVICE, epochs=100, cr=cr, batch_size=64, steps_per_epoch=100)
     models_dict[cr] = model
 
 # 3. 统一蒙特卡洛评估
