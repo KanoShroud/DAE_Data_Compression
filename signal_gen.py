@@ -43,8 +43,8 @@ class SignalSimulator:
             X_clean_out = np.zeros_like(u_t_batch)
             delays = []
 
-            # 训练时使用混合信噪比 [-5, 15]dB，提升网络在各个噪声区间的鲁棒性
-            snrs = np.random.uniform(-5, 15, size=batch_size) if snr_db is None else np.ones(batch_size) * snr_db
+            # 训练时使用混合信噪比 [-15, 15]dB，提升网络在各个噪声区间的鲁棒性
+            snrs = np.random.uniform(-15, 15, size=batch_size) if snr_db is None else np.ones(batch_size) * snr_db
 
             for i in range(batch_size):
                 main_delay = np.random.randint(10, 50)

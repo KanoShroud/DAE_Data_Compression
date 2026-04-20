@@ -6,6 +6,30 @@ import matplotlib.pyplot as plt
 from scipy import signal
 
 
+def gcc_phat(sig1, sig2):
+    """
+    广义互相关 (相位变换加权) - GCC-PHAT
+    完美替代 signal.correlate(..., mode='same')，专治压缩带来的波形平滑。
+    """
+    n = len(sig1)
+    # 补零到 2N-1 防止圆周卷积缠绕
+    SIG1 = np.fft.fft(sig1, n=2 * n - 1)
+    SIG2 = np.fft.fft(sig2, n=2 * n - 1)
+
+    # 计算互功率谱
+    R = SIG1 * np.conj(SIG2)
+
+    # PHAT 加权 (引入 epsilon 防止对纯白噪声过度放大)
+    epsilon = np.max(np.abs(R)) * 1e-3
+    R_weighted = R / (np.abs(R) + epsilon)
+
+    # 逆傅里叶变换回时域
+    cc = np.fft.fftshift(np.fft.ifft(R_weighted))
+
+    # 截取中心段，使其长度与 scipy 的 mode='same' (长度 n) 完全一致
+    start = (len(cc) - n) // 2
+    return cc[start:start + n]
+
 class MonteCarloExperiment:
     """
     蒙特卡洛实验类
@@ -43,11 +67,11 @@ class MonteCarloExperiment:
                 sig_raw1 = raw_np1[i, 0, :] + 1j * raw_np1[i, 1, :]
                 sig_raw2 = raw_np2[i, 0, :] + 1j * raw_np2[i, 1, :]
 
-                corr_raw = signal.correlate(sig_raw1, sig_raw2, mode='same')
+                # 【修改点】：替换为 GCC-PHAT
+                corr_raw = gcc_phat(sig_raw1, sig_raw2)
                 lags = signal.correlation_lags(len(sig_raw1), len(sig_raw2), mode='same')
                 delay_raw = lags[np.argmax(np.abs(corr_raw))]
 
-                # 真实 TDOA 是两个接收端物理延迟的差值
                 true_tdoa = delays1[i] - delays2[i]
                 se_raw += (delay_raw - true_tdoa) ** 2
             results['raw'].append(np.sqrt(se_raw / self.num_trials))
@@ -56,7 +80,6 @@ class MonteCarloExperiment:
             for cr, model in self.models_dict.items():
                 se_dae = 0.0
                 with torch.no_grad():
-                    # DAE 对两路信道分别进行降噪和特征提取
                     Y1_rec = model(X1_dev).cpu().numpy()
                     Y2_rec = model(X2_dev).cpu().numpy()
 
@@ -64,7 +87,8 @@ class MonteCarloExperiment:
                     sig_rec1 = Y1_rec[i, 0, :] + 1j * Y1_rec[i, 1, :]
                     sig_rec2 = Y2_rec[i, 0, :] + 1j * Y2_rec[i, 1, :]
 
-                    corr_dae = signal.correlate(sig_rec1, sig_rec2, mode='same')
+                    # 【修改点】：替换为 GCC-PHAT
+                    corr_dae = gcc_phat(sig_rec1, sig_rec2)
                     delay_dae = lags[np.argmax(np.abs(corr_dae))]
 
                     true_tdoa = delays1[i] - delays2[i]
