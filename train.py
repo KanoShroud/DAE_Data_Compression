@@ -44,13 +44,18 @@ def train_model(device, epochs, cr, batch_size=64, steps_per_epoch=100, lr=0.000
             loss = criterion(output, by)
             loss.backward()
             optimizer.step()
-
             ep_loss += loss.item()
+
+        # ================= [新增：步进调度器] =================
+        scheduler.step()  # 每个 Epoch 结束后更新一次学习率
+        # ========================================================
 
         avg_loss = ep_loss / steps_per_epoch
         loss_hist.append(avg_loss)
 
         if (ep + 1) % 10 == 0:
-            print(f"Epoch {ep + 1}/{epochs}: Loss {avg_loss:.5f}")
+            # 顺便打印出当前的学习率，观察衰减过程
+            current_lr = scheduler.get_last_lr()[0]
+            print(f"Epoch {ep + 1}/{epochs}: Loss {avg_loss:.5f} | LR: {current_lr:.6f}")
 
     return model, loss_hist

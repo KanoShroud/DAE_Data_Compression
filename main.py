@@ -22,7 +22,7 @@ sim = SignalSimulator()
 for cr in CR_LIST:
     print(f"\n" + "="*40)
     # 直接调用流式训练，不需要传入 dataset
-    model, _ = train_model(DEVICE, epochs=100, cr=cr, batch_size=64, steps_per_epoch=100)
+    model, _ = train_model(DEVICE, epochs=200, cr=cr, batch_size=64, steps_per_epoch=100)
     models_dict[cr] = model
 
 # 3. 统一蒙特卡洛评估
