@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import StepLR  # 引入调度器
 from model import DAE
 from signal_gen import SignalSimulator
 
@@ -18,6 +19,12 @@ def train_model(device, epochs, cr, batch_size=64, steps_per_epoch=100, lr=0.000
 
     # 面对高熵动态数据，略微降低学习率以确保梯度下降稳定
     optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    # ================= [新增：学习率调度器] =================
+    # 每 50 个 Epoch，将学习率衰减为原来的一半 (gamma=0.5)
+    scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
+    # ========================================================
+
     criterion = nn.MSELoss()
     loss_hist = []
 

@@ -12,7 +12,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 EPOCHS = 300
 CR_LIST = [4, 8, 16] # 目标验证的压缩率列表
 
-CR_LIST = [4, 8, 16]
 models_dict = {}
 
 # 1. 实例化一个公共的 Simulator，供后续评估使用
