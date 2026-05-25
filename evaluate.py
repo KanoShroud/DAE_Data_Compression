@@ -102,12 +102,13 @@ class MonteCarloExperiment:
 # --- 绘图函数 ---
 
 def plot_training_loss(loss_hist):
-    plt.figure(1, figsize=(6, 4))
+    fig = plt.figure(1, figsize=(6, 4))
     plt.plot(loss_hist, linewidth=2)
     plt.title("Figure 1: Training Loss Curve (MSE)")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.grid(True, alpha=0.3)
+    return fig
 
 
 def plot_snr_comparison(model, sim, device, snr_list=None):
@@ -131,16 +132,16 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
         ax.set_title(col, fontsize=12, fontweight='bold')
 
     for i, snr in enumerate(snr_list):
-        X, Y, src, delays = sim.generate_batch(1, snr_db=snr)
+        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(1, snr_db=snr)
+        X, Y, delays = X1_n, X1_c, d1
         with torch.no_grad():
             rec = model(X.to(device)).cpu()
 
         # 提取完整的复数信号 (I + jQ)
         noisy_complex = X[0, 0, :].numpy() + 1j * X[0, 1, :].numpy()
-        clean_complex = Y[0, 0, :].numpy() + 1j * Y[0, 1, :].numpy()  # 补充提取干净信号的复数形式
+        clean_complex = Y[0, 0, :].numpy() + 1j * Y[0, 1, :].numpy()
         recon_complex = rec[0, 0, :].numpy() + 1j * rec[0, 1, :].numpy()
 
-        source_complex = src[0]  # 使用原本就是复数的源信号
         true_d = delays[0]
 
         # 1. 时域图 (改为绘制信号模值 Magnitude)
@@ -177,13 +178,13 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
         ax_f.grid(alpha=0.3)
         ax_f.set_xlim(-20, 20)
 
-        # 3. 互相关图 (改为复包络互相关)
+        # 3. 互相关图 (改为复包络互相关，以干净信号为参考)
         ax_c = axes[i, 2]
 
         # 对复数信号执行互相关
-        corr_n = signal.correlate(noisy_complex, source_complex, mode='same')
-        corr_r = signal.correlate(recon_complex, source_complex, mode='same')
-        lags = signal.correlation_lags(len(noisy_complex), len(source_complex), mode='same')
+        corr_n = signal.correlate(noisy_complex, clean_complex, mode='same')
+        corr_r = signal.correlate(recon_complex, clean_complex, mode='same')
+        lags = signal.correlation_lags(len(noisy_complex), len(clean_complex), mode='same')
 
         # 取互相关结果的模值（包络）并归一化
         corr_n_abs = np.abs(corr_n)
@@ -205,7 +206,7 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
 
 def plot_monte_carlo(mc_data):
     results, snr_range = mc_data
-    plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
 
     # 颜色和标记配置，严格贴合论文 Fig. 5 的风格
     plt.plot(snr_range, results['raw'], 'b-s', label='Original data', linewidth=1.5)
@@ -222,3 +223,4 @@ def plot_monte_carlo(mc_data):
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
+    return fig
