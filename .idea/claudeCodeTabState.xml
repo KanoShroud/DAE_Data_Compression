@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ClaudeCodeTabState">
+    <option name="tabNames">
+      <map>
+        <entry key="0" value="Diff_CR_DeepseekRevised" />
+        <entry key="1" value="Diff_CR_MimoRevised" />
+      </map>
+    </option>
+    <option name="tabSessions">
+      <map>
+        <entry key="0">
+          <value>
+            <TabSessionState>
+              <option name="provider" value="claude" />
+              <option name="sessionId" value="5d9172cb-d145-45f3-9c34-0c6301adcbe8" />
+              <option name="model" value="claude-opus-4-7[1m]" />
+              <option name="permissionMode" value="plan" />
+              <option name="reasoningEffort" value="high" />
+            </TabSessionState>
+          </value>
+        </entry>
+        <entry key="1">
+          <value>
+            <TabSessionState>
+              <option name="provider" value="claude" />
+              <option name="sessionId" value="42347585-440c-4deb-a8d0-8acb0bc03201" />
+              <option name="model" value="claude-opus-4-7[1m]" />
+              <option name="permissionMode" value="plan" />
+              <option name="reasoningEffort" value="high" />
+            </TabSessionState>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="tabCount" value="2" />
+  </component>
+</project>
