@@ -123,10 +123,12 @@ class SignalSimulator:
                 # 接收端 RRC 匹配滤波 → 纯净目标
                 clean_real = self._apply_rrc(x_clean_raw.real)
                 clean_imag = self._apply_rrc(x_clean_raw.imag)
-                X_clean_out[i] = clean_real + 1j * clean_imag
+                clean_complex = clean_real + 1j * clean_imag
+                X_clean_out[i] = clean_complex
 
-                # 加噪
-                sig_p = np.mean(np.abs(x_clean_raw) ** 2)
+                # 加噪 — 以 Rx RRC 滤波后的信号功率为 SNR 基准
+                # RRC 滤波器单位能量归一化(Σ|h|²=1),白噪声通过后功率不变
+                sig_p = np.mean(np.abs(clean_complex) ** 2)
                 noise_p = sig_p / (10 ** (snrs[i] / 10))
                 noise = (np.random.normal(0, 1, self.signal_len)
                          + 1j * np.random.normal(0, 1, self.signal_len)) * np.sqrt(noise_p / 2)

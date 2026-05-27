@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 from train import train_with_cv
-from evaluate import MonteCarloExperiment, plot_monte_carlo
+from evaluate import MonteCarloExperiment, plot_monte_carlo, plot_snr_comparison
 from signal_gen import SignalSimulator
 
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CR_LIST = [4, 8, 16]
-N_SAMPLES = 10000        # 论文: 50 snapshots × 200 trials
-K_FOLDS = 5              # 论文: k=5
+N_SAMPLES = 20000        # 增加样本数以匹配CR=4的3.2M参数量需求
+K_FOLDS = 3              # 论文k=5, 但随机信道下CV方差大, 3折已足够且节省40%时间
 MAX_EPOCHS = 100         # 最大训练轮数（早停可提前结束）
 BATCH_SIZE = 64
 LR = 0.0005
@@ -23,30 +23,40 @@ SEED = 42
 PATIENCE = 20            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 
-# 输出目录
-RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "运行结果")
-os.makedirs(RESULT_DIR, exist_ok=True)
+# 如需快速验证（5~10分钟），可将 K_FOLDS 降至 1 并设 USE_SPLIT=True
+# 此时仅做单次 80/20 train/val 划分，跳过全量 CV
+USE_SPLIT = False        # True: 单次划分快速模式; False: K-fold CV
+
+# 全局随机种子 —— 确保训练与评估完全可复现
+import numpy as np
+import random
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+# 输出目录 —— 每次运行创建独立子文件夹，避免结果互相覆盖
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "运行结果", TIMESTAMP)
+os.makedirs(RESULT_DIR, exist_ok=True)
 
 # ===================== 工具函数 =====================
 
-def save_and_show(fig, filename_stem):
+def save_figure(fig, filename_stem):
     """
-    保存图片到运行结果目录（含时间戳），并以非阻塞模式显示。
+    保存图片为 SVG 矢量图格式，并立即弹出显示窗口。
 
-    参数:
-        fig:           matplotlib Figure 对象
-        filename_stem: 文件名主干（不含扩展名和时间戳）
+    SVG 为矢量图形，可无损缩放，适合论文插图。
     """
-    filepath = os.path.join(RESULT_DIR, f"{filename_stem}_{TIMESTAMP}.png")
-    fig.savefig(filepath, dpi=150, bbox_inches='tight')
+    filepath = os.path.join(RESULT_DIR, f"{filename_stem}.svg")
+    fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
-
-
-def nonblocking_show():
-    """非阻塞显示所有已创建的 figure，不阻塞 main 函数退出。"""
+    # 非阻塞弹出窗口，后续 plt.show() 会统一阻塞等待用户关闭
     plt.show(block=False)
-    plt.pause(0.1)  # 允许 GUI 事件循环处理窗口绘制
+    plt.pause(0.1)
 
 # ===================== 主流程 =====================
 
@@ -61,7 +71,7 @@ for cr in CR_LIST:
     model, cv_results = train_with_cv(
         DEVICE, cr=cr, k=K_FOLDS, n_samples=N_SAMPLES,
         epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=SEED,
-        patience=PATIENCE, weight_decay=WEIGHT_DECAY
+        patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT
     )
     models_dict[cr] = model
     cv_results_dict[cr] = cv_results
@@ -72,7 +82,8 @@ fig_cv, axes_cv = plt.subplots(1, len(CR_LIST),
 if len(CR_LIST) == 1:
     axes_cv = [axes_cv]
 for ax, cr in zip(axes_cv, CR_LIST):
-    for fold_idx in range(K_FOLDS):
+    n_folds = len(cv_results_dict[cr]['fold_train_loss'])
+    for fold_idx in range(n_folds):
         ax.plot(cv_results_dict[cr]['fold_train_loss'][fold_idx],
                 alpha=0.4, color=f'C{fold_idx}', linewidth=0.8)
         ax.plot(cv_results_dict[cr]['fold_val_loss'][fold_idx],
@@ -81,22 +92,31 @@ for ax, cr in zip(axes_cv, CR_LIST):
     ax.set_xlabel('Epoch')
     ax.set_ylabel('MSE Loss')
     ax.grid(True, alpha=0.3)
-fig_cv.suptitle('K-Fold Cross-Validation Training Curves (solid: train, dashed: val)',
-                fontsize=13)
+cv_title = 'Training Curves (solid: train, dashed: val)'
+if not USE_SPLIT:
+    cv_title = f'{K_FOLDS}-Fold Cross-Validation ' + cv_title
+fig_cv.suptitle(cv_title, fontsize=13)
 fig_cv.tight_layout()
-save_and_show(fig_cv, "CV_training_curves")
+save_figure(fig_cv, "CV_training_curves")
 
 # 4. 统一蒙特卡洛评估
 print("\n" + "=" * 40)
-exp = MonteCarloExperiment(models_dict, sim, DEVICE)
+exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=SEED)
 mc_results = exp.run()
 
 # 5. 绘制蒙特卡洛结果并保存
 fig_mc = plot_monte_carlo(mc_results)
-save_and_show(fig_mc, "MonteCarlo_TDOA_RMSE")
+save_figure(fig_mc, "MonteCarlo_TDOA_RMSE")
 
-# 6. 非阻塞显示所有图片
-nonblocking_show()
+# 6. 绘制信噪比对比图（4 个 SNR 水平 × 3 列：时域/频谱/互相关）
+#    使用最后训练的模型（CR=16 压缩最激进，对比效果最明显）
+fig_snr = plot_snr_comparison(models_dict[CR_LIST[-1]], sim, DEVICE)
+save_figure(fig_snr, "SNR_Comparison")
+
+# 7. 阻塞等待用户关闭所有图片窗口后退出
+if plt.get_fignums():
+    print("\n所有图片已显示。关闭图片窗口后程序自动退出。")
+    plt.show()
 
 print(f"\n所有图片已保存至: {RESULT_DIR}")
 print(f"时间戳: {TIMESTAMP}")
