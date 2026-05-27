@@ -1,6 +1,7 @@
 # train.py
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, Subset
 from torch.optim.lr_scheduler import StepLR
@@ -81,39 +82,57 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
 def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   batch_size=64, lr=0.0005, seed=42,
-                  patience=20, weight_decay=1e-4):
+                  patience=20, weight_decay=1e-4, use_split=False):
     """
-    使用 k-fold 交叉验证训练 DAE 模型。
+    训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
     1. 用固定种子生成含 n_samples 条样本的数据集
-    2. 按 k-fold 划分训练/验证集
-    3. 依次训练 k 个模型，含早停 & L2 正则化
+    2a. use_split=False: 按 k-fold 划分训练/验证集（论文方案）
+    2b. use_split=True:  单次 80/20 随机划分（快速验证用）
+    3. 早停 & L2 正则化
     4. 返回验证 loss 最低的模型
 
     参数:
         device:       torch.device
         cr:           压缩率 (4/8/16)
-        k:            fold 数（论文 k=5）
-        n_samples:    总样本数（论文 N=10,000）
-        epochs:       最大训练轮数（默认 100，早停可提前结束）
+        k:            fold 数 (use_split=True 时忽略)
+        n_samples:    总样本数
+        epochs:       最大训练轮数（早停可提前结束）
         batch_size:   批量大小
         lr:           初始学习率
         seed:         数据集随机种子
         patience:     早停耐心值
         weight_decay: L2 正则化系数
+        use_split:    True 则使用单次 80/20 划分替代 K-fold CV
     """
-    print(f"\n{'='*60}")
-    print(f"Training DAE (CR={cr}) with {k}-Fold Cross-Validation")
-    print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
-    print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
-    print(f"{'='*60}")
+    # 固定全局随机种子，确保数据集生成、模型初始化和数据划分完全可复现
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
     sim = SignalSimulator()
     X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
     dataset = TensorDataset(X_noisy, X_clean)
 
-    kf = KFold(n_splits=k, shuffle=True, random_state=seed)
-    indices = list(range(n_samples))
+    if use_split:
+        # 单次 80/20 train/val 划分 (快速模式)
+        n_train = int(n_samples * 0.8)
+        indices = torch.randperm(n_samples, generator=torch.Generator().manual_seed(seed))
+        train_idx = indices[:n_train].tolist()
+        val_idx = indices[n_train:].tolist()
+
+        suffix = f"Quick Split ({n_train}/{n_samples - n_train})"
+        n_folds_actual = 1
+    else:
+        suffix = f"{k}-Fold Cross-Validation"
+        n_folds_actual = k
+
+    print(f"\n{'='*60}")
+    print(f"Training DAE (CR={cr}) with {suffix}")
+    print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
+    print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
+    model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
+    print(f"  Model Parameters: {model_params:,}")
+    print(f"{'='*60}")
 
     cv_results = {
         'cr': cr,
@@ -126,7 +145,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     best_model = None
     best_overall_val = float('inf')
 
-    for fold_idx, (train_idx, val_idx) in enumerate(kf.split(indices)):
+    if use_split:
+        split_iterator = [(train_idx, val_idx)]
+    else:
+        kf = KFold(n_splits=k, shuffle=True, random_state=seed)
+        split_iterator = list(kf.split(range(n_samples)))
+
+    for fold_idx, (train_idx, val_idx) in enumerate(split_iterator):
         train_loader = DataLoader(Subset(dataset, train_idx),
                                   batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(Subset(dataset, val_idx),
@@ -150,9 +175,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
             best_overall_val = best_val
             best_model = model
 
-    avg_val = sum(cv_results['fold_best_val']) / k
-    avg_stop = sum(cv_results['fold_stopped_epoch']) / k
-    print(f"\n  Average Best Val Loss over {k} folds: {avg_val:.6f}")
+    avg_val = sum(cv_results['fold_best_val']) / n_folds_actual
+    avg_stop = sum(cv_results['fold_stopped_epoch']) / n_folds_actual
+    print(f"\n  Average Best Val Loss over {n_folds_actual} fold(s): {avg_val:.6f}")
     print(f"  Average Stop Epoch: {avg_stop:.1f}")
     print(f"  Selected model with Val Loss: {best_overall_val:.6f}")
 

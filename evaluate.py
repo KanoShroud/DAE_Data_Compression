@@ -36,47 +36,52 @@ class MonteCarloExperiment:
     功能：在不同 SNR 下进行多次实验，统计 RMSE 和 Loss。
     """
 
-    def __init__(self, models_dict, simulator, device):
+    def __init__(self, models_dict, simulator, device, seed=None):
         # models_dict: {16: model_cr16, 8: model_cr8, ...}
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
         self.snr_range = np.arange(-10, 22, 2)
         self.num_trials = 500
+        self.seed = seed
 
     def run(self):
         print("Running Monte Carlo Sweep across multiple CRs...")
-        # 结果容器
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            print(f"  Monte Carlo random seed set to: {self.seed}")
+
         results = {'raw': []}
         for cr in self.models_dict.keys():
             results[f'dae_{cr}'] = []
             self.models_dict[cr].eval()
 
+        # 所有信号长度相同（1024），lags 只需计算一次
+        signal_len = self.sim.signal_len
+        lags = signal.correlation_lags(signal_len, signal_len, mode='same')
+
         for snr in self.snr_range:
-            # 修改数据解包方式：提取双链路数据
-            X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2 = self.sim.generate_pair_batch(self.num_trials,
-                                                                                                    snr_db=snr)
+            X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2 = \
+                self.sim.generate_pair_batch(self.num_trials, snr_db=snr)
             X1_dev = X1_noisy.to(self.device)
             X2_dev = X2_noisy.to(self.device)
             raw_np1 = X1_noisy.cpu().numpy()
             raw_np2 = X2_noisy.cpu().numpy()
 
-            # 2. 计算 Baseline (Raw) TDOA
+            # 1. 计算 Baseline (Raw) TDOA
             se_raw = 0.0
             for i in range(self.num_trials):
                 sig_raw1 = raw_np1[i, 0, :] + 1j * raw_np1[i, 1, :]
                 sig_raw2 = raw_np2[i, 0, :] + 1j * raw_np2[i, 1, :]
 
-                # 【修改点】：替换为 GCC-PHAT
                 corr_raw = gcc_phat(sig_raw1, sig_raw2)
-                lags = signal.correlation_lags(len(sig_raw1), len(sig_raw2), mode='same')
                 delay_raw = lags[np.argmax(np.abs(corr_raw))]
 
                 true_tdoa = delays1[i] - delays2[i]
                 se_raw += (delay_raw - true_tdoa) ** 2
             results['raw'].append(np.sqrt(se_raw / self.num_trials))
 
-            # 3. 计算各个 DAE 的重构信号 TDOA
+            # 2. 计算各个 DAE 的重构信号 TDOA
             for cr, model in self.models_dict.items():
                 se_dae = 0.0
                 with torch.no_grad():
@@ -87,7 +92,6 @@ class MonteCarloExperiment:
                     sig_rec1 = Y1_rec[i, 0, :] + 1j * Y1_rec[i, 1, :]
                     sig_rec2 = Y2_rec[i, 0, :] + 1j * Y2_rec[i, 1, :]
 
-                    # 【修改点】：替换为 GCC-PHAT
                     corr_dae = gcc_phat(sig_rec1, sig_rec2)
                     delay_dae = lags[np.argmax(np.abs(corr_dae))]
 
@@ -102,7 +106,7 @@ class MonteCarloExperiment:
 # --- 绘图函数 ---
 
 def plot_training_loss(loss_hist):
-    fig = plt.figure(1, figsize=(6, 4))
+    fig = plt.figure(figsize=(6, 4))
     plt.plot(loss_hist, linewidth=2)
     plt.title("Figure 1: Training Loss Curve (MSE)")
     plt.xlabel("Epoch")
@@ -123,7 +127,7 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
     model.eval()
 
     num_rows = len(snr_list)
-    fig, axes = plt.subplots(num_rows, 3, figsize=(15, 2 * num_rows), num=2)
+    fig, axes = plt.subplots(num_rows, 3, figsize=(15, 2 * num_rows))
     plt.suptitle(f"Figure 2: Signal Analysis (Bandwidth=20MHz, Fs={Fs / 1e6:.0f}MHz)", fontsize=16)
 
     # 修改点：更新列标题以反映物理意义的改变
@@ -202,6 +206,7 @@ def plot_snr_comparison(model, sim, device, snr_list=None):
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.93)
+    return fig
 
 
 def plot_monte_carlo(mc_data):
