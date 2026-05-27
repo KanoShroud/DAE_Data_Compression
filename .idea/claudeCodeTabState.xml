@@ -3,8 +3,8 @@
   <component name="ClaudeCodeTabState">
     <option name="tabNames">
       <map>
-        <entry key="0" value="Test2_Diff_CR_DeepseekRevised" />
-        <entry key="1" value="Test2_Diff_CR_MimoRevised" />
+        <entry key="0" value="Deepseek" />
+        <entry key="1" value="Mimo" />
       </map>
     </option>
     <option name="tabSessions">
@@ -14,10 +14,9 @@
             <TabSessionState>
               <option name="provider" value="claude" />
               <option name="sessionId" value="5d9172cb-d145-45f3-9c34-0c6301adcbe8" />
-              <option name="cwd" value="$PROJECT_DIR$" />
               <option name="model" value="claude-opus-4-7[1m]" />
-              <option name="permissionMode" value="acceptEdits" />
-              <option name="reasoningEffort" value="max" />
+              <option name="permissionMode" value="plan" />
+              <option name="reasoningEffort" value="high" />
             </TabSessionState>
           </value>
         </entry>
@@ -28,7 +27,7 @@
               <option name="sessionId" value="42347585-440c-4deb-a8d0-8acb0bc03201" />
               <option name="cwd" value="$PROJECT_DIR$" />
               <option name="model" value="claude-opus-4-7[1m]" />
-              <option name="permissionMode" value="plan" />
+              <option name="permissionMode" value="acceptEdits" />
               <option name="reasoningEffort" value="high" />
             </TabSessionState>
           </value>

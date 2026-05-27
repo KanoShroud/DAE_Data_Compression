@@ -53,14 +53,31 @@ class SignalSimulator:
     模拟 BPSK 调制的非协作辐射源，经 RRC 脉冲成形、多径信道和接收匹配滤波。
     """
 
-    def __init__(self, signal_len=1024, beta=0.35, rrc_span=8):
+    def __init__(self, signal_len=1024, beta=0.35, rrc_span=8,
+                 channel_mode="random", n_fixed_channels=50, channel_pool_seed=42):
+        """
+        参数:
+            signal_len:         信号长度（采样点数）
+            beta:               RRC 滚降系数
+            rrc_span:           RRC 滤波器跨度（符号数）
+            channel_mode:       "random" 每样本随机信道；"fixed" 从预生成信道池中随机选取
+            n_fixed_channels:   固定信道池大小（仅 channel_mode="fixed" 时生效）
+            channel_pool_seed:  信道池生成种子（仅 channel_mode="fixed" 时生效）
+        """
         self.signal_len = signal_len
         self.samples_per_symbol = 2
         self.beta = beta
         self.rrc_span = rrc_span
+        self.channel_mode = channel_mode
 
         # RRC 脉冲成形滤波器（替代原 Butterworth 滤波器）
         self.rrc = rrc_filter(beta=beta, span=rrc_span, sps=self.samples_per_symbol)
+
+        # 固定信道池
+        self._channel_pool = None
+        self._channel_delays = None
+        if channel_mode == "fixed":
+            self._build_channel_pool(n_fixed_channels, channel_pool_seed)
 
     def _apply_rrc(self, x, axis=-1):
         """对信号施加 RRC 匹配滤波，输出长度与输入一致"""
@@ -69,6 +86,28 @@ class SignalSimulator:
         else:
             return np.array([signal.convolve(x[i], self.rrc, mode='same')
                              for i in range(x.shape[0])])
+
+    def _build_channel_pool(self, n_channels, seed):
+        """预生成 n_channels 条固定多径信道，确保可复现"""
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        self._channel_pool = []
+        self._channel_delays = []
+        for _ in range(n_channels):
+            main_delay = np.random.randint(10, 50)
+            h = np.zeros(self.signal_len, dtype=complex)
+            h[main_delay] = 1.0
+            for _ in range(np.random.randint(2, 4)):
+                tap_delay = np.random.randint(main_delay + 5,
+                                              min(main_delay + 100, self.signal_len))
+                h[tap_delay] = (np.random.uniform(0.1, 0.4)
+                                * np.exp(1j * np.random.uniform(0, 2 * np.pi)))
+            self._channel_pool.append(h)
+            self._channel_delays.append(main_delay)
+
+        np.random.set_state(rng_state)
+        print(f"[SignalSimulator] 固定信道池已生成: {n_channels} 条信道 (seed={seed})")
 
     def generate_pair_batch(self, batch_size, snr_db=None):
         """
@@ -106,16 +145,20 @@ class SignalSimulator:
                 snrs = np.ones(batch_size) * snr_db
 
             for i in range(batch_size):
-                main_delay = np.random.randint(10, 50)
+                if self.channel_mode == "fixed":
+                    ch_idx = np.random.randint(0, len(self._channel_pool))
+                    h = self._channel_pool[ch_idx]
+                    main_delay = self._channel_delays[ch_idx]
+                else:
+                    main_delay = np.random.randint(10, 50)
+                    h = np.zeros(self.signal_len, dtype=complex)
+                    h[main_delay] = 1.0
+                    for _ in range(np.random.randint(2, 4)):
+                        tap_delay = np.random.randint(main_delay + 5,
+                                                      min(main_delay + 100, self.signal_len))
+                        h[tap_delay] = (np.random.uniform(0.1, 0.4)
+                                        * np.exp(1j * np.random.uniform(0, 2 * np.pi)))
                 delays.append(main_delay)
-
-                h = np.zeros(self.signal_len, dtype=complex)
-                h[main_delay] = 1.0
-                for _ in range(np.random.randint(2, 4)):
-                    tap_delay = np.random.randint(main_delay + 5,
-                                                  min(main_delay + 100, self.signal_len))
-                    h[tap_delay] = (np.random.uniform(0.1, 0.4)
-                                    * np.exp(1j * np.random.uniform(0, 2 * np.pi)))
 
                 full_conv = signal.convolve(u_t_batch[i], h, mode='full')
                 x_clean_raw = full_conv[:self.signal_len]

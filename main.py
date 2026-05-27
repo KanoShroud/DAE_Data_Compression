@@ -27,6 +27,11 @@ WEIGHT_DECAY = 1e-4      # L2 正则化系数
 # 此时仅做单次 80/20 train/val 划分，跳过全量 CV
 USE_SPLIT = False        # True: 单次划分快速模式; False: K-fold CV
 
+# 信道模式 —— "fixed" 从固定信道池采样（匹配论文 50 snapshots）；"random" 每样本随机信道
+CHANNEL_MODE = "fixed"         # "fixed" 或 "random"
+N_FIXED_CHANNELS = 50          # 固定信道快照数（论文 50 snapshots）
+CHANNEL_POOL_SEED = 42         # 信道池生成种子
+
 # 全局随机种子 —— 确保训练与评估完全可复现
 import numpy as np
 import random
@@ -64,14 +69,18 @@ models_dict = {}
 cv_results_dict = {}
 
 # 1. 实例化一个公共的 Simulator，供后续蒙特卡洛评估使用
-sim = SignalSimulator()
+sim = SignalSimulator(channel_mode=CHANNEL_MODE,
+                      n_fixed_channels=N_FIXED_CHANNELS,
+                      channel_pool_seed=CHANNEL_POOL_SEED)
 
 # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
 for cr in CR_LIST:
     model, cv_results = train_with_cv(
         DEVICE, cr=cr, k=K_FOLDS, n_samples=N_SAMPLES,
         epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=SEED,
-        patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT
+        patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
+        channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
+        channel_pool_seed=CHANNEL_POOL_SEED
     )
     models_dict[cr] = model
     cv_results_dict[cr] = cv_results
