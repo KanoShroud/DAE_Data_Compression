@@ -83,7 +83,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   batch_size=64, lr=0.0005, seed=42,
                   patience=20, weight_decay=1e-4, use_split=False,
-                  channel_mode="random", n_fixed_channels=50, channel_pool_seed=42):
+                  channel_mode="random", n_fixed_channels=50, channel_pool_seed=42,
+                  sim=None):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
@@ -108,14 +109,16 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         channel_mode: "random" 每样本随机信道；"fixed" 从预生成信道池中随机选取
         n_fixed_channels: 固定信道池大小
         channel_pool_seed: 信道池生成种子
+        sim:              外部传入的 SignalSimulator 实例（避免重复创建信道池）
     """
     # 固定全局随机种子，确保数据集生成、模型初始化和数据划分完全可复现
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    sim = SignalSimulator(channel_mode=channel_mode,
-                          n_fixed_channels=n_fixed_channels,
-                          channel_pool_seed=channel_pool_seed)
+    if sim is None:
+        sim = SignalSimulator(channel_mode=channel_mode,
+                              n_fixed_channels=n_fixed_channels,
+                              channel_pool_seed=channel_pool_seed)
     X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
     dataset = TensorDataset(X_noisy, X_clean)
 

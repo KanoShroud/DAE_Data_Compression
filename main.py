@@ -2,6 +2,8 @@
 
 import os
 import torch
+import numpy as np
+import random
 import matplotlib
 matplotlib.use('TkAgg')  # 非阻塞显示后端
 import matplotlib.pyplot as plt
@@ -14,13 +16,13 @@ from signal_gen import SignalSimulator
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CR_LIST = [4, 8, 16]
-N_SAMPLES = 20000        # 增加样本数以匹配CR=4的3.2M参数量需求
+N_SAMPLES = 50000        # 增加样本数以改善低SNR区间的CR排序
 K_FOLDS = 3              # 论文k=5, 但随机信道下CV方差大, 3折已足够且节省40%时间
 MAX_EPOCHS = 100         # 最大训练轮数（早停可提前结束）
 BATCH_SIZE = 64
 LR = 0.0005
 SEED = 42
-PATIENCE = 20            # 早停耐心值
+PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 
 # 如需快速验证（5~10分钟），可将 K_FOLDS 降至 1 并设 USE_SPLIT=True
@@ -33,8 +35,6 @@ N_FIXED_CHANNELS = 50          # 固定信道快照数（论文 50 snapshots）
 CHANNEL_POOL_SEED = 42         # 信道池生成种子
 
 # 全局随机种子 —— 确保训练与评估完全可复现
-import numpy as np
-import random
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
@@ -80,7 +80,7 @@ for cr in CR_LIST:
         epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=SEED,
         patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
         channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
-        channel_pool_seed=CHANNEL_POOL_SEED
+        channel_pool_seed=CHANNEL_POOL_SEED, sim=sim
     )
     models_dict[cr] = model
     cv_results_dict[cr] = cv_results
@@ -93,17 +93,21 @@ if len(CR_LIST) == 1:
 for ax, cr in zip(axes_cv, CR_LIST):
     n_folds = len(cv_results_dict[cr]['fold_train_loss'])
     for fold_idx in range(n_folds):
+        lbl_train = f'Train (Fold {fold_idx+1})' if n_folds > 1 else 'Train'
+        lbl_val = f'Val (Fold {fold_idx+1})' if n_folds > 1 else 'Val'
         ax.plot(cv_results_dict[cr]['fold_train_loss'][fold_idx],
-                alpha=0.4, color=f'C{fold_idx}', linewidth=0.8)
+                alpha=0.4, color=f'C{fold_idx}', linewidth=0.8, label=lbl_train)
         ax.plot(cv_results_dict[cr]['fold_val_loss'][fold_idx],
-                alpha=0.7, color=f'C{fold_idx}', linewidth=1.2, linestyle='--')
+                alpha=0.7, color=f'C{fold_idx}', linewidth=1.2, linestyle='--',
+                label=lbl_val)
     ax.set_title(f'CR={cr}')
     ax.set_xlabel('Epoch')
     ax.set_ylabel('MSE Loss')
     ax.grid(True, alpha=0.3)
-cv_title = 'Training Curves (solid: train, dashed: val)'
+    ax.legend(fontsize=7, framealpha=0.8)
+cv_title = 'Figure 1: Training Curves (solid: train, dashed: val)'
 if not USE_SPLIT:
-    cv_title = f'{K_FOLDS}-Fold Cross-Validation ' + cv_title
+    cv_title = f'Figure 1: {K_FOLDS}-Fold Cross-Validation Training Curves'
 fig_cv.suptitle(cv_title, fontsize=13)
 fig_cv.tight_layout()
 save_figure(fig_cv, "CV_training_curves")
@@ -119,7 +123,7 @@ save_figure(fig_mc, "MonteCarlo_TDOA_RMSE")
 
 # 6. 绘制信噪比对比图（4 个 SNR 水平 × 3 列：时域/频谱/互相关）
 #    使用最后训练的模型（CR=16 压缩最激进，对比效果最明显）
-fig_snr = plot_snr_comparison(models_dict[CR_LIST[-1]], sim, DEVICE)
+fig_snr = plot_snr_comparison(models_dict[CR_LIST[-1]], sim, DEVICE, cr=CR_LIST[-1])
 save_figure(fig_snr, "SNR_Comparison")
 
 # 7. 阻塞等待用户关闭所有图片窗口后退出

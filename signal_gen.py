@@ -53,12 +53,12 @@ class SignalSimulator:
     模拟 BPSK 调制的非协作辐射源，经 RRC 脉冲成形、多径信道和接收匹配滤波。
     """
 
-    def __init__(self, signal_len=1024, beta=0.35, rrc_span=8,
+    def __init__(self, signal_len=1024, beta=0.2, rrc_span=8,
                  channel_mode="random", n_fixed_channels=50, channel_pool_seed=42):
         """
         参数:
             signal_len:         信号长度（采样点数）
-            beta:               RRC 滚降系数
+            beta:               RRC 滚降系数 (0.2 → BW = (1+0.2)×20 = 24 MHz)
             rrc_span:           RRC 滤波器跨度（符号数）
             channel_mode:       "random" 每样本随机信道；"fixed" 从预生成信道池中随机选取
             n_fixed_channels:   固定信道池大小（仅 channel_mode="fixed" 时生效）

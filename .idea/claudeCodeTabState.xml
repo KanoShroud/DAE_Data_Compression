@@ -15,7 +15,7 @@
               <option name="provider" value="claude" />
               <option name="sessionId" value="5d9172cb-d145-45f3-9c34-0c6301adcbe8" />
               <option name="model" value="claude-opus-4-7[1m]" />
-              <option name="permissionMode" value="plan" />
+              <option name="permissionMode" value="acceptEdits" />
               <option name="reasoningEffort" value="high" />
             </TabSessionState>
           </value>
