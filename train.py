@@ -1,4 +1,5 @@
 # train.py
+import time
 import torch
 import torch.nn as nn
 import numpy as np
@@ -34,6 +35,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     stopped_epoch = epochs
 
     for ep in range(epochs):
+        t_ep = time.time()
+
         model.train()
         ep_loss = 0.0
         for bx, by in train_loader:
@@ -63,17 +66,20 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         else:
             epochs_no_improve += 1
 
+        ep_time = time.time() - t_ep
+
         if (ep + 1) % 10 == 0:
             current_lr = scheduler.get_last_lr()[0]
             early_mark = " [EARLY STOP]" if epochs_no_improve >= patience else ""
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
                   f"Train Loss {train_loss_hist[-1]:.5f} | "
-                  f"Val Loss {val_loss:.5f} | LR: {current_lr:.6f}{early_mark}")
+                  f"Val Loss {val_loss:.5f} | LR: {current_lr:.6f} | "
+                  f"{ep_time:.1f}s{early_mark}")
 
         if epochs_no_improve >= patience:
             stopped_epoch = ep + 1
             print(f"  Fold {fold_idx} Early stopping at Epoch {stopped_epoch} "
-                  f"(no improvement for {patience} epochs)")
+                  f"(no improvement for {patience} epochs, epoch耗时 {ep_time:.1f}s)")
             break
 
     model.load_state_dict(best_state)
@@ -143,6 +149,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"  Model Parameters: {model_params:,}")
     print(f"{'='*60}")
 
+    t_train_start = time.time()
+
     cv_results = {
         'cr': cr,
         'fold_train_loss': [],
@@ -167,10 +175,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                                 batch_size=batch_size, shuffle=False)
 
         model = DAE(cr=cr).to(device)
+        t_fold = time.time()
         model, train_loss, val_loss, best_val, stopped = train_one_fold(
             device, model, train_loader, val_loader, epochs, lr,
             fold_idx + 1, patience=patience, weight_decay=weight_decay
         )
+        fold_time = time.time() - t_fold
 
         cv_results['fold_train_loss'].append(train_loss)
         cv_results['fold_val_loss'].append(val_loss)
@@ -178,17 +188,19 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         cv_results['fold_stopped_epoch'].append(stopped)
 
         print(f"  Fold {fold_idx + 1} Best Val Loss: {best_val:.6f} "
-              f"(stopped at epoch {stopped})")
+              f"(stopped at epoch {stopped},耗时 {fold_time:.1f}s)")
 
         if best_val < best_overall_val:
             best_overall_val = best_val
             best_model = model
 
+    t_train_total = time.time() - t_train_start
     avg_val = sum(cv_results['fold_best_val']) / n_folds_actual
     avg_stop = sum(cv_results['fold_stopped_epoch']) / n_folds_actual
     print(f"\n  Average Best Val Loss over {n_folds_actual} fold(s): {avg_val:.6f}")
     print(f"  Average Stop Epoch: {avg_stop:.1f}")
     print(f"  Selected model with Val Loss: {best_overall_val:.6f}")
+    print(f"  Training Time: {t_train_total:.1f}s ({t_train_total/60:.1f}min)")
 
     return best_model, cv_results
 

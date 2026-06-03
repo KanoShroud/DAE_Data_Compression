@@ -56,7 +56,7 @@ class MonteCarloExperiment:
         self.sim = simulator
         self.device = device
         self.snr_range = np.arange(-10, 21, 1)
-        self.num_trials = 500
+        self.num_trials = 300
         self.seed = seed
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
         self.gcc_method = gcc_method
@@ -131,19 +131,71 @@ def plot_training_loss(loss_hist):
     return fig
 
 
-def plot_snr_comparison(model, sim, device, snr_list=None, cr=None):
+def generate_snr_data(model, sim, device, snr_list=None):
+    """生成 Figure 2 所需的绘图数据，可保存供 replot.py 重绘"""
     if snr_list is None:
         snr_list = [-10, 0, 10, 20]
 
-    # 采样率 40MHz，符号率 = Fs / sps = 40MHz / 2 = 20MHz
-    # RRC 滚降后 RF 带宽 = (1+beta) × 符号率 = (1+0.2) × 20 = 24MHz
     Fs = 40e6
-    Ts_us = 1e6 / Fs  # 采样间隔 = 0.025 μs
+    Ts_us = 1e6 / Fs
 
-    print(f"--- Phase 2: Analyzing Specific SNRs {snr_list} ---")
+    print(f"--- Generating SNR comparison data for {snr_list} ---")
     model.eval()
 
-    num_rows = len(snr_list)
+    data_list = []
+    for snr in snr_list:
+        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(1, snr_db=snr)
+        with torch.no_grad():
+            x1_rec = model(X1_n.to(device)).cpu()
+            x2_rec = model(X2_n.to(device)).cpu()
+
+        noisy1 = X1_n[0, 0, :].numpy() + 1j * X1_n[0, 1, :].numpy()
+        clean1 = X1_c[0, 0, :].numpy() + 1j * X1_c[0, 1, :].numpy()
+        recon1 = x1_rec[0, 0, :].numpy() + 1j * x1_rec[0, 1, :].numpy()
+        noisy2 = X2_n[0, 0, :].numpy() + 1j * X2_n[0, 1, :].numpy()
+        clean2 = X2_c[0, 0, :].numpy() + 1j * X2_c[0, 1, :].numpy()
+        recon2 = x2_rec[0, 0, :].numpy() + 1j * x2_rec[0, 1, :].numpy()
+        n_samples = len(noisy1)
+
+        f_n, P_n = signal.periodogram(noisy1, fs=Fs, return_onesided=False, scaling='density', detrend=False)
+        f_c, P_c = signal.periodogram(clean1, fs=Fs, return_onesided=False, scaling='density', detrend=False)
+        f_r, P_r = signal.periodogram(recon1, fs=Fs, return_onesided=False, scaling='density', detrend=False)
+
+        lags = signal.correlation_lags(n_samples, n_samples, mode='same')
+        corr_n = gcc_standard(noisy1, noisy2)
+        corr_c = gcc_standard(clean1, clean2)
+        corr_r = gcc_standard(recon1, recon2)
+
+        data_list.append({
+            'snr': snr,
+            'n_samples': n_samples,
+            't_us': np.arange(n_samples) * Ts_us,
+            'noisy_mag': np.abs(noisy1), 'clean_mag': np.abs(clean1), 'recon_mag': np.abs(recon1),
+            'f_n': np.fft.fftshift(f_n), 'f_c': np.fft.fftshift(f_c), 'f_r': np.fft.fftshift(f_r),
+            'P_n_db': 10 * np.log10(np.fft.fftshift(P_n) + 1e-30),
+            'P_c_db': 10 * np.log10(np.fft.fftshift(P_c) + 1e-30),
+            'P_r_db': 10 * np.log10(np.fft.fftshift(P_r) + 1e-30),
+            'lags': lags,
+            'corr_n_norm': np.abs(corr_n) / (np.max(np.abs(corr_n)) + 1e-9),
+            'corr_c_norm': np.abs(corr_c) / (np.max(np.abs(corr_c)) + 1e-9),
+            'corr_r_norm': np.abs(corr_r) / (np.max(np.abs(corr_r)) + 1e-9),
+            'true_tdoa': d1[0] - d2[0],
+        })
+
+    return data_list
+
+
+def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=None, data=None):
+    """
+    绘制 Figure 2: SNR 信号对比图。
+    可通过 data 参数传入预计算数据（replot.py 用），或传入 model+sim 现场计算。
+    """
+    if data is None:
+        data = generate_snr_data(model, sim, device, snr_list)
+    snr_list = [d['snr'] for d in data]
+
+    Fs = 40e6
+    num_rows = len(data)
     fig, axes = plt.subplots(num_rows, 3, figsize=(14, 2.1 * num_rows + 0.4))
     if num_rows == 1:
         axes = axes[np.newaxis, :]
@@ -156,31 +208,15 @@ def plot_snr_comparison(model, sim, device, snr_list=None, cr=None):
     for ax, col in zip(axes[0], cols):
         ax.set_title(col, fontsize=10, fontweight='bold')
 
-    for i, snr in enumerate(snr_list):
-        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(1, snr_db=snr)
-        X, Y = X1_n, X1_c
-        with torch.no_grad():
-            rec = model(X.to(device)).cpu()
+    for i, d in enumerate(data):
+        snr = d['snr']
+        t_us = d['t_us']
 
-        # 提取完整的复数信号 (I + jQ)
-        noisy_complex = X[0, 0, :].numpy() + 1j * X[0, 1, :].numpy()
-        clean_complex = Y[0, 0, :].numpy() + 1j * Y[0, 1, :].numpy()
-        recon_complex = rec[0, 0, :].numpy() + 1j * rec[0, 1, :].numpy()
-        n_samples = len(noisy_complex)
-
-        # 时域 x 轴：采样点 → 微秒
-        t_us = np.arange(n_samples) * Ts_us
-
-        # --- 1. 时域图 (线性幅度) ---
+        # --- 时域 ---
         ax_t = axes[i, 0]
-
-        noisy_mag = np.abs(noisy_complex)
-        clean_mag = np.abs(clean_complex)
-        recon_mag = np.abs(recon_complex)
-
-        ax_t.plot(t_us, noisy_mag, color='lightgray', linewidth=0.5, label='Noisy')
-        ax_t.plot(t_us, clean_mag, 'k--', linewidth=0.8, label='Clean')
-        ax_t.plot(t_us, recon_mag, 'r', alpha=0.8, linewidth=0.8, label='DAE')
+        ax_t.plot(t_us, d['noisy_mag'], color='cornflowerblue', linewidth=0.5, label='Noisy')
+        ax_t.plot(t_us, d['clean_mag'], 'k--', linewidth=0.8, label='Clean')
+        ax_t.plot(t_us, d['recon_mag'], 'r', alpha=0.8, linewidth=0.8, label='DAE')
         ax_t.set_ylabel(f"SNR={snr}dB\n|s(t)|", fontsize=9, fontweight='bold')
         ax_t.legend(loc='upper right', fontsize=7, framealpha=0.8)
         ax_t.set_xlim(0, t_us[299])
@@ -188,23 +224,11 @@ def plot_snr_comparison(model, sim, device, snr_list=None, cr=None):
         if i == num_rows - 1:
             ax_t.set_xlabel("Time [μs]", fontsize=10)
 
-        # --- 2. 频域图 (PSD in dB, 双边谱) ---
+        # --- 频域 ---
         ax_f = axes[i, 1]
-
-        f_n, P_n = signal.periodogram(noisy_complex, fs=Fs, return_onesided=False,
-                                      scaling='density', detrend=False)
-        f_r, P_r = signal.periodogram(recon_complex, fs=Fs, return_onesided=False,
-                                      scaling='density', detrend=False)
-        f_n = np.fft.fftshift(f_n)
-        P_n = np.fft.fftshift(P_n)
-        f_r = np.fft.fftshift(f_r)
-        P_r = np.fft.fftshift(P_r)
-
-        P_n_db = 10 * np.log10(P_n + 1e-30)
-        P_r_db = 10 * np.log10(P_r + 1e-30)
-
-        ax_f.plot(f_n / 1e6, P_n_db, color='lightgray', linewidth=0.5, label='Noisy')
-        ax_f.plot(f_r / 1e6, P_r_db, 'r', linewidth=0.8, label='DAE')
+        ax_f.plot(d['f_n'] / 1e6, d['P_n_db'], color='cornflowerblue', linewidth=0.5, label='Noisy')
+        ax_f.plot(d['f_c'] / 1e6, d['P_c_db'], 'k--', linewidth=0.8, label='Clean')
+        ax_f.plot(d['f_r'] / 1e6, d['P_r_db'], 'r', linewidth=0.8, label='DAE')
         ax_f.legend(loc='upper right', fontsize=7, framealpha=0.8)
         if i == num_rows - 1:
             ax_f.set_xlabel("Frequency [MHz]", fontsize=10)
@@ -212,28 +236,14 @@ def plot_snr_comparison(model, sim, device, snr_list=None, cr=None):
         ax_f.grid(alpha=0.3)
         ax_f.set_xlim(-20, 20)
 
-        # --- 3. 互相关图 — 双接收机 TDOA 估计效果 ---
+        # --- 互相关 ---
         ax_c = axes[i, 2]
-
-        x2_noisy_complex = X2_n[0, 0, :].numpy() + 1j * X2_n[0, 1, :].numpy()
-        with torch.no_grad():
-            x2_rec = model(X2_n.to(device)).cpu()
-        x2_recon_complex = x2_rec[0, 0, :].numpy() + 1j * x2_rec[0, 1, :].numpy()
-
-        corr_n = gcc_standard(noisy_complex, x2_noisy_complex)
-        corr_r = gcc_standard(recon_complex, x2_recon_complex)
-        lags = signal.correlation_lags(n_samples, n_samples, mode='same')
-
-        corr_n_norm = np.abs(corr_n) / (np.max(np.abs(corr_n)) + 1e-9)
-        corr_r_norm = np.abs(corr_r) / (np.max(np.abs(corr_r)) + 1e-9)
-
-        true_tdoa = d1[0] - d2[0]
-
-        ax_c.plot(lags, corr_n_norm, color='gray', alpha=0.5, linewidth=0.8, label='Raw')
-        ax_c.plot(lags, corr_r_norm, 'r', linewidth=1.2, label='DAE')
-        ax_c.axvline(true_tdoa, color='blue', linestyle='--', linewidth=0.8,
-                     label=f'True TDOA={true_tdoa}')
-        ax_c.set_xlim(true_tdoa - 100, true_tdoa + 100)
+        ax_c.plot(d['lags'], d['corr_n_norm'], color='cornflowerblue', linewidth=0.8, label='Noisy')
+        ax_c.plot(d['lags'], d['corr_c_norm'], 'k--', linewidth=0.8, label='Clean')
+        ax_c.plot(d['lags'], d['corr_r_norm'], 'r', linewidth=1.2, label='DAE')
+        ax_c.axvline(d['true_tdoa'], color='blue', linestyle='--', linewidth=0.8,
+                     label=f"True TDOA={d['true_tdoa']}")
+        ax_c.set_xlim(d['true_tdoa'] - 100, d['true_tdoa'] + 100)
         ax_c.grid(alpha=0.3)
         ax_c.set_ylabel("Norm. GCC", fontsize=9)
         ax_c.legend(loc='upper right', fontsize=7, framealpha=0.8)
