@@ -1,6 +1,7 @@
 # main.py
 
 import os
+import sys
 import time
 import torch
 import numpy as np
@@ -53,6 +54,25 @@ if torch.cuda.is_available():
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "运行结果", TIMESTAMP)
 os.makedirs(RESULT_DIR, exist_ok=True)
+
+# 日志重定向 —— 同时输出到控制台和文件
+class Tee:
+    """将 stdout 同时输出到终端和文件"""
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+log_path = os.path.join(RESULT_DIR, "run.log")
+log_file = open(log_path, 'w', encoding='utf-8')
+sys.stdout = Tee(sys.__stdout__, log_file)
+sys.stderr = Tee(sys.__stderr__, log_file)
+print(f"[Log] {log_path}")
 
 # ===================== 工具函数 =====================
 
@@ -197,3 +217,9 @@ if plt.get_fignums():
     plt.show()
 
 print("程序运行完毕。")
+
+# 关闭日志文件，恢复原始 stdout/stderr
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
+log_file.close()
+print(f"[Log] 日志已保存至: {log_path}")

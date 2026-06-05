@@ -88,7 +88,15 @@ class SignalSimulator:
                              for i in range(x.shape[0])])
 
     def _build_channel_pool(self, n_channels, seed):
-        """预生成 n_channels 条固定多径信道，确保可复现"""
+        """
+        预生成 n_channels 条固定多径信道，确保可复现。
+
+        增强版信道模型（匹配论文城市交叉路口场景）：
+        - 4-7 条多径 tap（原 2-4 条），模拟丰富散射环境
+        - 指数衰减功率延迟剖面（PDP），符合城市信道统计特性
+        - 最大延迟扩展 ~200 采样点（5μs @ 40MHz），对应 ~1500m 路径差
+        - 复增益随机相位，模拟各径独立衰落
+        """
         rng_state = np.random.get_state()
         np.random.seed(seed)
 
@@ -98,11 +106,24 @@ class SignalSimulator:
             main_delay = np.random.randint(10, 50)
             h = np.zeros(self.signal_len, dtype=complex)
             h[main_delay] = 1.0
-            for _ in range(np.random.randint(2, 4)):
-                tap_delay = np.random.randint(main_delay + 5,
-                                              min(main_delay + 100, self.signal_len))
-                h[tap_delay] = (np.random.uniform(0.1, 0.4)
-                                * np.exp(1j * np.random.uniform(0, 2 * np.pi)))
+
+            # 多径 tap 数量：4-7 条（城市环境丰富散射）
+            n_taps = np.random.randint(3, 7)
+
+            # 延迟扩展：taps 均匀分布在 [main+5, main+200) 范围
+            max_delay = min(main_delay + 200, self.signal_len)
+            tap_delays = np.sort(np.random.randint(main_delay + 5, max_delay, size=n_taps))
+
+            # 指数衰减功率延迟剖面（PDP）
+            # 相对延迟越大，功率越小；衰减因子 tau_rms 控制衰减速度
+            tau_rms = np.random.uniform(20, 60)  # 均方根延迟扩展（采样点）
+            for td in tap_delays:
+                rel_delay = td - main_delay
+                power = np.exp(-rel_delay / tau_rms)  # 指数衰减
+                gain = np.sqrt(power) * np.random.uniform(0.2, 0.6)
+                phase = np.random.uniform(0, 2 * np.pi)
+                h[td] = gain * np.exp(1j * phase)
+
             self._channel_pool.append(h)
             self._channel_delays.append(main_delay)
 

@@ -55,8 +55,8 @@ class MonteCarloExperiment:
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
-        self.snr_range = np.arange(-10, 21, 1)
-        self.num_trials = 300
+        self.snr_range = np.arange(-10, 6, 1)
+        self.num_trials = 1000
         self.seed = seed
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
         self.gcc_method = gcc_method
@@ -134,7 +134,7 @@ def plot_training_loss(loss_hist):
 def generate_snr_data(model, sim, device, snr_list=None):
     """生成 Figure 2 所需的绘图数据，可保存供 replot.py 重绘"""
     if snr_list is None:
-        snr_list = [-10, 0, 10, 20]
+        snr_list = [-10, -5, 0, 5]
 
     Fs = 40e6
     Ts_us = 1e6 / Fs
