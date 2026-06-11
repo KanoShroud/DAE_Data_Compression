@@ -19,7 +19,7 @@ from signal_gen import SignalSimulator
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CR_LIST = [4, 8, 16]
-N_SAMPLES = 40000        # 增加样本数以改善低SNR区间的CR排序
+N_SAMPLES = 50000        # 训练样本数
 K_FOLDS = 3              # 论文k=5, 但随机信道下CV方差大, 3折已足够且节省40%时间
 MAX_EPOCHS = 150         # 最大训练轮数（早停可提前结束）
 BATCH_SIZE = 128
@@ -27,6 +27,7 @@ LR = 0.0005
 SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
+LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -123,7 +124,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=current_seed,
             patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
             channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
-            channel_pool_seed=CHANNEL_POOL_SEED, sim=sim
+            channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
+            lambda_corr=LAMBDA_CORR
         )
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
@@ -165,6 +167,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         # 生成 Figure 2 的绘图数据
         snr_data = generate_snr_data(models_dict[CR_LIST[-1]], sim, DEVICE)
+
+        # 保存模型权重（供 diagnose_dae.py 使用）
+        for cr, model in models_dict.items():
+            model_path = os.path.join(RESULT_DIR, f"model_cr{cr}.pt")
+            torch.save(model.state_dict(), model_path)
+            print(f"[Saved] {model_path}")
 
         # 保存绘图数据
         plot_data = {

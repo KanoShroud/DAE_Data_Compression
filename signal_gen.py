@@ -91,38 +91,66 @@ class SignalSimulator:
         """
         预生成 n_channels 条固定多径信道，确保可复现。
 
-        增强版信道模型（匹配论文城市交叉路口场景）：
-        - 4-7 条多径 tap（原 2-4 条），模拟丰富散射环境
-        - 指数衰减功率延迟剖面（PDP），符合城市信道统计特性
-        - 最大延迟扩展 ~200 采样点（5μs @ 40MHz），对应 ~1500m 路径差
-        - 复增益随机相位，模拟各径独立衰落
+        Saleh-Valenzuela 聚簇多径信道模型（匹配论文 Wireless InSite 城市场景）：
+        - 多径按簇到达，更接近真实城市散射环境
+        - 簇到达服从 Poisson 过程（率 Λ）
+        - 簇内径到达服从 Poisson 过程（率 λ，λ > Λ）
+        - 簇幅度指数衰减（时间常数 Γ）
+        - 簇内径幅度指数衰减（时间常数 γ）
+        - 20% 概率 NLOS（最强径不是第一径）
+
+        参数说明（采样点为单位，1 采样点 = 25ns @ 40MHz）：
+        - Λ = 0.1: 簇到达率，平均簇间距 10 采样点（250ns）
+        - λ = 0.5: 簇内径到达率，平均径间距 2 采样点（50ns）
+        - Γ = 50: 簇衰减时间常数（1.25μs）
+        - γ = 10: 簇内径衰减时间常数（250ns）
         """
         rng_state = np.random.get_state()
         np.random.seed(seed)
+
+        # Saleh-Valenzuela 参数
+        Lambda = 0.1      # 簇到达率（每采样点）
+        lam = 0.5         # 簇内径到达率（每采样点）
+        Gamma = 50        # 簇衰减时间常数（采样点）
+        gamma = 10        # 簇内径衰减时间常数（采样点）
 
         self._channel_pool = []
         self._channel_delays = []
         for _ in range(n_channels):
             main_delay = np.random.randint(10, 50)
             h = np.zeros(self.signal_len, dtype=complex)
-            h[main_delay] = 1.0
+            h[main_delay] = 1.0  # LOS 分量
 
-            # 多径 tap 数量：4-7 条（城市环境丰富散射）
-            n_taps = np.random.randint(3, 7)
+            # 生成簇到达时间（Poisson 过程）
+            cluster_delays = []
+            t = main_delay + 5
+            while t < min(main_delay + 300, self.signal_len):
+                cluster_delays.append(t)
+                t += np.random.exponential(1.0 / Lambda)
 
-            # 延迟扩展：taps 均匀分布在 [main+5, main+200) 范围
-            max_delay = min(main_delay + 200, self.signal_len)
-            tap_delays = np.sort(np.random.randint(main_delay + 5, max_delay, size=n_taps))
+            # 对每个簇生成径
+            for cluster_delay in cluster_delays:
+                # 簇幅度：指数衰减
+                cluster_amp = np.exp(-(cluster_delay - main_delay) / Gamma)
 
-            # 指数衰减功率延迟剖面（PDP）
-            # 相对延迟越大，功率越小；衰减因子 tau_rms 控制衰减速度
-            tau_rms = np.random.uniform(20, 60)  # 均方根延迟扩展（采样点）
-            for td in tap_delays:
-                rel_delay = td - main_delay
-                power = np.exp(-rel_delay / tau_rms)  # 指数衰减
-                gain = np.sqrt(power) * np.random.uniform(0.2, 0.6)
-                phase = np.random.uniform(0, 2 * np.pi)
-                h[td] = gain * np.exp(1j * phase)
+                # 簇内径到达时间（Poisson 过程）
+                ray_t = cluster_delay
+                while ray_t < min(cluster_delay + 50, self.signal_len):
+                    if int(ray_t) < self.signal_len:
+                        # 径幅度 = 簇幅度 × 簇内径衰减 × Rayleigh 衰落
+                        ray_amp = cluster_amp * np.exp(-(ray_t - cluster_delay) / gamma)
+                        rayleigh = np.sqrt(-2 * np.log(np.random.uniform(0.01, 1.0)))
+                        gain = ray_amp * rayleigh * 0.3
+                        phase = np.random.uniform(0, 2 * np.pi)
+                        h[int(ray_t)] += gain * np.exp(1j * phase)
+                    ray_t += np.random.exponential(1.0 / lam)
+
+            # 20% 概率 NLOS：最强径不是第一径
+            if np.random.random() < 0.2:
+                gains = [(i, abs(h[i])) for i in range(len(h)) if i != main_delay and abs(h[i]) > 0]
+                if gains:
+                    strongest = max(gains, key=lambda x: x[1])
+                    h[strongest[0]] *= np.random.uniform(1.5, 3.0)
 
             self._channel_pool.append(h)
             self._channel_delays.append(main_delay)
@@ -244,3 +272,30 @@ class SignalSimulator:
         np.random.set_state(rng_state)
 
         return torch.cat(noisy_list, dim=0), torch.cat(clean_list, dim=0)
+
+    def generate_paired_training_dataset(self, n_samples, seed=42):
+        """
+        生成配对训练数据集（X1, X2 同信道同噪声），用于相关性损失训练。
+
+        返回:
+            X1_noisy, X1_clean, X2_noisy, X2_clean: (n_samples, 2, signal_len)
+        """
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        batch_cap = 500
+        x1n_list, x1c_list, x2n_list, x2c_list = [], [], [], []
+
+        for start in range(0, n_samples, batch_cap):
+            end = min(start + batch_cap, n_samples)
+            bs = end - start
+            X1_n, X1_c, X2_n, X2_c, _, _ = self.generate_pair_batch(bs, snr_db=None)
+            x1n_list.append(X1_n)
+            x1c_list.append(X1_c)
+            x2n_list.append(X2_n)
+            x2c_list.append(X2_c)
+
+        np.random.set_state(rng_state)
+
+        return (torch.cat(x1n_list, dim=0), torch.cat(x1c_list, dim=0),
+                torch.cat(x2n_list, dim=0), torch.cat(x2c_list, dim=0))

@@ -55,7 +55,7 @@ class MonteCarloExperiment:
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
-        self.snr_range = np.arange(-10, 6, 1)
+        self.snr_range = np.arange(-10, 11, 1)
         self.num_trials = 1000
         self.seed = seed
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
@@ -71,6 +71,8 @@ class MonteCarloExperiment:
         for cr in self.models_dict.keys():
             results[f'dae_{cr}'] = []
             results[f'dae_{cr}_med'] = []
+            results[f'dae_{cr}_norm'] = []
+            results[f'dae_{cr}_norm_med'] = []
             self.models_dict[cr].eval()
 
         signal_len = self.sim.signal_len
@@ -101,6 +103,8 @@ class MonteCarloExperiment:
             for cr, model in self.models_dict.items():
                 se_dae = 0.0
                 se_list_dae = []
+                se_dae_norm = 0.0
+                se_list_dae_norm = []
                 with torch.no_grad():
                     Y1_rec = model(X1_dev).cpu().numpy()
                     Y2_rec = model(X2_dev).cpu().numpy()
@@ -113,8 +117,26 @@ class MonteCarloExperiment:
                     se = (delay_dae - true_tdoa) ** 2
                     se_dae += se
                     se_list_dae.append(se)
+
+                    # 归一化版本：将 DAE 输出缩放到与 Raw 相同的 RMS 幅度
+                    raw_rms1 = np.sqrt(np.mean(np.abs(sig_raw1) ** 2))
+                    raw_rms2 = np.sqrt(np.mean(np.abs(sig_raw2) ** 2))
+                    dae_rms1 = np.sqrt(np.mean(np.abs(sig_rec1) ** 2))
+                    dae_rms2 = np.sqrt(np.mean(np.abs(sig_rec2) ** 2))
+                    scale1 = raw_rms1 / (dae_rms1 + 1e-30)
+                    scale2 = raw_rms2 / (dae_rms2 + 1e-30)
+                    sig_norm1 = sig_rec1 * scale1
+                    sig_norm2 = sig_rec2 * scale2
+                    corr_norm = self.gcc_func(sig_norm1, sig_norm2)
+                    delay_norm = lags[np.argmax(np.abs(corr_norm))]
+                    se_norm = (delay_norm - true_tdoa) ** 2
+                    se_dae_norm += se_norm
+                    se_list_dae_norm.append(se_norm)
+
                 results[f'dae_{cr}'].append(np.sqrt(se_dae / self.num_trials))
                 results[f'dae_{cr}_med'].append(np.sqrt(np.median(se_list_dae)))
+                results[f'dae_{cr}_norm'].append(np.sqrt(se_dae_norm / self.num_trials))
+                results[f'dae_{cr}_norm_med'].append(np.sqrt(np.median(se_list_dae_norm)))
 
         return results, self.snr_range
 
@@ -134,7 +156,7 @@ def plot_training_loss(loss_hist):
 def generate_snr_data(model, sim, device, snr_list=None):
     """生成 Figure 2 所需的绘图数据，可保存供 replot.py 重绘"""
     if snr_list is None:
-        snr_list = [-10, -5, 0, 5]
+        snr_list = [-10, -3, 3, 10]
 
     Fs = 40e6
     Ts_us = 1e6 / Fs
@@ -257,6 +279,7 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
 def plot_monte_carlo(mc_data):
     results, snr_range = mc_data
     has_median = 'raw_med' in results
+    has_norm = 'dae_4_norm' in results
     ncols = 2 if has_median else 1
     fig, axes = plt.subplots(1, ncols, figsize=(8 * ncols, 5.5))
     if ncols == 1:
@@ -271,13 +294,21 @@ def plot_monte_carlo(mc_data):
         ax.plot(snr_range, results['dae_8'], 'g-o', label='Data with CR=8', markerfacecolor='none', linewidth=1.5)
     if 'dae_16' in results:
         ax.plot(snr_range, results['dae_16'], 'r-+', label='Data with CR=16', linewidth=1.5)
+    # 归一化版本（虚线）
+    if has_norm:
+        if 'dae_4_norm' in results:
+            ax.plot(snr_range, results['dae_4_norm'], 'm--*', label='CR=4 (norm)', linewidth=1.0, alpha=0.6)
+        if 'dae_8_norm' in results:
+            ax.plot(snr_range, results['dae_8_norm'], 'g--o', label='CR=8 (norm)', markerfacecolor='none', linewidth=1.0, alpha=0.6)
+        if 'dae_16_norm' in results:
+            ax.plot(snr_range, results['dae_16_norm'], 'r--+', label='CR=16 (norm)', linewidth=1.0, alpha=0.6)
     ax.set_xlabel('SNR [dB]', fontsize=12)
     ax.set_ylabel('TDOA RMSE [samples]', fontsize=12)
     ax.set_title('Mean RMSE (sensitive to outliers)', fontsize=11)
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.5)
 
-    # 右图: Median RMSE (对 outlier 鲁棒，展示典型性能)
+    # 右图: Median RMSE
     if has_median:
         ax = axes[1]
         ax.plot(snr_range, results['raw_med'], 'b-s', label='Original data', linewidth=1.5)
@@ -287,6 +318,14 @@ def plot_monte_carlo(mc_data):
             ax.plot(snr_range, results['dae_8_med'], 'g-o', label='Data with CR=8', markerfacecolor='none', linewidth=1.5)
         if 'dae_16_med' in results:
             ax.plot(snr_range, results['dae_16_med'], 'r-+', label='Data with CR=16', linewidth=1.5)
+        # 归一化版本（虚线）
+        if has_norm:
+            if 'dae_4_norm_med' in results:
+                ax.plot(snr_range, results['dae_4_norm_med'], 'm--*', label='CR=4 (norm)', linewidth=1.0, alpha=0.6)
+            if 'dae_8_norm_med' in results:
+                ax.plot(snr_range, results['dae_8_norm_med'], 'g--o', label='CR=8 (norm)', markerfacecolor='none', linewidth=1.0, alpha=0.6)
+            if 'dae_16_norm_med' in results:
+                ax.plot(snr_range, results['dae_16_norm_med'], 'r--+', label='CR=16 (norm)', linewidth=1.0, alpha=0.6)
         ax.set_xlabel('SNR [dB]', fontsize=12)
         ax.set_ylabel('TDOA RMSE [samples]', fontsize=12)
         ax.set_title('Median RMSE (robust, typical performance)', fontsize=11)

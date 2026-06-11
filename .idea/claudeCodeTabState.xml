@@ -1,26 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeTabState">
-    <option name="tabNames">
-      <map>
-        <entry key="0" value="Deepseek" />
-        <entry key="1" value="Mimo" />
-      </map>
-    </option>
     <option name="tabSessions">
       <map>
         <entry key="0">
-          <value>
-            <TabSessionState>
-              <option name="provider" value="claude" />
-              <option name="sessionId" value="5d9172cb-d145-45f3-9c34-0c6301adcbe8" />
-              <option name="model" value="claude-opus-4-7[1m]" />
-              <option name="permissionMode" value="acceptEdits" />
-              <option name="reasoningEffort" value="high" />
-            </TabSessionState>
-          </value>
-        </entry>
-        <entry key="1">
           <value>
             <TabSessionState>
               <option name="provider" value="claude" />
@@ -34,6 +17,5 @@
         </entry>
       </map>
     </option>
-    <option name="tabCount" value="2" />
   </component>
 </project>

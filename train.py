@@ -12,8 +12,38 @@ from model import DAE
 from signal_gen import SignalSimulator
 
 
+def gcc_torch(sig1_real, sig1_imag, sig2_real, sig2_imag, fft_len=None):
+    """
+    可微分 GCC 计算（PyTorch 版本）
+
+    参数:
+        sig1_real, sig1_imag: (batch, signal_len) 实部和虚部
+        sig2_real, sig2_imag: (batch, signal_len)
+        fft_len: FFT 长度（默认 2 的幂次，比 2*signal_len-1 更快）
+    返回:
+        cc_real: (batch, fft_len) 互相关函数（实部）
+    """
+    n = sig1_real.shape[-1]
+    if fft_len is None:
+        fft_len = 1
+        while fft_len < 2 * n - 1:
+            fft_len <<= 1
+
+    sig1 = torch.complex(sig1_real, sig1_imag)
+    sig2 = torch.complex(sig2_real, sig2_imag)
+
+    SIG1 = torch.fft.fft(sig1, n=fft_len)
+    SIG2 = torch.fft.fft(sig2, n=fft_len)
+
+    R = SIG1 * torch.conj(SIG2)
+    cc = torch.fft.ifft(R)
+    cc = torch.fft.fftshift(cc, dim=-1)
+
+    return cc.real
+
+
 def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
-                   fold_idx, patience=20, weight_decay=1e-4):
+                   fold_idx, patience=20, weight_decay=1e-4, lambda_corr=0.0):
     """
     在单个 fold 上训练模型，含早停机制。
 
@@ -39,13 +69,45 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
         model.train()
         ep_loss = 0.0
-        for bx, by in train_loader:
-            bx, by = bx.to(device), by.to(device)
-            optimizer.zero_grad()
-            loss = criterion(model(bx), by)
-            loss.backward()
-            optimizer.step()
-            ep_loss += loss.item() * bx.size(0)
+        ep_corr = 0.0
+        for batch in train_loader:
+            if lambda_corr > 0 and len(batch) == 4:
+                # 配对数据：(X1_noisy, X1_clean, X2_noisy, X2_clean)
+                bx1, by1, bx2, by2 = [b.to(device) for b in batch]
+                optimizer.zero_grad()
+
+                # 合并 X1/X2 为单次前向传播
+                bx_all = torch.cat([bx1, bx2], dim=0)
+                y_all = model(bx_all)
+                y1, y2 = y_all.chunk(2, dim=0)
+
+                loss_mse = criterion(y1, by1) + criterion(y2, by2)
+
+                # Clean 信号 GCC 不需要梯度
+                with torch.no_grad():
+                    gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
+                                          by2[:, 0, :], by2[:, 1, :])
+                    gcc_clean_n = gcc_clean / (torch.max(torch.abs(gcc_clean), dim=-1, keepdim=True)[0] + 1e-9)
+
+                # DAE 输出 GCC 需要梯度
+                gcc_dae = gcc_torch(y1[:, 0, :], y1[:, 1, :],
+                                    y2[:, 0, :], y2[:, 1, :])
+                gcc_dae_n = gcc_dae / (torch.max(torch.abs(gcc_dae), dim=-1, keepdim=True)[0] + 1e-9)
+                loss_corr = criterion(gcc_dae_n, gcc_clean_n)
+
+                loss = loss_mse + lambda_corr * loss_corr
+                loss.backward()
+                optimizer.step()
+                ep_loss += loss_mse.item() * bx1.size(0)
+                ep_corr += loss_corr.item() * bx1.size(0)
+            else:
+                # 单信号数据：(noisy, clean)
+                bx, by = batch[0].to(device), batch[1].to(device)
+                optimizer.zero_grad()
+                loss = criterion(model(bx), by)
+                loss.backward()
+                optimizer.step()
+                ep_loss += loss.item() * bx.size(0)
         train_loss_hist.append(ep_loss / len(train_loader.dataset))
 
         scheduler.step()
@@ -53,8 +115,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for bx, by in val_loader:
-                bx, by = bx.to(device), by.to(device)
+            for batch in val_loader:
+                if len(batch) == 4:
+                    bx, by = batch[0].to(device), batch[1].to(device)
+                else:
+                    bx, by = batch[0].to(device), batch[1].to(device)
                 val_loss += criterion(model(bx), by).item() * bx.size(0)
         val_loss /= len(val_loader.dataset)
         val_loss_hist.append(val_loss)
@@ -71,10 +136,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         if (ep + 1) % 10 == 0:
             current_lr = scheduler.get_last_lr()[0]
             early_mark = " [EARLY STOP]" if epochs_no_improve >= patience else ""
+            corr_str = f" | Corr {ep_corr / len(train_loader.dataset):.5f}" if lambda_corr > 0 else ""
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
-                  f"Train Loss {train_loss_hist[-1]:.5f} | "
-                  f"Val Loss {val_loss:.5f} | LR: {current_lr:.6f} | "
-                  f"{ep_time:.1f}s{early_mark}")
+                  f"Train {train_loss_hist[-1]:.5f} | "
+                  f"Val {val_loss:.5f}{corr_str} | "
+                  f"LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
 
         if epochs_no_improve >= patience:
             stopped_epoch = ep + 1
@@ -90,32 +156,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   batch_size=64, lr=0.0005, seed=42,
                   patience=20, weight_decay=1e-4, use_split=False,
                   channel_mode="random", n_fixed_channels=50, channel_pool_seed=42,
-                  sim=None):
+                  sim=None, lambda_corr=0.0):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
-    1. 用固定种子生成含 n_samples 条样本的数据集
-    2a. use_split=False: 按 k-fold 划分训练/验证集（论文方案）
-    2b. use_split=True:  单次 80/20 随机划分（快速验证用）
-    3. 早停 & L2 正则化
-    4. 返回验证 loss 最低的模型
-
     参数:
-        device:       torch.device
-        cr:           压缩率 (4/8/16)
-        k:            fold 数 (use_split=True 时忽略)
-        n_samples:    总样本数
-        epochs:       最大训练轮数（早停可提前结束）
-        batch_size:   批量大小
-        lr:           初始学习率
-        seed:         数据集随机种子
-        patience:     早停耐心值
-        weight_decay: L2 正则化系数
-        use_split:    True 则使用单次 80/20 划分替代 K-fold CV
-        channel_mode: "random" 每样本随机信道；"fixed" 从预生成信道池中随机选取
-        n_fixed_channels: 固定信道池大小
-        channel_pool_seed: 信道池生成种子
-        sim:              外部传入的 SignalSimulator 实例（避免重复创建信道池）
+        lambda_corr:  GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
     """
     # 固定全局随机种子，确保数据集生成、模型初始化和数据划分完全可复现
     torch.manual_seed(seed)
@@ -125,8 +171,14 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         sim = SignalSimulator(channel_mode=channel_mode,
                               n_fixed_channels=n_fixed_channels,
                               channel_pool_seed=channel_pool_seed)
-    X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
-    dataset = TensorDataset(X_noisy, X_clean)
+
+    if lambda_corr > 0:
+        # 配对数据：X1 和 X2 来自同信道同噪声，用于 GCC 损失
+        X1_n, X1_c, X2_n, X2_c = sim.generate_paired_training_dataset(n_samples, seed=seed)
+        dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c)
+    else:
+        X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
+        dataset = TensorDataset(X_noisy, X_clean)
 
     if use_split:
         # 单次 80/20 train/val 划分 (快速模式)
@@ -145,6 +197,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
+    if lambda_corr > 0:
+        print(f"  Correlation Loss: λ={lambda_corr}")
     model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
     print(f"  Model Parameters: {model_params:,}")
     print(f"{'='*60}")
@@ -178,7 +232,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         t_fold = time.time()
         model, train_loss, val_loss, best_val, stopped = train_one_fold(
             device, model, train_loader, val_loader, epochs, lr,
-            fold_idx + 1, patience=patience, weight_decay=weight_decay
+            fold_idx + 1, patience=patience, weight_decay=weight_decay,
+            lambda_corr=lambda_corr
         )
         fold_time = time.time() - t_fold
 
