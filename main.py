@@ -28,6 +28,12 @@ SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
+LAMBDA_PEAK = 0.5        # PNCC 峰值损失权重（0=不启用，>0 启用）
+
+# 自适应 λ 配置（方案1）
+USE_ADAPTIVE_LAMBDA = True   # 是否使用自适应 λ（根据 SNR 动态调整）
+SNR_THRESHOLD = 0.0          # 自适应 λ 的 SNR 阈值（dB）：SNR < 阈值时 λ 增大
+LAMBDA_TEMPERATURE = 5.0     # 自适应 λ 的温度参数：越小过渡越陡峭
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -125,7 +131,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
             channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
             channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
-            lambda_corr=LAMBDA_CORR
+            lambda_corr=LAMBDA_CORR, lambda_peak=LAMBDA_PEAK,
+            use_adaptive_lambda=USE_ADAPTIVE_LAMBDA,
+            snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE
         )
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results

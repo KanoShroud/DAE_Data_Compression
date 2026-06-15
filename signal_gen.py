@@ -279,23 +279,26 @@ class SignalSimulator:
 
         返回:
             X1_noisy, X1_clean, X2_noisy, X2_clean: (n_samples, 2, signal_len)
+            tdoa: (n_samples,) 真实 TDOA（采样点）
         """
         rng_state = np.random.get_state()
         np.random.seed(seed)
 
         batch_cap = 500
-        x1n_list, x1c_list, x2n_list, x2c_list = [], [], [], []
+        x1n_list, x1c_list, x2n_list, x2c_list, tdoa_list = [], [], [], [], []
 
         for start in range(0, n_samples, batch_cap):
             end = min(start + batch_cap, n_samples)
             bs = end - start
-            X1_n, X1_c, X2_n, X2_c, _, _ = self.generate_pair_batch(bs, snr_db=None)
+            X1_n, X1_c, X2_n, X2_c, delays1, delays2 = self.generate_pair_batch(bs, snr_db=None)
             x1n_list.append(X1_n)
             x1c_list.append(X1_c)
             x2n_list.append(X2_n)
             x2c_list.append(X2_c)
+            tdoa_list.append(torch.tensor(np.array(delays1) - np.array(delays2)))
 
         np.random.set_state(rng_state)
 
         return (torch.cat(x1n_list, dim=0), torch.cat(x1c_list, dim=0),
-                torch.cat(x2n_list, dim=0), torch.cat(x2c_list, dim=0))
+                torch.cat(x2n_list, dim=0), torch.cat(x2c_list, dim=0),
+                torch.cat(tdoa_list, dim=0))

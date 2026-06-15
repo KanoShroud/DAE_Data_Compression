@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeTabState">
+    <option name="tabNames">
+      <map>
+        <entry key="0" value="Mimo" />
+      </map>
+    </option>
     <option name="tabSessions">
       <map>
         <entry key="0">
           <value>
             <TabSessionState>
               <option name="provider" value="claude" />
-              <option name="sessionId" value="42347585-440c-4deb-a8d0-8acb0bc03201" />
-              <option name="cwd" value="$PROJECT_DIR$" />
+              <option name="sessionId" value="982c7a24-3d6e-4e26-a751-7ec25f262916" />
               <option name="model" value="claude-opus-4-7[1m]" />
               <option name="permissionMode" value="acceptEdits" />
-              <option name="reasoningEffort" value="high" />
             </TabSessionState>
           </value>
         </entry>
