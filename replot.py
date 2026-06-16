@@ -21,8 +21,6 @@ RESULT_DIR = "运行结果/20260601_145854"
 def save_figure(fig, filepath):
     fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
-    plt.show(block=False)
-    plt.pause(0.1)
 
 
 def replot(result_dir):
@@ -38,6 +36,21 @@ def replot(result_dir):
     snr_data = data['snr_data']
     snr_cr = data['snr_cr']
     mc_results = data['mc_results']
+    config = data.get('config', None)
+
+    # --- 显示运行配置 ---
+    if config:
+        print(f"\n{'='*60}")
+        print(f"Run Configuration:")
+        print(f"  Samples: {config['n_samples']} | Batch: {config['batch_size']} | LR: {config['lr']}")
+        print(f"  K-Folds: {config['k_folds']} | Max Epochs: {config['max_epochs']} | Patience: {config['patience']}")
+        print(f"  λ_corr: {config['lambda_corr']} | λ_peak: {config['lambda_peak']} | "
+              f"Adaptive: {config['use_adaptive_lambda']}")
+        print(f"  Channel: {config['channel_mode']} ({config['n_fixed_channels']} fixed)")
+        print(f"  CR List: {config['cr_list']}")
+        print(f"{'='*60}\n")
+    else:
+        print("(No config found in plot_data.pkl — legacy data file)")
 
     # --- Figure 1: CV 训练曲线 ---
     cr_list = list(cv_results_dict.keys())

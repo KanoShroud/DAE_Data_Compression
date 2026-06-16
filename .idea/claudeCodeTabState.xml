@@ -3,7 +3,7 @@
   <component name="ClaudeCodeTabState">
     <option name="tabNames">
       <map>
-        <entry key="0" value="Mimo" />
+        <entry key="0" value="创新方案" />
       </map>
     </option>
     <option name="tabSessions">
@@ -12,7 +12,7 @@
           <value>
             <TabSessionState>
               <option name="provider" value="claude" />
-              <option name="sessionId" value="982c7a24-3d6e-4e26-a751-7ec25f262916" />
+              <option name="sessionId" value="8b6a96d9-be07-4817-b03f-257293887c76" />
               <option name="model" value="claude-opus-4-7[1m]" />
               <option name="permissionMode" value="acceptEdits" />
             </TabSessionState>

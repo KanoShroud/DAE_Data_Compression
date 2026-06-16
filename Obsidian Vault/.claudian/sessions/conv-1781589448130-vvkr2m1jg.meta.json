@@ -1,0 +1,27 @@
+{
+  "id": "conv-1781589448130-vvkr2m1jg",
+  "providerId": "claude",
+  "title": "Critique review and propose revision plan",
+  "titleGenerationStatus": "success",
+  "createdAt": 1781589448131,
+  "updatedAt": 1781589679982,
+  "lastResponseAt": 1781589679982,
+  "sessionId": "b93f5f30-a41a-4da0-8d6c-fa0ef9faf307",
+  "providerState": {
+    "providerSessionId": "b93f5f30-a41a-4da0-8d6c-fa0ef9faf307"
+  },
+  "currentNote": "DAE New Method/研究总结_文献综述_创新方案.md",
+  "enabledMcpServers": [
+    "ZoteroMCP"
+  ],
+  "usage": {
+    "model": "opus[1m]",
+    "inputTokens": 8428,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 99584,
+    "contextWindow": 1000000,
+    "contextTokens": 108012,
+    "percentage": 11,
+    "contextWindowIsAuthoritative": true
+  }
+}

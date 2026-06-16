@@ -28,7 +28,7 @@ SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
-LAMBDA_PEAK = 0.5        # PNCC 峰值损失权重（0=不启用，>0 启用）
+LAMBDA_PEAK = 0.25       # PNCC 峰值损失最大权重（自适应：低SNR→0，高SNR→0.25）
 
 # 自适应 λ 配置（方案1）
 USE_ADAPTIVE_LAMBDA = True   # 是否使用自适应 λ（根据 SNR 动态调整）
@@ -85,16 +85,14 @@ print(f"[Log] {log_path}")
 
 def save_figure(fig, filename_stem):
     """
-    保存图片为 SVG 矢量图格式，并立即弹出显示窗口。
+    保存图片为 SVG 矢量图格式。
 
     SVG 为矢量图形，可无损缩放，适合论文插图。
+    图形窗口在程序末尾统一弹出，避免重复显示。
     """
     filepath = os.path.join(RESULT_DIR, f"{filename_stem}.svg")
     fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
-    # 非阻塞弹出窗口，后续 plt.show() 会统一阻塞等待用户关闭
-    plt.show(block=False)
-    plt.pause(0.1)
 
 # ===================== 主流程 =====================
 
@@ -146,30 +144,88 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
     # 4. 最后一个 seed：生成图片和保存数据
     if is_last_seed:
-        # 绘制交叉验证训练曲线
-        fig_cv, axes_cv = plt.subplots(1, len(CR_LIST),
-                                        figsize=(6 * len(CR_LIST), 4.5))
-        if len(CR_LIST) == 1:
-            axes_cv = [axes_cv]
-        for ax, cr in zip(axes_cv, CR_LIST):
-            n_folds = len(cv_results_dict[cr]['fold_train_loss'])
-            for fold_idx in range(n_folds):
-                lbl_train = f'Train (Fold {fold_idx+1})' if n_folds > 1 else 'Train'
-                lbl_val = f'Val (Fold {fold_idx+1})' if n_folds > 1 else 'Val'
-                ax.plot(cv_results_dict[cr]['fold_train_loss'][fold_idx],
-                        alpha=0.4, color=f'C{fold_idx}', linewidth=0.8, label=lbl_train)
-                ax.plot(cv_results_dict[cr]['fold_val_loss'][fold_idx],
-                        alpha=0.7, color=f'C{fold_idx}', linewidth=1.2, linestyle='--',
-                        label=lbl_val)
-            ax.set_title(f'CR={cr}')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('MSE Loss')
-            ax.grid(True, alpha=0.3)
-            ax.legend(fontsize=7, framealpha=0.8)
-        cv_title = 'Figure 1: Training Curves (solid: train, dashed: val)'
-        if not USE_SPLIT:
-            cv_title = f'Figure 1: {K_FOLDS}-Fold Cross-Validation Training Curves'
-        fig_cv.suptitle(cv_title, fontsize=13)
+        # ===== Figure 1: 多分量训练动态 (3行×3列面板) =====
+        n_cr = len(CR_LIST)
+        fig_cv, axes_cv = plt.subplots(3, n_cr, figsize=(5 * n_cr, 8.5))
+        if n_cr == 1:
+            axes_cv = axes_cv[:, np.newaxis]  # 保证 2D 索引
+
+        has_corr = LAMBDA_CORR > 0
+        has_peak = LAMBDA_PEAK > 0
+
+        for col, cr in enumerate(CR_LIST):
+            cr_data = cv_results_dict[cr]
+            n_folds = len(cr_data['fold_train_loss'])
+
+            # --- Row 1: MSE Loss ---
+            ax_mse = axes_cv[0, col]
+            for fi in range(n_folds):
+                lbl_t = f'Train (F{fi+1})' if n_folds > 1 else 'Train'
+                lbl_v = f'Val (F{fi+1})' if n_folds > 1 else 'Val'
+                ax_mse.plot(cr_data['fold_train_loss'][fi], alpha=0.4,
+                            color=f'C{fi}', linewidth=0.8, label=lbl_t)
+                ax_mse.plot(cr_data['fold_val_loss'][fi], alpha=0.7,
+                            color=f'C{fi}', linewidth=1.2, linestyle='--', label=lbl_v)
+            ax_mse.set_title(f'CR={cr} | MSE Loss', fontsize=10, fontweight='bold')
+            ax_mse.set_ylabel('MSE')
+            ax_mse.grid(True, alpha=0.3)
+            ax_mse.legend(fontsize=6, framealpha=0.8, ncol=2)
+
+            # --- Row 2: GCC Correlation Loss ---
+            ax_corr = axes_cv[1, col]
+            if has_corr and 'fold_corr_loss' in cr_data:
+                for fi in range(n_folds):
+                    ax_corr.plot(cr_data['fold_corr_loss'][fi], alpha=0.5,
+                                 color=f'C{fi}', linewidth=1.0,
+                                 label=f'F{fi+1}' if n_folds > 1 else 'Corr')
+                ax_corr.set_title(f'CR={cr} | GCC Correlation Loss', fontsize=10, fontweight='bold')
+                ax_corr.legend(fontsize=6, framealpha=0.8)
+            else:
+                ax_corr.text(0.5, 0.5, 'N/A (pure MSE)', ha='center', va='center',
+                             transform=ax_corr.transAxes, color='gray')
+                ax_corr.set_title(f'CR={cr} | GCC Correlation Loss', fontsize=10, fontweight='bold')
+            ax_corr.set_ylabel('Corr Loss')
+            ax_corr.grid(True, alpha=0.3)
+
+        # --- Row 3: Adaptive Parameters (all CRs overlaid) ---
+        ax_lambda = axes_cv[2, 0]
+        ax_peak = axes_cv[2, 1] if n_cr >= 2 else axes_cv[2, 0]
+        for col, cr in enumerate(CR_LIST):
+            cr_data = cv_results_dict[cr]
+            n_folds = len(cr_data.get('fold_avg_lambda', []))
+            if has_corr and n_folds > 0:
+                for fi in range(n_folds):
+                    avg_l = np.mean(cr_data['fold_avg_lambda'][fi]) if len(cr_data['fold_avg_lambda'][fi]) > 0 else 0
+                    ax_lambda.plot(cr_data['fold_avg_lambda'][fi], alpha=0.5,
+                                   color=f'C{col}', linewidth=0.8,
+                                   label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
+            if has_peak and 'fold_peak_loss' in cr_data:
+                for fi in range(n_folds):
+                    ax_peak.plot(cr_data['fold_peak_loss'][fi], alpha=0.5,
+                                 color=f'C{col}', linewidth=1.0,
+                                 label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
+
+        ax_lambda.set_title('Adaptive λ (SNR-dependent)', fontsize=10, fontweight='bold')
+        ax_lambda.set_xlabel('Epoch'); ax_lambda.set_ylabel('λ')
+        ax_lambda.grid(True, alpha=0.3)
+        if has_corr:
+            ax_lambda.axhline(y=0.30, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
+            ax_lambda.legend(fontsize=6, framealpha=0.8)
+
+        ax_peak.set_title('PNCC Peak Loss', fontsize=10, fontweight='bold')
+        ax_peak.set_xlabel('Epoch'); ax_peak.set_ylabel('Peak Loss')
+        ax_peak.grid(True, alpha=0.3)
+        if has_peak:
+            ax_peak.legend(fontsize=6, framealpha=0.8)
+
+        # 隐藏 Row 3 Col 3（若存在）
+        if n_cr >= 3:
+            axes_cv[2, 2].set_visible(False)
+
+        adaptive_str = "Adaptive" if USE_ADAPTIVE_LAMBDA else f"Fixed λ={LAMBDA_CORR}"
+        cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics '
+                    f'(λ_corr={LAMBDA_CORR}, λ_peak={LAMBDA_PEAK}, {adaptive_str})')
+        fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
         save_figure(fig_cv, "Fig1_CV_training_curves")
 
@@ -182,12 +238,30 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             torch.save(model.state_dict(), model_path)
             print(f"[Saved] {model_path}")
 
-        # 保存绘图数据
+        # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
             'cv_results_dict': cv_results_dict,
             'snr_data': snr_data,
             'snr_cr': CR_LIST[-1],
             'mc_results': mc_results,
+            'config': {
+                'n_samples': N_SAMPLES,
+                'batch_size': BATCH_SIZE,
+                'k_folds': K_FOLDS,
+                'max_epochs': MAX_EPOCHS,
+                'lr': LR,
+                'seed': SEED,
+                'patience': PATIENCE,
+                'weight_decay': WEIGHT_DECAY,
+                'lambda_corr': LAMBDA_CORR,
+                'lambda_peak': LAMBDA_PEAK,
+                'use_adaptive_lambda': USE_ADAPTIVE_LAMBDA,
+                'snr_threshold': SNR_THRESHOLD,
+                'lambda_temperature': LAMBDA_TEMPERATURE,
+                'channel_mode': CHANNEL_MODE,
+                'n_fixed_channels': N_FIXED_CHANNELS,
+                'cr_list': CR_LIST,
+            },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
         with open(pkl_path, 'wb') as f:

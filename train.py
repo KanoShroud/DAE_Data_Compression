@@ -16,14 +16,20 @@ class AdaptiveLambda(nn.Module):
     """
     自适应 λ 模块：根据 SNR 动态调整 MSE 和相关性损失的权重
 
-    λ(SNR) = σ((SNR_threshold - SNR) / temperature)
+    λ(SNR) = λ_min + (λ_max - λ_min) · σ((SNR_threshold - SNR) / temperature)
 
-    低 SNR → λ 大（更重视 GCC 结构保留）
-    高 SNR → λ 小（更重视波形重建）
+    低 SNR → λ 接近 λ_max（更重视 GCC 结构保留）
+    高 SNR → λ 接近 λ_min（更重视波形重建）
+
+    λ 始终限制在 [λ_min, λ_max] 范围内（默认 [0.20, 0.50]，以 λ=0.30 为中心），
+    平衡 GCC 结构保留与 MSE 波形重建。
     """
 
-    def __init__(self, snr_threshold=0.0, temperature=5.0):
+    def __init__(self, lambda_min=0.20, lambda_max=0.50,
+                 snr_threshold=0.0, temperature=5.0):
         super().__init__()
+        self.lambda_min = lambda_min
+        self.lambda_max = lambda_max
         self.snr_threshold = snr_threshold
         self.temperature = temperature
 
@@ -32,12 +38,12 @@ class AdaptiveLambda(nn.Module):
         参数:
             snr: SNR 值 (dB)，标量或张量
         返回:
-            λ 值，范围 (0, 1)
+            λ 值，范围 [lambda_min, lambda_max]
         """
-        lambda_val = torch.sigmoid(
+        raw = torch.sigmoid(
             (self.snr_threshold - snr) / self.temperature
         )
-        return lambda_val
+        return self.lambda_min + (self.lambda_max - self.lambda_min) * raw
 
 
 def estimate_batch_snr(noisy, clean):
@@ -155,6 +161,62 @@ def gcc_peak_loss(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
     return torch.mean(1.0 - peak_norm)
 
 
+def gcc_peak_loss_per_sample(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
+    """
+    逐样本 PNCC 峰值损失（不取均值），配合自适应峰值权重使用。
+
+    返回:
+        loss_per_sample: (batch,) 每个样本的 1 - |GCC(true_tdoa)| / max(|GCC|)
+    """
+    n = y1_real.shape[-1]
+    if fft_len is None:
+        fft_len = 1
+        while fft_len < 2 * n - 1:
+            fft_len <<= 1
+
+    sig1 = torch.complex(y1_real, y1_imag)
+    sig2 = torch.complex(y2_real, y2_imag)
+    SIG1 = torch.fft.fft(sig1, n=fft_len)
+    SIG2 = torch.fft.fft(sig2, n=fft_len)
+    R = SIG1 * torch.conj(SIG2)
+    cc = torch.fft.ifft(R)
+    cc = torch.fft.fftshift(cc, dim=-1)
+
+    cc_mag = torch.abs(cc)
+    zero_idx = fft_len // 2
+    true_idx = zero_idx + true_tdoa.long()
+    true_idx = torch.clamp(true_idx, 0, fft_len - 1)
+
+    batch_idx = torch.arange(cc_mag.shape[0], device=cc_mag.device)
+    peak_at_true = cc_mag[batch_idx, true_idx]
+    peak_max = torch.max(cc_mag, dim=-1)[0]
+    peak_norm = peak_at_true / (peak_max + 1e-9)
+
+    return 1.0 - peak_norm  # (batch,)
+
+
+def adaptive_peak_lambda(snr, peak_max=0.15, snr_center=0.0, temperature=5.0):
+    """
+    峰值损失权重：高 SNR 时峰可靠 → 权重大；低 SNR 时峰噪声主导 → 权重小。
+
+    λ_peak(SNR) = peak_max · σ((SNR - snr_center) / temperature)
+
+    与 AdaptiveLambda 形成互补：
+      - 低 SNR：λ_corr 温和增强 + λ_peak 接近零（避免噪声梯度）
+      - 高 SNR：λ_corr 温和减弱 + λ_peak 接近 peak_max（峰值可靠，精调 TDOA）
+
+    参数:
+        snr:          (batch,) 每样本 SNR (dB)
+        peak_max:     峰值损失最大权重（默认 0.15）
+        snr_center:   sigmoid 中心点 SNR (dB)
+        temperature:  sigmoid 温度参数
+
+    返回:
+        lambda_peak: (batch,) 每样本的峰值损失权重
+    """
+    return peak_max * torch.sigmoid((snr - snr_center) / temperature)
+
+
 def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    fold_idx, patience=20, weight_decay=1e-4, lambda_corr=0.0,
                    lambda_peak=0.0, adaptive_lambda=None):
@@ -167,7 +229,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         lambda_peak:    PNCC 峰值损失权重
         adaptive_lambda: AdaptiveLambda 实例，None 则使用固定 lambda_corr
     返回:
-        model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch
+        model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch,
+        corr_hist, peak_hist, lambda_hist
     """
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = StepLR(optimizer, step_size=30, gamma=0.5)
@@ -175,6 +238,9 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
     train_loss_hist = []
     val_loss_hist = []
+    corr_hist = []
+    peak_hist = []
+    lambda_hist = []
     best_val_loss = float('inf')
     best_state = None
     epochs_no_improve = 0
@@ -220,26 +286,38 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 # 逐样本 GCC 相关性损失
                 corr_per_sample = torch.mean((gcc_dae_n - gcc_clean_n) ** 2, dim=1)  # (batch,)
 
-                # PNCC 峰值损失
-                loss_peak = torch.tensor(0.0, device=device)
-                if lambda_peak > 0 and true_tdoa is not None:
-                    loss_peak = gcc_peak_loss(
-                        y1[:, 0, :], y1[:, 1, :],
-                        y2[:, 0, :], y2[:, 1, :],
-                        true_tdoa.float()
-                    )
-
-                # 计算逐样本自适应 λ
+                # 计算逐样本 SNR（自适应 λ 和峰值损失共用）
                 if adaptive_lambda is not None:
                     snr_per_sample = estimate_per_sample_snr(bx1, by1)  # (batch,)
                     lambda_per_sample = adaptive_lambda(snr_per_sample)  # (batch,)
                 else:
                     lambda_per_sample = torch.full((bx1.size(0),), lambda_corr, device=device)
+                    snr_per_sample = None
+
+                # PNCC 峰值损失（逐样本自适应权重：高 SNR 权重大，低 SNR 权重小）
+                loss_peak = torch.tensor(0.0, device=device)
+                if lambda_peak > 0 and true_tdoa is not None:
+                    if snr_per_sample is not None:
+                        # 逐样本峰值损失 + SNR 正向依赖权重
+                        peak_per_sample = gcc_peak_loss_per_sample(
+                            y1[:, 0, :], y1[:, 1, :],
+                            y2[:, 0, :], y2[:, 1, :],
+                            true_tdoa.float()
+                        )
+                        peak_lambda = adaptive_peak_lambda(snr_per_sample, peak_max=lambda_peak)
+                        loss_peak = torch.mean(peak_lambda * peak_per_sample)
+                    else:
+                        # 无自适应 λ 时使用固定权重（向后兼容）
+                        loss_peak = lambda_peak * gcc_peak_loss(
+                            y1[:, 0, :], y1[:, 1, :],
+                            y2[:, 0, :], y2[:, 1, :],
+                            true_tdoa.float()
+                        )
 
                 # 加权总损失
                 loss_mse = torch.mean(mse_per_sample)
                 loss_corr = torch.mean(corr_per_sample)
-                loss = torch.mean(mse_per_sample + lambda_per_sample * corr_per_sample) + lambda_peak * loss_peak
+                loss = torch.mean(mse_per_sample + lambda_per_sample * corr_per_sample) + loss_peak
 
                 loss.backward()
                 optimizer.step()
@@ -257,6 +335,9 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 optimizer.step()
                 ep_loss += loss.item() * bx.size(0)
         train_loss_hist.append(ep_loss / len(train_loader.dataset))
+        corr_hist.append(ep_corr / len(train_loader.dataset) if n_batches > 0 else 0.0)
+        peak_hist.append(ep_peak / len(train_loader.dataset) if n_batches > 0 else 0.0)
+        lambda_hist.append(ep_lambda / n_batches if n_batches > 0 else lambda_corr)
 
         scheduler.step()
 
@@ -299,7 +380,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             break
 
     model.load_state_dict(best_state)
-    return model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch
+    return model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch, \
+        corr_hist, peak_hist, lambda_hist
 
 
 def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
@@ -354,11 +436,16 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
     if lambda_corr > 0:
         if use_adaptive_lambda:
-            print(f"  Correlation Loss: Adaptive λ (threshold={snr_threshold}dB, temp={lambda_temperature})")
+            print(f"  Correlation Loss: Adaptive λ ∈ [0.20, 0.50] "
+                  f"(center={snr_threshold}dB, temp={lambda_temperature})")
         else:
             print(f"  Correlation Loss: Fixed λ={lambda_corr}")
     if lambda_peak > 0:
-        print(f"  Peak Loss: λ_peak={lambda_peak}")
+        if use_adaptive_lambda:
+            print(f"  Peak Loss: Adaptive λ_peak ∈ [~0, {lambda_peak}] "
+                  f"(SNR-positive sigmoid, center={snr_threshold}dB, temp={lambda_temperature})")
+        else:
+            print(f"  Peak Loss: Fixed λ_peak={lambda_peak}")
     model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
     print(f"  Model Parameters: {model_params:,}")
     print(f"{'='*60}")
@@ -371,6 +458,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'fold_val_loss': [],
         'fold_best_val': [],
         'fold_stopped_epoch': [],
+        'fold_corr_loss': [],
+        'fold_peak_loss': [],
+        'fold_avg_lambda': [],
     }
 
     best_model = None
@@ -394,20 +484,25 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         # 创建自适应 λ 实例（如果启用）
         adaptive_lambda = None
         if use_adaptive_lambda and lambda_corr > 0:
-            adaptive_lambda = AdaptiveLambda(snr_threshold, lambda_temperature).to(device)
+            adaptive_lambda = AdaptiveLambda(
+                snr_threshold=snr_threshold, temperature=lambda_temperature).to(device)
 
-        model, train_loss, val_loss, best_val, stopped = train_one_fold(
-            device, model, train_loader, val_loader, epochs, lr,
-            fold_idx + 1, patience=patience, weight_decay=weight_decay,
-            lambda_corr=lambda_corr, lambda_peak=lambda_peak,
-            adaptive_lambda=adaptive_lambda
-        )
+        model, train_loss, val_loss, best_val, stopped, corr_loss, peak_loss, avg_lambda = \
+            train_one_fold(
+                device, model, train_loader, val_loader, epochs, lr,
+                fold_idx + 1, patience=patience, weight_decay=weight_decay,
+                lambda_corr=lambda_corr, lambda_peak=lambda_peak,
+                adaptive_lambda=adaptive_lambda
+            )
         fold_time = time.time() - t_fold
 
         cv_results['fold_train_loss'].append(train_loss)
         cv_results['fold_val_loss'].append(val_loss)
         cv_results['fold_best_val'].append(best_val)
         cv_results['fold_stopped_epoch'].append(stopped)
+        cv_results['fold_corr_loss'].append(corr_loss)
+        cv_results['fold_peak_loss'].append(peak_loss)
+        cv_results['fold_avg_lambda'].append(avg_lambda)
 
         print(f"  Fold {fold_idx + 1} Best Val Loss: {best_val:.6f} "
               f"(stopped at epoch {stopped},耗时 {fold_time:.1f}s)")
