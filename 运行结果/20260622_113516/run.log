@@ -1,0 +1,141 @@
+[Log] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\run.log
+[SignalSimulator] 固定信道池已生成: 50 条信道 (seed=42)
+
+============================================================
+Training DAE (CR=4) with 3-Fold Cross-Validation
+  Samples: 50000 | Max Epochs: 150 | Batch: 128 | LR: 0.0005
+  Early Stopping Patience: 10 | Weight Decay: 0.0001
+  Correlation Loss: Adaptive λ ∈ [0.23, 0.53] (center=0.0dB, temp=5.0)
+  Peak Loss: Adaptive λ_peak ∈ [~0, 0.25] (SNR-positive sigmoid, center=0.0dB, temp=5.0)
+  GCC-Centric Loss: ε_MSE=0.03
+  Model Parameters: 3,188,418
+============================================================
+  Fold 1 Epoch 10/150: Train 8.54195 | Val 4.27368 | Corr 0.01551 | Peak 0.00721 | GCC-centric | λ=0.380 | LR: 0.000500 | 19.3s
+  Fold 1 Epoch 20/150: Train 8.52688 | Val 4.26150 | Corr 0.01429 | Peak 0.00550 | GCC-centric | λ=0.380 | LR: 0.000500 | 20.4s
+  Fold 1 Epoch 30/150: Train 8.52060 | Val 4.25803 | Corr 0.01359 | Peak 0.00415 | GCC-centric | λ=0.380 | LR: 0.000250 | 20.4s
+  Fold 1 Epoch 40/150: Train 8.51678 | Val 4.25646 | Corr 0.01311 | Peak 0.00343 | GCC-centric | λ=0.380 | LR: 0.000250 | 18.8s
+  Fold 1 Epoch 50/150: Train 8.51329 | Val 4.25507 | Corr 0.01575 | Peak 0.00422 | GCC-centric | λ=0.380 | LR: 0.000250 | 21.6s
+  Fold 1 Epoch 60/150: Train 8.51419 | Val 4.25536 | Corr 0.01397 | Peak 0.00355 | GCC-centric | λ=0.380 | LR: 0.000125 | 21.9s
+  Fold 1 Early stopping at Epoch 66 (no improvement for 10 epochs, epoch耗时 21.9s)
+  Fold 1 Best Val Loss: 4.254594 (stopped at epoch 66,耗时 1332.8s)
+  Fold 2 Epoch 10/150: Train 8.53311 | Val 4.26317 | Corr 0.01494 | Peak 0.00447 | GCC-centric | λ=0.379 | LR: 0.000500 | 22.4s
+  Fold 2 Epoch 20/150: Train 8.52758 | Val 4.25870 | Corr 0.01323 | Peak 0.00432 | GCC-centric | λ=0.379 | LR: 0.000500 | 17.7s
+  Fold 2 Epoch 30/150: Train 8.52614 | Val 4.25785 | Corr 0.01301 | Peak 0.00524 | GCC-centric | λ=0.379 | LR: 0.000250 | 17.7s
+  Fold 2 Epoch 40/150: Train 8.52247 | Val 4.25625 | Corr 0.01150 | Peak 0.00359 | GCC-centric | λ=0.379 | LR: 0.000250 | 17.6s
+  Fold 2 Early stopping at Epoch 47 (no improvement for 10 epochs, epoch耗时 17.9s)
+  Fold 2 Best Val Loss: 4.256228 (stopped at epoch 47,耗时 919.7s)
+  Fold 3 Epoch 10/150: Train 8.52092 | Val 4.26852 | Corr 0.01310 | Peak 0.00412 | GCC-centric | λ=0.380 | LR: 0.000500 | 17.5s
+  Fold 3 Epoch 20/150: Train 8.51296 | Val 4.26553 | Corr 0.01143 | Peak 0.00328 | GCC-centric | λ=0.380 | LR: 0.000500 | 17.5s
+  Fold 3 Epoch 30/150: Train 8.51213 | Val 4.26593 | Corr 0.01093 | Peak 0.00378 | GCC-centric | λ=0.380 | LR: 0.000250 | 17.5s
+  Fold 3 Epoch 40/150: Train 8.50983 | Val 4.26396 | Corr 0.00971 | Peak 0.00254 | GCC-centric | λ=0.380 | LR: 0.000250 | 17.4s
+  Fold 3 Epoch 50/150: Train 8.50968 | Val 4.26351 | Corr 0.00952 | Peak 0.00263 | GCC-centric | λ=0.380 | LR: 0.000250 | 17.5s
+  Fold 3 Early stopping at Epoch 55 (no improvement for 10 epochs, epoch耗时 17.4s)
+  Fold 3 Best Val Loss: 4.263430 (stopped at epoch 55,耗时 971.8s)
+
+  Average Best Val Loss over 3 fold(s): 4.258084
+  Average Stop Epoch: 56.0
+  Selected model with Val Loss: 4.254594
+  Training Time: 3224.5s (53.7min)
+
+============================================================
+Training DAE (CR=8) with 3-Fold Cross-Validation
+  Samples: 50000 | Max Epochs: 150 | Batch: 128 | LR: 0.0005
+  Early Stopping Patience: 10 | Weight Decay: 0.0001
+  Correlation Loss: Adaptive λ ∈ [0.23, 0.53] (center=0.0dB, temp=5.0)
+  Peak Loss: Adaptive λ_peak ∈ [~0, 0.25] (SNR-positive sigmoid, center=0.0dB, temp=5.0)
+  GCC-Centric Loss: ε_MSE=0.03
+  Model Parameters: 1,779,138
+============================================================
+  Fold 1 Epoch 10/150: Train 8.51494 | Val 4.25590 | Corr 0.01445 | Peak 0.00414 | GCC-centric | λ=0.380 | LR: 0.000500 | 17.8s
+  Fold 1 Epoch 20/150: Train 8.51275 | Val 4.25438 | Corr 0.01249 | Peak 0.00305 | GCC-centric | λ=0.380 | LR: 0.000500 | 17.8s
+  Fold 1 Epoch 30/150: Train 8.51173 | Val 4.25393 | Corr 0.01162 | Peak 0.00253 | GCC-centric | λ=0.380 | LR: 0.000250 | 17.7s
+  Fold 1 Epoch 40/150: Train 8.51135 | Val 4.25375 | Corr 0.01035 | Peak 0.00161 | GCC-centric | λ=0.380 | LR: 0.000250 | 18.1s
+  Fold 1 Epoch 50/150: Train 8.51133 | Val 4.25374 | Corr 0.00997 | Peak 0.00145 | GCC-centric | λ=0.380 | LR: 0.000250 | 17.7s
+  Fold 1 Epoch 60/150: Train 8.51132 | Val 4.25373 | Corr 0.00969 | Peak 0.00128 | GCC-centric | λ=0.380 | LR: 0.000125 | 18.2s
+  Fold 1 Epoch 70/150: Train 8.51131 | Val 4.25373 | Corr 0.00902 | Peak 0.00072 | GCC-centric | λ=0.380 | LR: 0.000125 | 17.6s
+  Fold 1 Epoch 80/150: Train 8.51131 | Val 4.25373 | Corr 0.00894 | Peak 0.00081 | GCC-centric | λ=0.380 | LR: 0.000125 | 19.2s
+  Fold 1 Epoch 90/150: Train 8.51131 | Val 4.25373 | Corr 0.00877 | Peak 0.00065 | GCC-centric | λ=0.380 | LR: 0.000063 | 21.1s
+  Fold 1 Epoch 100/150: Train 8.51131 | Val 4.25373 | Corr 0.00846 | Peak 0.00039 | GCC-centric | λ=0.380 | LR: 0.000063 | 22.0s
+  Fold 1 Epoch 110/150: Train 8.51131 | Val 4.25373 | Corr 0.00836 | Peak 0.00035 | GCC-centric | λ=0.380 | LR: 0.000063 | 22.2s
+  Fold 1 Epoch 120/150: Train 8.51131 | Val 4.25373 | Corr 0.00830 | Peak 0.00037 | GCC-centric | λ=0.380 | LR: 0.000031 | 21.8s
+  Fold 1 Epoch 130/150: Train 8.51131 | Val 4.25373 | Corr 0.00814 | Peak 0.00023 | GCC-centric | λ=0.380 | LR: 0.000031 | 20.1s
+  Fold 1 Early stopping at Epoch 138 (no improvement for 10 epochs, epoch耗时 18.9s)
+  Fold 1 Best Val Loss: 4.253729 (stopped at epoch 138,耗时 2637.8s)
+  Fold 2 Epoch 10/150: Train 8.54038 | Val 4.26767 | Corr 0.01372 | Peak 0.00553 | GCC-centric | λ=0.379 | LR: 0.000500 | 21.7s
+  Fold 2 Epoch 20/150: Train 8.53205 | Val 4.26046 | Corr 0.01297 | Peak 0.00462 | GCC-centric | λ=0.379 | LR: 0.000500 | 21.4s
+  Fold 2 Epoch 30/150: Train 8.52113 | Val 4.25632 | Corr 0.01370 | Peak 0.00412 | GCC-centric | λ=0.379 | LR: 0.000250 | 19.3s
+  Fold 2 Epoch 40/150: Train 8.52039 | Val 4.25552 | Corr 0.01153 | Peak 0.00294 | GCC-centric | λ=0.379 | LR: 0.000250 | 21.5s
+  Fold 2 Early stopping at Epoch 43 (no improvement for 10 epochs, epoch耗时 21.9s)
+  Fold 2 Best Val Loss: 4.255328 (stopped at epoch 43,耗时 896.2s)
+  Fold 3 Epoch 10/150: Train 8.52346 | Val 4.26741 | Corr 0.01307 | Peak 0.00412 | GCC-centric | λ=0.380 | LR: 0.000500 | 22.0s
+  Fold 3 Epoch 20/150: Train 8.51396 | Val 4.27020 | Corr 0.01145 | Peak 0.00344 | GCC-centric | λ=0.380 | LR: 0.000500 | 22.1s
+  Fold 3 Epoch 30/150: Train 8.51200 | Val 4.26427 | Corr 0.01092 | Peak 0.00359 | GCC-centric | λ=0.380 | LR: 0.000250 | 22.5s
+  Fold 3 Epoch 40/150: Train 8.51011 | Val 4.26367 | Corr 0.00968 | Peak 0.00265 | GCC-centric | λ=0.380 | LR: 0.000250 | 21.5s
+  Fold 3 Early stopping at Epoch 42 (no improvement for 10 epochs, epoch耗时 21.7s)
+  Fold 3 Best Val Loss: 4.263327 (stopped at epoch 42,耗时 904.8s)
+
+  Average Best Val Loss over 3 fold(s): 4.257461
+  Average Stop Epoch: 74.3
+  Selected model with Val Loss: 4.253729
+  Training Time: 4438.8s (74.0min)
+
+============================================================
+Training DAE (CR=16) with 3-Fold Cross-Validation
+  Samples: 50000 | Max Epochs: 150 | Batch: 128 | LR: 0.0005
+  Early Stopping Patience: 10 | Weight Decay: 0.0001
+  Correlation Loss: Adaptive λ ∈ [0.23, 0.53] (center=0.0dB, temp=5.0)
+  Peak Loss: Adaptive λ_peak ∈ [~0, 0.25] (SNR-positive sigmoid, center=0.0dB, temp=5.0)
+  GCC-Centric Loss: ε_MSE=0.03
+  Model Parameters: 1,074,498
+============================================================
+  Fold 1 Epoch 10/150: Train 8.51484 | Val 4.25557 | Corr 0.01456 | Peak 0.00398 | GCC-centric | λ=0.380 | LR: 0.000500 | 22.0s
+  Fold 1 Epoch 20/150: Train 8.51241 | Val 4.25443 | Corr 0.01269 | Peak 0.00311 | GCC-centric | λ=0.380 | LR: 0.000500 | 21.4s
+  Fold 1 Epoch 30/150: Train 8.51148 | Val 4.25383 | Corr 0.01158 | Peak 0.00278 | GCC-centric | λ=0.380 | LR: 0.000250 | 21.1s
+  Fold 1 Epoch 40/150: Train 8.51133 | Val 4.25374 | Corr 0.01021 | Peak 0.00166 | GCC-centric | λ=0.380 | LR: 0.000250 | 21.8s
+  Fold 1 Epoch 50/150: Train 8.51133 | Val 4.25374 | Corr 0.00980 | Peak 0.00142 | GCC-centric | λ=0.380 | LR: 0.000250 | 22.9s
+  Fold 1 Epoch 60/150: Train 8.51133 | Val 4.25374 | Corr 0.00959 | Peak 0.00141 | GCC-centric | λ=0.380 | LR: 0.000125 | 21.0s [EARLY STOP]
+  Fold 1 Early stopping at Epoch 60 (no improvement for 10 epochs, epoch耗时 21.0s)
+  Fold 1 Best Val Loss: 4.253736 (stopped at epoch 60,耗时 1293.3s)
+  Fold 2 Epoch 10/150: Train 8.52185 | Val 4.25537 | Corr 0.01469 | Peak 0.00414 | GCC-centric | λ=0.379 | LR: 0.000500 | 21.5s
+  Fold 2 Epoch 20/150: Train 8.51901 | Val 4.25502 | Corr 0.01283 | Peak 0.00313 | GCC-centric | λ=0.379 | LR: 0.000500 | 21.8s
+  Fold 2 Epoch 30/150: Train 8.51780 | Val 4.25417 | Corr 0.01174 | Peak 0.00265 | GCC-centric | λ=0.379 | LR: 0.000250 | 19.5s
+  Fold 2 Epoch 40/150: Train 8.51740 | Val 4.25400 | Corr 0.01040 | Peak 0.00178 | GCC-centric | λ=0.379 | LR: 0.000250 | 21.7s
+  Fold 2 Epoch 50/150: Train 8.51739 | Val 4.25399 | Corr 0.00986 | Peak 0.00155 | GCC-centric | λ=0.379 | LR: 0.000250 | 20.3s
+  Fold 2 Epoch 60/150: Train 8.51738 | Val 4.25399 | Corr 0.00951 | Peak 0.00141 | GCC-centric | λ=0.379 | LR: 0.000125 | 21.6s
+  Fold 2 Epoch 70/150: Train 8.51738 | Val 4.25399 | Corr 0.00891 | Peak 0.00076 | GCC-centric | λ=0.379 | LR: 0.000125 | 22.0s
+  Fold 2 Epoch 80/150: Train 8.51737 | Val 4.25398 | Corr 0.00880 | Peak 0.00073 | GCC-centric | λ=0.379 | LR: 0.000125 | 21.0s
+  Fold 2 Early stopping at Epoch 88 (no improvement for 10 epochs, epoch耗时 21.7s)
+  Fold 2 Best Val Loss: 4.253985 (stopped at epoch 88,耗时 1873.0s)
+  Fold 3 Epoch 10/150: Train 8.51075 | Val 4.26425 | Corr 0.01472 | Peak 0.00387 | GCC-centric | λ=0.380 | LR: 0.000500 | 19.9s
+  Fold 3 Epoch 20/150: Train 8.50822 | Val 4.26290 | Corr 0.01269 | Peak 0.00303 | GCC-centric | λ=0.380 | LR: 0.000500 | 22.2s
+  Fold 3 Epoch 30/150: Train 8.50726 | Val 4.26250 | Corr 0.01149 | Peak 0.00261 | GCC-centric | λ=0.380 | LR: 0.000250 | 18.7s
+  Fold 3 Epoch 40/150: Train 8.50713 | Val 4.26245 | Corr 0.01004 | Peak 0.00163 | GCC-centric | λ=0.380 | LR: 0.000250 | 21.7s
+  Fold 3 Epoch 50/150: Train 8.50715 | Val 4.26248 | Corr 0.00977 | Peak 0.00161 | GCC-centric | λ=0.380 | LR: 0.000250 | 22.2s
+  Fold 3 Early stopping at Epoch 58 (no improvement for 10 epochs, epoch耗时 22.3s)
+  Fold 3 Best Val Loss: 4.262445 (stopped at epoch 58,耗时 1222.0s)
+
+  Average Best Val Loss over 3 fold(s): 4.256722
+  Average Stop Epoch: 68.7
+  Selected model with Val Loss: 4.253736
+  Training Time: 4388.3s (73.1min)
+
+========================================
+Running Monte Carlo Sweep (GCC method: standard)...
+  Monte Carlo random seed set to: 42
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\Fig1_CV_training_curves.svg
+--- Generating SNR comparison data for [-10, -3, 3, 10] ---
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\model_cr4.pt
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\model_cr8.pt
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\model_cr16.pt
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\plot_data.pkl
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\Fig3_MonteCarlo_TDOA_RMSE.svg
+[Saved] F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516\Fig2_SNR_Comparison.svg
+
+============================================================
+总运行耗时: 12223.7s (203.7min)
+所有图片已保存至: F:\PythonWorkspace\DAE Data Compression\运行结果\20260622_113516
+时间戳: 20260622_113516
+============================================================
+
+所有图片已显示。关闭图片窗口后程序自动退出。
+程序运行完毕。

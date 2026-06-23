@@ -165,6 +165,7 @@ class DAE(nn.Module):
     def __init__(self, cr=16):
         super().__init__()
         # --- 编码器 (Encoder) ---
+        # 维度链: 1024 -> 170 -> 85 -> 43
         self.enc = nn.Sequential(
             ComplexConv1d(1, 32, 10, 6, 2), ComplexBatchNorm1d(32), nn.ReLU(),
             ComplexConv1d(32, 32, 5, 2, 2), ComplexBatchNorm1d(32), nn.ReLU(),
@@ -175,13 +176,12 @@ class DAE(nn.Module):
         self.feature_len = 43
         self.latent_dim = 2048 // cr
 
-        # 复数全连接层：
-        # 输入：128*43 实数 = 2752 复数特征
-        # 输出：latent_dim 实数 = latent_dim/2 复数特征
+        # 复数全连接层
         self.fc_enc = ComplexLinear(128 * 43 // 2, self.latent_dim // 2)
         self.fc_dec = ComplexLinear(self.latent_dim // 2, 128 * 43 // 2)
 
         # --- 解码器 (Decoder) ---
+        # 维度链: 43 -> 85 -> 170 -> 1024
         self.dec_res = nn.Sequential(ResidualBlock(64), ResidualBlock(64))
         self.dec_conv = nn.Sequential(
             ComplexConvTranspose1d(64, 32, 5, 2, 2, output_padding=0),

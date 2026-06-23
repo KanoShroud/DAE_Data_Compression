@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "DAE New Method/专家评审意见_综述与创新方案不足及修改建议.md",
-                "mode": "source",
+                "file": "文献总结&创新方案/研究总结_文献综述_创新方案.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "专家评审意见_综述与创新方案不足及修改建议"
+              "title": "研究总结_文献综述_创新方案"
             }
           }
         ]
@@ -136,13 +136,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "DAE New Method/专家评审意见_综述与创新方案不足及修改建议.md",
+                "file": "文献总结&创新方案/研究总结_文献综述_创新方案.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "专家评审意见_综述与创新方案不足及修改建议 的大纲"
+              "title": "研究总结_文献综述_创新方案 的大纲"
             }
           }
         ]
@@ -168,6 +168,20 @@
               "icon": "bot",
               "title": "Claudian"
             }
+          },
+          {
+            "id": "4951a22ecac2ced7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
           }
         ]
       }
@@ -190,6 +204,8 @@
   },
   "active": "3ead470401f2e019",
   "lastOpenFiles": [
+    "文献总结&创新方案/专家评审意见_综述与创新方案不足及修改建议.md",
+    "文献总结&创新方案/研究总结_文献综述_创新方案.md",
     "DAE New Method/研究总结_文献综述_创新方案.md",
     "DAE New Method/专家评审意见_综述与创新方案不足及修改建议.md",
     "DAE New Method/专家评审意见_综述与创新方案不足及修改建议.md.tmp.42280.08ee2bae2416",

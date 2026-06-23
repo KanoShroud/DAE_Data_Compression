@@ -1,0 +1,57 @@
+[Log] F:\PythonWorkspace\DAE Data Compression\运行结果\20260616_164736\run.log
+[SignalSimulator] 固定信道池已生成: 50 条信道 (seed=42)
+
+============================================================
+Training DAE (CR=4) with 3-Fold Cross-Validation
+  Samples: 50000 | Max Epochs: 150 | Batch: 128 | LR: 0.0005
+  Early Stopping Patience: 10 | Weight Decay: 0.0001
+  Correlation Loss: Adaptive λ ∈ [0.23, 0.53] (center=0.0dB, temp=5.0)
+  Peak Loss: Adaptive λ_peak ∈ [~0, 0.25] (SNR-positive sigmoid, center=0.0dB, temp=5.0)
+  Model Parameters: 2,977,954
+============================================================
+Traceback (most recent call last):
+  File "F:\PythonWorkspace\DAE Data Compression\main.py", line 126, in <module>
+    model, cv_results = train_with_cv(
+  File "F:\PythonWorkspace\DAE Data Compression\train.py", line 491, in train_with_cv
+    train_one_fold(
+  File "F:\PythonWorkspace\DAE Data Compression\train.py", line 267, in train_one_fold
+    y_all = model(bx_all)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "F:\PythonWorkspace\DAE Data Compression\model.py", line 202, in forward
+    y = self.dec_conv(self.dec_res(self.fc_dec(z).view(b, 128, -1)))
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\container.py", line 244, in forward
+    input = module(input)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "F:\PythonWorkspace\DAE Data Compression\model.py", line 161, in forward
+    return self.act(x + self.net(x))
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\container.py", line 244, in forward
+    input = module(input)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "F:\PythonWorkspace\DAE Data Compression\model.py", line 16, in forward
+    out_r = self.conv_r(x_r) - self.conv_i(x_i)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\conv.py", line 371, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "D:\Software\anaconda3\envs\PyTorch\lib\site-packages\torch\nn\modules\conv.py", line 366, in _conv_forward
+    return F.conv1d(
+RuntimeError: Given groups=1, weight of size [96, 96, 3], expected input[256, 64, 33] to have 96 channels, but got 64 channels instead

@@ -29,6 +29,8 @@ PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
 LAMBDA_PEAK = 0.25       # PNCC 峰值损失最大权重（自适应：低SNR→0，高SNR→0.25）
+BETA_FI = 0.0             # Fisher 损失已归档（GCC损失覆盖其功能）
+EPSILON_MSE = 0.03         # MSE 正则项权重（GCC中心损失，R9=0.01→R10=0.1→R11=0.03）
 
 # 自适应 λ 配置（方案1）
 USE_ADAPTIVE_LAMBDA = True   # 是否使用自适应 λ（根据 SNR 动态调整）
@@ -129,7 +131,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
             channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
             channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
-            lambda_corr=LAMBDA_CORR, lambda_peak=LAMBDA_PEAK,
+            lambda_corr=LAMBDA_CORR, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
+            epsilon_mse=EPSILON_MSE,
             use_adaptive_lambda=USE_ADAPTIVE_LAMBDA,
             snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE
         )
@@ -223,8 +226,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             axes_cv[2, 2].set_visible(False)
 
         adaptive_str = "Adaptive" if USE_ADAPTIVE_LAMBDA else f"Fixed λ={LAMBDA_CORR}"
+        gcc_str = f"GCC-centric (ε_MSE={EPSILON_MSE})" if EPSILON_MSE < 0.1 else ""
         cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics '
-                    f'(λ_corr={LAMBDA_CORR}, λ_peak={LAMBDA_PEAK}, {adaptive_str})')
+                    f'(λ_peak={LAMBDA_PEAK}, {adaptive_str}, {gcc_str})')
         fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
         save_figure(fig_cv, "Fig1_CV_training_curves")

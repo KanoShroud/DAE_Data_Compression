@@ -164,7 +164,7 @@ class SignalSimulator:
 
         参数:
             batch_size: 批量大小
-            snr_db:     SNR (dB)。若为 None，训练模式使用 [-10, 15] dB 混合
+            snr_db:     SNR (dB)。若为 None，训练模式使用 [-10, 10] dB 混合（与评估范围一致）
 
         返回:
             X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2
@@ -189,7 +189,7 @@ class SignalSimulator:
             delays = []
 
             if snr_db is None:
-                snrs = np.random.uniform(-10, 15, size=batch_size)
+                snrs = np.random.uniform(-10, 10, size=batch_size)
             else:
                 snrs = np.ones(batch_size) * snr_db
 
