@@ -69,6 +69,10 @@ class SignalSimulator:
         self.beta = beta
         self.rrc_span = rrc_span
         self.channel_mode = channel_mode
+        # RRC 滤波器群延迟（采样点）：mode='same' 引入 (len(rrc)-1)//2 = 8 样本延迟
+        # 发射端 + 接收端 RRC 各一次 → 总计 16 样本
+        # TDOA 计算中两路抵消，不影响差值；仅在需要绝对延迟时需要补偿
+        self._rrc_group_delay = (rrc_span * self.samples_per_symbol) // 2 * 2  # = 16
 
         # RRC 脉冲成形滤波器（替代原 Butterworth 滤波器）
         self.rrc = rrc_filter(beta=beta, span=rrc_span, sps=self.samples_per_symbol)
@@ -119,7 +123,7 @@ class SignalSimulator:
         for _ in range(n_channels):
             main_delay = np.random.randint(10, 50)
             h = np.zeros(self.signal_len, dtype=complex)
-            h[main_delay] = 1.0  # LOS 分量
+            h[main_delay] += 1.0  # LOS 分量
 
             # 生成簇到达时间（Poisson 过程）
             cluster_delays = []
@@ -139,18 +143,22 @@ class SignalSimulator:
                     if int(ray_t) < self.signal_len:
                         # 径幅度 = 簇幅度 × 簇内径衰减 × Rayleigh 衰落
                         ray_amp = cluster_amp * np.exp(-(ray_t - cluster_delay) / gamma)
-                        rayleigh = np.sqrt(-2 * np.log(np.random.uniform(0.01, 1.0)))
+                        rayleigh = np.sqrt(-2 * np.log(np.random.uniform(1e-10, 1.0)))
                         gain = ray_amp * rayleigh * 0.3
                         phase = np.random.uniform(0, 2 * np.pi)
                         h[int(ray_t)] += gain * np.exp(1j * phase)
                     ray_t += np.random.exponential(1.0 / lam)
 
-            # 20% 概率 NLOS：最强径不是第一径
+            # 20% 概率 NLOS：LOS 径被遮挡，NLOS 径成为主导
             if np.random.random() < 0.2:
-                gains = [(i, abs(h[i])) for i in range(len(h)) if i != main_delay and abs(h[i]) > 0]
-                if gains:
-                    strongest = max(gains, key=lambda x: x[1])
-                    h[strongest[0]] *= np.random.uniform(1.5, 3.0)
+                # LOS 径衰减 20 倍（模拟物理遮挡）
+                h[main_delay] *= 0.05
+                # 非 LOS 径中选取最强径放大为新的主导
+                non_los_gains = [(i, abs(h[i])) for i in range(len(h))
+                                 if i != main_delay and abs(h[i]) > 0]
+                if non_los_gains:
+                    strongest = max(non_los_gains, key=lambda x: x[1])
+                    h[strongest[0]] *= 5.0
 
             self._channel_pool.append(h)
             self._channel_delays.append(main_delay)
@@ -184,6 +192,7 @@ class SignalSimulator:
         u_t = base_signal_shaped + 1j * np.zeros_like(base_signal_shaped)
 
         def apply_channel_and_noise(u_t_batch):
+            # 注意：不保存/恢复RNG状态，确保两次调用(X1和X2)产生不同的随机采样
             X_noisy_out = np.zeros_like(u_t_batch)
             X_clean_out = np.zeros_like(u_t_batch)
             delays = []

@@ -11,7 +11,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
-from evaluate import plot_snr_comparison, plot_monte_carlo
+from evaluate import plot_snr_comparison, plot_snr_comparison_multi, plot_monte_carlo
 
 # ========== 在此修改结果目录路径 ==========
 RESULT_DIR = "运行结果/20260601_145854"
@@ -76,8 +76,12 @@ def replot(result_dir):
     fig_cv.tight_layout()
     save_figure(fig_cv, os.path.join(result_dir, "Fig1_CV_training_curves.svg"))
 
-    # --- Figure 2: SNR 信号对比 ---
-    fig_snr = plot_snr_comparison(cr=snr_cr, data=snr_data)
+    # --- Figure 2: SNR 信号对比 (多CR叠加) ---
+    if isinstance(snr_cr, list):
+        fig_snr = plot_snr_comparison_multi(cr_list=snr_cr, data_dict=snr_data)
+    else:
+        # 旧格式兼容: 单CR
+        fig_snr = plot_snr_comparison(cr=snr_cr, data=snr_data)
     save_figure(fig_snr, os.path.join(result_dir, "Fig2_SNR_Comparison.svg"))
 
     # --- Figure 3: Monte Carlo ---

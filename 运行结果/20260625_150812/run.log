@@ -1,0 +1,20 @@
+[Log] F:\PythonWorkspace\DAE Data Compression\运行结果\20260625_150812\run.log
+[SignalSimulator] 固定信道池已生成: 50 条信道 (seed=42)
+
+============================================================
+Training DAE (CR=4) with 3-Fold Cross-Validation
+  Samples: 50000 | Max Epochs: 150 | Batch: 128 | LR: 0.0005
+  Early Stopping Patience: 10 | Weight Decay: 0.0001
+  Unified Loss: L = 1.0·L_corr + 0.15·L_peak + 0.75·NMSE
+  Adaptive Peak Weight: λ_peak(SNR) = 0.15·σ((SNR-0)/5), range ~[0, 0.15]
+  Training SNR: [-10, 10] dB uniform (eval-matched)
+  Model Parameters: 3,188,418
+============================================================
+Traceback (most recent call last):
+  File "F:\PythonWorkspace\DAE Data Compression\main.py", line 140, in <module>
+    model, cv_results = train_with_cv(
+  File "F:\PythonWorkspace\DAE Data Compression\train.py", line 626, in train_with_cv
+    train_one_fold(
+  File "F:\PythonWorkspace\DAE Data Compression\train.py", line 466, in train_one_fold
+    n_val += bx.size(0)
+UnboundLocalError: local variable 'bx' referenced before assignment

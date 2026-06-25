@@ -13,7 +13,7 @@ from datetime import datetime
 
 from train import train_with_cv
 import pickle
-from evaluate import MonteCarloExperiment, plot_monte_carlo, plot_snr_comparison, generate_snr_data
+from evaluate import MonteCarloExperiment, plot_monte_carlo, plot_snr_comparison, plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all
 from signal_gen import SignalSimulator
 
 # ===================== 配置 =====================
@@ -30,12 +30,24 @@ WEIGHT_DECAY = 1e-4      # L2 正则化系数
 LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
 LAMBDA_PEAK = 0.25       # PNCC 峰值损失最大权重（自适应：低SNR→0，高SNR→0.25）
 BETA_FI = 0.0             # Fisher 损失已归档（GCC损失覆盖其功能）
-EPSILON_MSE = 0.03         # MSE 正则项权重（GCC中心损失，R9=0.01→R10=0.1→R11=0.03）
 
-# 自适应 λ 配置（方案1）
-USE_ADAPTIVE_LAMBDA = True   # 是否使用自适应 λ（根据 SNR 动态调整）
-SNR_THRESHOLD = 0.0          # 自适应 λ 的 SNR 阈值（dB）：SNR < 阈值时 λ 增大
-LAMBDA_TEMPERATURE = 5.0     # 自适应 λ 的温度参数：越小过渡越陡峭
+# ========== Per-CR 损失配置 (容量分配理论 v2) ==========
+# 统一GCC-centric公式: L = 1.0·L_corr + λ_peak·L_Peak + ε·NMSE
+# Corr=1.0恒定的原因：TDOA是所有CR的最终目标（瓶颈独立性，128维足够）
+# ε由"额外维度比例"决定: ε = (dim_latent - 128) / dim_latent × 1.0
+#   CR=4 (512维):  ε=0.75, λp=0.15 → 75%额外容量去重建, Corr=1.0基准
+#   CR=8 (256维):  ε=0.50, λp=0.20 → 50%额外容量去重建, Corr=1.0基准
+#   CR=16 (128维): ε=0.03, λp=0.25 → 无额外容量, 纯TDOA, NMSE仅防退化
+LOSS_CONFIG = {
+    4:  {'epsilon_mse': 0.75, 'lambda_peak': 0.15},
+    8:  {'epsilon_mse': 0.50, 'lambda_peak': 0.20},
+    16: {'epsilon_mse': 0.03, 'lambda_peak': 0.25},
+}
+
+# 自适应 Peak 配置（方案1）
+USE_ADAPTIVE_LAMBDA = True   # 是否启用逐样本SNR估计（用于自适应peak权重）
+SNR_THRESHOLD = 0.0          # sigmoid 中心点 SNR (dB)
+LAMBDA_TEMPERATURE = 5.0     # sigmoid 温度参数
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -132,9 +144,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
             channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
             lambda_corr=LAMBDA_CORR, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
-            epsilon_mse=EPSILON_MSE,
+            epsilon_mse=0.03,
             use_adaptive_lambda=USE_ADAPTIVE_LAMBDA,
-            snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE
+            snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE,
+            loss_config=LOSS_CONFIG[cr],
         )
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
@@ -169,8 +182,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             color=f'C{fi}', linewidth=0.8, label=lbl_t)
                 ax_mse.plot(cr_data['fold_val_loss'][fi], alpha=0.7,
                             color=f'C{fi}', linewidth=1.2, linestyle='--', label=lbl_v)
-            ax_mse.set_title(f'CR={cr} | MSE Loss', fontsize=10, fontweight='bold')
-            ax_mse.set_ylabel('MSE')
+            ax_mse.set_title(f'CR={cr} | NMSE (ε={LOSS_CONFIG[cr]["epsilon_mse"]})', fontsize=10, fontweight='bold')
+            ax_mse.set_ylabel('NMSE')
             ax_mse.grid(True, alpha=0.3)
             ax_mse.legend(fontsize=6, framealpha=0.8, ncol=2)
 
@@ -190,51 +203,53 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             ax_corr.set_ylabel('Corr Loss')
             ax_corr.grid(True, alpha=0.3)
 
-        # --- Row 3: Adaptive Parameters (all CRs overlaid) ---
-        ax_lambda = axes_cv[2, 0]
+        # --- Row 3: Avg SNR estimate + Peak Loss (all CRs overlaid) ---
+        ax_snr = axes_cv[2, 0]
         ax_peak = axes_cv[2, 1] if n_cr >= 2 else axes_cv[2, 0]
         for col, cr in enumerate(CR_LIST):
             cr_data = cv_results_dict[cr]
-            n_folds = len(cr_data.get('fold_avg_lambda', []))
+            n_folds = len(cr_data.get('fold_avg_snr', []))
             if has_corr and n_folds > 0:
                 for fi in range(n_folds):
-                    avg_l = np.mean(cr_data['fold_avg_lambda'][fi]) if len(cr_data['fold_avg_lambda'][fi]) > 0 else 0
-                    ax_lambda.plot(cr_data['fold_avg_lambda'][fi], alpha=0.5,
-                                   color=f'C{col}', linewidth=0.8,
-                                   label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
+                    ax_snr.plot(cr_data['fold_avg_snr'][fi], alpha=0.5,
+                                color=f'C{col}', linewidth=0.8,
+                                label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
             if has_peak and 'fold_peak_loss' in cr_data:
                 for fi in range(n_folds):
                     ax_peak.plot(cr_data['fold_peak_loss'][fi], alpha=0.5,
                                  color=f'C{col}', linewidth=1.0,
                                  label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
 
-        ax_lambda.set_title('Adaptive λ (SNR-dependent)', fontsize=10, fontweight='bold')
-        ax_lambda.set_xlabel('Epoch'); ax_lambda.set_ylabel('λ')
-        ax_lambda.grid(True, alpha=0.3)
+        ax_snr.set_title('Avg SNR Estimate [dB] (training batch)', fontsize=10, fontweight='bold')
+        ax_snr.set_xlabel('Epoch'); ax_snr.set_ylabel('SNR [dB]')
+        ax_snr.grid(True, alpha=0.3)
+        ax_snr.axhline(y=0.0, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
         if has_corr:
-            ax_lambda.axhline(y=0.30, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
-            ax_lambda.legend(fontsize=6, framealpha=0.8)
+            ax_snr.legend(fontsize=6, framealpha=0.8)
 
-        ax_peak.set_title('PNCC Peak Loss', fontsize=10, fontweight='bold')
-        ax_peak.set_xlabel('Epoch'); ax_peak.set_ylabel('Peak Loss')
-        ax_peak.grid(True, alpha=0.3)
-        if has_peak:
-            ax_peak.legend(fontsize=6, framealpha=0.8)
+        if n_cr >= 2:
+            ax_peak.set_title('PNCC Peak Loss', fontsize=10, fontweight='bold')
+            ax_peak.set_xlabel('Epoch'); ax_peak.set_ylabel('Peak Loss')
+            ax_peak.grid(True, alpha=0.3)
+            if has_peak:
+                ax_peak.legend(fontsize=6, framealpha=0.8)
+        else:
+            # n_cr=1 时 ax_peak 与 ax_lambda 共享同一轴
+            pass
 
-        # 隐藏 Row 3 Col 3（若存在）
-        if n_cr >= 3:
-            axes_cv[2, 2].set_visible(False)
+        # 隐藏 Row 3 中未使用的列
+        # ax_lambda 使用 [2,0], ax_peak 使用 [2,1]，多余列需隐藏
+        for col in range(2, axes_cv.shape[1]):
+            axes_cv[2, col].set_visible(False)
 
-        adaptive_str = "Adaptive" if USE_ADAPTIVE_LAMBDA else f"Fixed λ={LAMBDA_CORR}"
-        gcc_str = f"GCC-centric (ε_MSE={EPSILON_MSE})" if EPSILON_MSE < 0.1 else ""
-        cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics '
-                    f'(λ_peak={LAMBDA_PEAK}, {adaptive_str}, {gcc_str})')
+        cfg_str = ", ".join([f"CR{cr}: ε={LOSS_CONFIG[cr]['epsilon_mse']}, λp={LOSS_CONFIG[cr]['lambda_peak']}" for cr in CR_LIST])
+        cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics  ({cfg_str})')
         fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
         save_figure(fig_cv, "Fig1_CV_training_curves")
 
-        # 生成 Figure 2 的绘图数据
-        snr_data = generate_snr_data(models_dict[CR_LIST[-1]], sim, DEVICE)
+        # 生成 Figure 2 的绘图数据（所有CR叠加）
+        snr_data_all = generate_snr_data_all(models_dict, sim, DEVICE)
 
         # 保存模型权重（供 diagnose_dae.py 使用）
         for cr, model in models_dict.items():
@@ -245,8 +260,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
             'cv_results_dict': cv_results_dict,
-            'snr_data': snr_data,
-            'snr_cr': CR_LIST[-1],
+            'snr_data': snr_data_all,
+            'snr_cr': CR_LIST,
             'mc_results': mc_results,
             'config': {
                 'n_samples': N_SAMPLES,
@@ -254,7 +269,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'k_folds': K_FOLDS,
                 'max_epochs': MAX_EPOCHS,
                 'lr': LR,
-                'seed': SEED,
+                'seed': current_seed,
+                'seed_list': SEED_LIST,
                 'patience': PATIENCE,
                 'weight_decay': WEIGHT_DECAY,
                 'lambda_corr': LAMBDA_CORR,
@@ -265,6 +281,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'channel_mode': CHANNEL_MODE,
                 'n_fixed_channels': N_FIXED_CHANNELS,
                 'cr_list': CR_LIST,
+                'loss_config': LOSS_CONFIG,
             },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
@@ -276,7 +293,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         fig_mc = plot_monte_carlo(mc_results)
         save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
 
-        fig_snr = plot_snr_comparison(cr=CR_LIST[-1], data=snr_data)
+        fig_snr = plot_snr_comparison_multi(cr_list=CR_LIST, data_dict=snr_data_all)
         save_figure(fig_snr, "Fig2_SNR_Comparison")
 
 # ===================== 多 seed 汇总 =====================
