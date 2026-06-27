@@ -1,25 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeTabState">
-    <option name="tabNames">
-      <map>
-        <entry key="0" value="创新方案" />
-      </map>
-    </option>
     <option name="tabSessions">
       <map>
         <entry key="0">
-          <value>
-            <TabSessionState>
-              <option name="provider" value="claude" />
-              <option name="sessionId" value="8b6a96d9-be07-4817-b03f-257293887c76" />
-              <option name="cwd" value="$PROJECT_DIR$" />
-              <option name="model" value="claude-opus-4-8[1m]" />
-              <option name="permissionMode" value="acceptEdits" />
-            </TabSessionState>
-          </value>
-        </entry>
-        <entry key="1">
           <value>
             <TabSessionState>
               <option name="provider" value="claude" />
@@ -30,19 +14,7 @@
             </TabSessionState>
           </value>
         </entry>
-        <entry key="2">
-          <value>
-            <TabSessionState>
-              <option name="provider" value="claude" />
-              <option name="sessionId" value="0c0339ee-1f15-445f-98bf-795c343feecc" />
-              <option name="cwd" value="$PROJECT_DIR$" />
-              <option name="model" value="claude-opus-4-7[1m]" />
-              <option name="permissionMode" value="acceptEdits" />
-            </TabSessionState>
-          </value>
-        </entry>
       </map>
     </option>
-    <option name="tabCount" value="3" />
   </component>
 </project>

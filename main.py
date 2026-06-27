@@ -28,19 +28,20 @@ SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
-LAMBDA_PEAK = 0.25       # PNCC 峰值损失最大权重（自适应：低SNR→0，高SNR→0.25）
+LAMBDA_PEAK = 0.25       # 全局默认（会被LOSS_CONFIG[cr]覆盖）
 BETA_FI = 0.0             # Fisher 损失已归档（GCC损失覆盖其功能）
 
-# ========== Per-CR 损失配置 (容量分配理论 v2) ==========
-# 统一GCC-centric公式: L = 1.0·L_corr + λ_peak·L_Peak + ε·NMSE
-# Corr=1.0恒定的原因：TDOA是所有CR的最终目标（瓶颈独立性，128维足够）
-# ε由"额外维度比例"决定: ε = (dim_latent - 128) / dim_latent × 1.0
-#   CR=4 (512维):  ε=0.75, λp=0.15 → 75%额外容量去重建, Corr=1.0基准
-#   CR=8 (256维):  ε=0.50, λp=0.20 → 50%额外容量去重建, Corr=1.0基准
-#   CR=16 (128维): ε=0.03, λp=0.25 → 无额外容量, 纯TDOA, NMSE仅防退化
+# ========== Per-CR 损失配置 (信封NMSE, 容量分配理论 v3) ==========
+# 统一公式: L = 1.0·L_corr + λ_peak·L_Peak + ε·NMSE_mag
+# NMSE_mag = ||y|-|s||²/|||s|||² (幅度包络, 与Corr无梯度冲突)
+# Corr=1.0恒定的原因: TDOA是所有CR的最终目标（瓶颈独立性, 128维足够）
+# ε 控制额外维度用于包络重建的温和辅助, 不压制Corr优化:
+#   CR=4 (512维):  ε=0.15, λp=0.15 → 温和重建, 不内战
+#   CR=8 (256维):  ε=0.08, λp=0.20 → 轻度重建
+#   CR=16 (128维): ε=0.03, λp=0.25 → 纯TDOA
 LOSS_CONFIG = {
-    4:  {'epsilon_mse': 0.75, 'lambda_peak': 0.15},
-    8:  {'epsilon_mse': 0.50, 'lambda_peak': 0.20},
+    4:  {'epsilon_mse': 0.15, 'lambda_peak': 0.15},
+    8:  {'epsilon_mse': 0.08, 'lambda_peak': 0.20},
     16: {'epsilon_mse': 0.03, 'lambda_peak': 0.25},
 }
 
@@ -152,6 +153,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
 
+        # 每个CR训练完立即保存模型，防止后续CR崩溃丢失已完成结果
+        model_path = os.path.join(RESULT_DIR, f"model_cr{cr}.pt")
+        torch.save(model.state_dict(), model_path)
+        print(f"[Saved] {model_path}")
+
     # 3. Monte Carlo 评估
     print("\n" + "=" * 40)
     exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed)
@@ -203,44 +209,24 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             ax_corr.set_ylabel('Corr Loss')
             ax_corr.grid(True, alpha=0.3)
 
-        # --- Row 3: Avg SNR estimate + Peak Loss (all CRs overlaid) ---
-        ax_snr = axes_cv[2, 0]
-        ax_peak = axes_cv[2, 1] if n_cr >= 2 else axes_cv[2, 0]
+        # --- Row 3: Peak Loss per CR (each CR its own subplot) ---
         for col, cr in enumerate(CR_LIST):
+            ax_pk = axes_cv[2, col]
             cr_data = cv_results_dict[cr]
-            n_folds = len(cr_data.get('fold_avg_snr', []))
-            if has_corr and n_folds > 0:
+            n_folds = len(cr_data.get('fold_peak_loss', []))
+            if has_peak and n_folds > 0:
                 for fi in range(n_folds):
-                    ax_snr.plot(cr_data['fold_avg_snr'][fi], alpha=0.5,
-                                color=f'C{col}', linewidth=0.8,
-                                label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
-            if has_peak and 'fold_peak_loss' in cr_data:
-                for fi in range(n_folds):
-                    ax_peak.plot(cr_data['fold_peak_loss'][fi], alpha=0.5,
-                                 color=f'C{col}', linewidth=1.0,
-                                 label=f'CR={cr} F{fi+1}' if fi == 0 else f'_F{fi+1}')
-
-        ax_snr.set_title('Avg SNR Estimate [dB] (training batch)', fontsize=10, fontweight='bold')
-        ax_snr.set_xlabel('Epoch'); ax_snr.set_ylabel('SNR [dB]')
-        ax_snr.grid(True, alpha=0.3)
-        ax_snr.axhline(y=0.0, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
-        if has_corr:
-            ax_snr.legend(fontsize=6, framealpha=0.8)
-
-        if n_cr >= 2:
-            ax_peak.set_title('PNCC Peak Loss', fontsize=10, fontweight='bold')
-            ax_peak.set_xlabel('Epoch'); ax_peak.set_ylabel('Peak Loss')
-            ax_peak.grid(True, alpha=0.3)
-            if has_peak:
-                ax_peak.legend(fontsize=6, framealpha=0.8)
-        else:
-            # n_cr=1 时 ax_peak 与 ax_lambda 共享同一轴
-            pass
-
-        # 隐藏 Row 3 中未使用的列
-        # ax_lambda 使用 [2,0], ax_peak 使用 [2,1]，多余列需隐藏
-        for col in range(2, axes_cv.shape[1]):
-            axes_cv[2, col].set_visible(False)
+                    ax_pk.plot(cr_data['fold_peak_loss'][fi], alpha=0.5,
+                               color=f'C{fi}', linewidth=1.0,
+                               label=f'F{fi+1}' if n_folds > 1 else 'Peak')
+                ax_pk.set_title(f'CR={cr} | PNCC Peak Loss (λp={LOSS_CONFIG[cr]["lambda_peak"]})',
+                                fontsize=9, fontweight='bold')
+                ax_pk.legend(fontsize=6, framealpha=0.8)
+            else:
+                ax_pk.text(0.5, 0.5, 'N/A', ha='center', va='center',
+                           transform=ax_pk.transAxes, color='gray')
+            ax_pk.set_xlabel('Epoch'); ax_pk.set_ylabel('Peak Loss')
+            ax_pk.grid(True, alpha=0.3)
 
         cfg_str = ", ".join([f"CR{cr}: ε={LOSS_CONFIG[cr]['epsilon_mse']}, λp={LOSS_CONFIG[cr]['lambda_peak']}" for cr in CR_LIST])
         cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics  ({cfg_str})')
@@ -250,12 +236,6 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         # 生成 Figure 2 的绘图数据（所有CR叠加）
         snr_data_all = generate_snr_data_all(models_dict, sim, DEVICE)
-
-        # 保存模型权重（供 diagnose_dae.py 使用）
-        for cr, model in models_dict.items():
-            model_path = os.path.join(RESULT_DIR, f"model_cr{cr}.pt")
-            torch.save(model.state_dict(), model_path)
-            print(f"[Saved] {model_path}")
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {

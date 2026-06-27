@@ -160,8 +160,10 @@ class SignalSimulator:
                     strongest = max(non_los_gains, key=lambda x: x[1])
                     h[strongest[0]] *= 5.0
 
+            # TDOA标签使用物理最强径（NLOS下不同于LOS几何延迟）
+            actual_main = np.argmax(np.abs(h))
             self._channel_pool.append(h)
-            self._channel_delays.append(main_delay)
+            self._channel_delays.append(actual_main)
 
         np.random.set_state(rng_state)
         print(f"[SignalSimulator] 固定信道池已生成: {n_channels} 条信道 (seed={seed})")
@@ -216,7 +218,7 @@ class SignalSimulator:
                                                       min(main_delay + 100, self.signal_len))
                         h[tap_delay] = (np.random.uniform(0.1, 0.4)
                                         * np.exp(1j * np.random.uniform(0, 2 * np.pi)))
-                delays.append(main_delay)
+                delays.append(np.argmax(np.abs(h)))
 
                 full_conv = signal.convolve(u_t_batch[i], h, mode='full')
                 x_clean_raw = full_conv[:self.signal_len]

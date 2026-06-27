@@ -307,7 +307,7 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
         ax_f.plot(d['f_n'] / 1e6, d['P_n_db'], color='cornflowerblue', linewidth=0.5, label='Noisy')
         ax_f.plot(d['f_c'] / 1e6, d['P_c_db'], 'k--', linewidth=0.8, label='Clean')
         ax_f.plot(d['f_r'] / 1e6, d['P_r_db'], 'r', linewidth=0.8, label='DAE')
-        ax_f.legend(loc='upper right', fontsize=7, framealpha=0.8)
+        ax_f.legend(loc='upper right', fontsize=6, framealpha=0.8, ncol=2)
         if i == num_rows - 1:
             ax_f.set_xlabel("Frequency [MHz]", fontsize=10)
         ax_f.set_ylabel("PSD [dB/Hz]", fontsize=9)
@@ -435,7 +435,7 @@ def plot_snr_comparison_multi(cr_list, data_dict, title_suffix=""):
                 ax_f.plot(d['f_n'] / 1e6, d['P_r_db'][cr], color=cr_colors.get(cr, 'r'),
                           linewidth=0.6, linestyle=cr_styles.get(cr, '-'),
                           alpha=0.9, label=f'DAE CR={cr}')
-        ax_f.legend(loc='upper right', fontsize=7, framealpha=0.8)
+        ax_f.legend(loc='upper right', fontsize=6, framealpha=0.8, ncol=2)
         ax_f.grid(alpha=0.3)
         ax_f.set_xlim(-20, 20)
         if i == num_rows - 1:

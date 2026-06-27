@@ -1,5 +1,6 @@
 # train.py
 import time
+import math
 import torch
 import torch.nn as nn
 import numpy as np
@@ -218,7 +219,7 @@ def adaptive_peak_lambda(snr, peak_max=0.15, snr_center=0.0, temperature=5.0):
     返回:
         lambda_peak: (batch,) 每样本的峰值损失权重
     """
-    return peak_max * torch.sigmoid((snr - snr_center) / temperature)
+    return peak_max * torch.sigmoid((snr_center - snr) / temperature)
 
 
 def fisher_tdoa_loss(y1_r, y1_i, y2_r, y2_i, c1_r, c1_i, c2_r, c2_i, fs=40e6):
@@ -269,11 +270,10 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     """
     在单个 fold 上训练模型，含早停机制。
 
-    统一GCC中心损失（NMSE归一化）:
+    统一损失（混合NMSE: 包络→复信号平滑过渡）:
         L = 1.0·L_corr + λp·L_peak + ε·NMSE
-    NMSE = MSE / signal_power（无量纲，完美=0，不相关≈1）。
-    ε由容量分配理论（额外维度比例）决定:
-       CR=4(512维, 75%额外): ε=0.75, CR=8(256维, 50%额外): ε=0.50, CR=16(128维): ε=0.03
+    NMSE在前50轮从纯包络平滑过渡到纯复数（α=epoch/50）。
+    ε由容量分配理论决定: CR=4(512维):0.75, CR=8(256维):0.50, CR=16(128维):0.03
 
     参数:
         epsilon_mse:    NMSE正则项权重（统一公式，所有CR使用同一路径）
@@ -295,6 +295,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     stopped_epoch = epochs
 
     for ep in range(epochs):
+        # ε调度：warmup期间从0线性增加到目标值，先学GCC再学重建
+        warmup_ep = 100  # 所有CR统一warmup：ε余弦从0升至目标值
+        progress = min((ep + 1) / warmup_ep, 1.0)
+        eps_factor = 0.5 * (1.0 - math.cos(math.pi * progress)) if warmup_ep > 0 else 1.0
+        epsilon_current = epsilon_mse * eps_factor
         t_ep = time.time()
 
         model.train()
@@ -316,16 +321,18 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 y_all = model(bx_all)
                 y1, y2 = y_all.chunk(2, dim=0)
 
-                # 逐样本 MSE 损失
-                mse1 = torch.mean((y1 - by1) ** 2, dim=[1, 2])  # (batch,)
-                mse2 = torch.mean((y2 - by2) ** 2, dim=[1, 2])  # (batch,)
-                mse_per_sample = mse1 + mse2  # (batch,) 原始平方误差
-
-                # 归一化 MSE (NMSE) —— 除以信号功率，使损失无量纲
-                # NMSE = MSE / signal_power → 完美重建=0, 不相关≈1, 比噪声差>1
-                # 三个损失分量现在在同一量级：NMSE~1, Corr~0.01-0.1, Peak~0-1
-                signal_power = torch.mean(by1 ** 2 + by2 ** 2, dim=[1, 2])  # (batch,)
-                mse_norm = mse_per_sample / (signal_power + 1e-9)  # (batch,) 归一化MSE
+                # === 包络 NMSE（幅度包络重建，与Corr无梯度冲突）===
+                # 所有CR统一使用包络NMSE：约束能量轮廓，不触及时域相位
+                # 避免了复NMSE与Corr在1D-CNN时域优化中的结构性梯度内战
+                mag_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
+                mag_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
+                mag_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
+                mag_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
+                mag_mse1 = torch.mean((mag_y1 - mag_s1)**2, dim=1)
+                mag_mse2 = torch.mean((mag_y2 - mag_s2)**2, dim=1)
+                mag_mse = mag_mse1 + mag_mse2
+                sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
+                nmse = mag_mse / (sig_power + 1e-9)  # (batch,) 包络NMSE
 
                 # Clean 信号 GCC 不需要梯度
                 with torch.no_grad():
@@ -375,15 +382,10 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         by1[:, 0, :], by1[:, 1, :], by2[:, 0, :], by2[:, 1, :]
                     )
 
-                # === 统一GCC中心损失 (NMSE归一化) ===
-                # L = 1.0·L_corr + λp·L_peak + ε·NMSE
-                # ε由容量分配理论（额外维度比例）决定：
-                #   CR=4(512维, 75%额外): ε=0.75 → 兼顾重建+TDOA
-                #   CR=8(256维, 50%额外): ε=0.50 → 优先TDOA
-                #   CR=16(128维, 0%额外):  ε=0.03 → 纯TDOA
-                loss_mse_norm = torch.mean(mse_norm)  # 归一化MSE
+                # === L = 1.0·Corr + λp·Peak + ε·NMSE_mag ===
+                loss_mse_norm = torch.mean(nmse)  # 包络NMSE
                 loss_corr = torch.mean(corr_per_sample)
-                loss = loss_corr + loss_peak + epsilon_mse * loss_mse_norm + beta_fi * loss_fi
+                loss = loss_corr + loss_peak + epsilon_current * loss_mse_norm + beta_fi * loss_fi
 
                 loss.backward()
                 optimizer.step()
@@ -426,12 +428,14 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     y_all = model(bx_all)
                     y1, y2 = y_all.chunk(2, dim=0)
 
-                    # NMSE 分量（归一化MSE：除以信号功率使无量纲）
-                    mse_v1 = torch.mean((y1 - by1) ** 2, dim=[1, 2])
-                    mse_v2 = torch.mean((y2 - by2) ** 2, dim=[1, 2])
-                    mse_v_raw = mse_v1 + mse_v2
-                    sig_pow_v = torch.mean(by1 ** 2 + by2 ** 2, dim=[1, 2])
-                    mse_v_norm = torch.mean(mse_v_raw / (sig_pow_v + 1e-9))
+                    # 验证NMSE：全部CR用包络（与训练一致，避免梯度内战）
+                    v_sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
+                    vm_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
+                    vm_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
+                    vm_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
+                    vm_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
+                    vm_mse = torch.mean((vm_y1-vm_s1)**2 + (vm_y2-vm_s2)**2, dim=1)
+                    mse_v_norm = torch.mean(vm_mse / (v_sig_power + 1e-9))
 
                     # GCC 分量（验证时也计算，确保早停反映真实目标）
                     gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
@@ -450,20 +454,22 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                             y2[:, 0, :], y2[:, 1, :],
                             true_tdoa_v.float())
 
-                    # 统一使用与训练完全相同的损失公式: L = corr + peak + ε·NMSE
+                    # 验证集用静态 epsilon_mse（锚定），不用动态 epsilon_current！
+                    # 否则 warmup 期 ε 逐轮增大 → val_loss 虚高 → 无法破最佳记录 → 伪早停
                     loss_v = corr_v + peak_v + epsilon_mse * mse_v_norm
 
                     val_mse += mse_v_norm.item() * bx1.size(0)
                     val_corr += corr_v.item() * bx1.size(0)
                     val_peak += peak_v.item() * bx1.size(0)
                     val_total += loss_v.item() * bx1.size(0)
+                    n_val += bx1.size(0)
                 else:
                     bx, by = batch[0].to(device), batch[1].to(device)
                     sig_pow = torch.mean(by ** 2)
                     nmse_v = criterion(model(bx), by).item() / (sig_pow.item() + 1e-9)
                     val_mse += nmse_v * bx.size(0)
                     val_total += nmse_v * bx.size(0)
-                n_val += bx.size(0)
+                    n_val += bx.size(0)
 
         val_mse /= n_val
         val_corr /= n_val
@@ -477,6 +483,12 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
+
+        # Grace period: warmup全期 + 额外30轮锁死早停
+        # Phase II初期模型从包络解过渡到复NMSE解，Corr/Peak短期恶化是相位修复的必需代价
+        # 30轮缓冲确保训练不被"阵痛期"的暂时性Loss上升误杀
+        if ep < warmup_ep + 30:
+            epochs_no_improve = 0
 
         ep_time = time.time() - t_ep
 
@@ -492,7 +504,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
                   f"TrainNMSE {train_loss_hist[-1]:.5f} | "
                   f"ValNMSE {val_mse:.5f}{val_corr_str}{val_peak_str}{corr_str}{peak_str}{fi_str}{snr_str} | "
-                  f"ε={epsilon_mse:.3f} | LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
+                  f"ε={epsilon_current:.3f} | LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
 
         if epochs_no_improve >= patience:
             stopped_epoch = ep + 1
@@ -574,7 +586,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
-    print(f"  Unified Loss: L = 1.0·L_corr + {lambda_peak}·L_peak + {epsilon_mse}·NMSE")
+    print(f"  Unified Loss (Envelope NMSE): L = 1.0·L_corr + {lambda_peak}·L_peak + {epsilon_mse}·NMSE_mag")
     if lambda_peak > 0:
         print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ((SNR-0)/5), "
               f"range ~[0, {lambda_peak}]")
