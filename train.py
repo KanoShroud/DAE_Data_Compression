@@ -321,9 +321,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 y_all = model(bx_all)
                 y1, y2 = y_all.chunk(2, dim=0)
 
-                # === 包络 NMSE（幅度包络重建，与Corr无梯度冲突）===
-                # 所有CR统一使用包络NMSE：约束能量轮廓，不触及时域相位
-                # 避免了复NMSE与Corr在1D-CNN时域优化中的结构性梯度内战
+                # === 固定比例混合 NMSE（α=ε，无ramp） ===
+                # 包络NMSE：约束幅度轮廓，不与Corr冲突，但遇相位地板(~0.38)
+                # 复NMSE：微量加入打破相位地板，比例=ε，ε小则几乎不进
+                # CR4(ε=0.15): 15%复+85%包 → 温和相位引导中CR区分最大
+                # CR16(ε=0.03): 3%复+97%包 → 近乎纯包络，无内战
                 mag_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
                 mag_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
                 mag_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
@@ -331,8 +333,12 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 mag_mse1 = torch.mean((mag_y1 - mag_s1)**2, dim=1)
                 mag_mse2 = torch.mean((mag_y2 - mag_s2)**2, dim=1)
                 mag_mse = mag_mse1 + mag_mse2
+                complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
                 sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
-                nmse = mag_mse / (sig_power + 1e-9)  # (batch,) 包络NMSE
+                nmse_mag = mag_mse / (sig_power + 1e-9)
+                nmse_complex = complex_mse / (sig_power + 1e-9)
+                env_ratio = 1.0 - epsilon_mse
+                nmse = env_ratio * nmse_mag + epsilon_mse * nmse_complex
 
                 # Clean 信号 GCC 不需要梯度
                 with torch.no_grad():
@@ -382,8 +388,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         by1[:, 0, :], by1[:, 1, :], by2[:, 0, :], by2[:, 1, :]
                     )
 
-                # === L = 1.0·Corr + λp·Peak + ε·NMSE_mag ===
-                loss_mse_norm = torch.mean(nmse)  # 包络NMSE
+                # === L = 1.0·Corr + λp·Peak + ε·[(1-ε)·NMSE_mag + ε·NMSE_complex] ===
+                loss_mse_norm = torch.mean(nmse)  # 固定混合NMSE (α=ε)
                 loss_corr = torch.mean(corr_per_sample)
                 loss = loss_corr + loss_peak + epsilon_current * loss_mse_norm + beta_fi * loss_fi
 
@@ -428,14 +434,18 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     y_all = model(bx_all)
                     y1, y2 = y_all.chunk(2, dim=0)
 
-                    # 验证NMSE：全部CR用包络（与训练一致，避免梯度内战）
+                    # 验证NMSE：与训练同公式（固定比例混合，α=ε）
                     v_sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
                     vm_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
                     vm_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
                     vm_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
                     vm_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
-                    vm_mse = torch.mean((vm_y1-vm_s1)**2 + (vm_y2-vm_s2)**2, dim=1)
-                    mse_v_norm = torch.mean(vm_mse / (v_sig_power + 1e-9))
+                    vm_mag_mse = torch.mean((vm_y1-vm_s1)**2 + (vm_y2-vm_s2)**2, dim=1)
+                    v_nmse_mag = vm_mag_mse / (v_sig_power + 1e-9)
+                    v_complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
+                    v_nmse_complex = v_complex_mse / (v_sig_power + 1e-9)
+                    v_env_ratio = 1.0 - epsilon_mse
+                    mse_v_norm = torch.mean(v_env_ratio * v_nmse_mag + epsilon_mse * v_nmse_complex)
 
                     # GCC 分量（验证时也计算，确保早停反映真实目标）
                     gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
@@ -586,7 +596,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
-    print(f"  Unified Loss (Envelope NMSE): L = 1.0·L_corr + {lambda_peak}·L_peak + {epsilon_mse}·NMSE_mag")
+    print(f"  Unified Loss (Fixed Blend, α=ε): L = 1.0·Corr + {lambda_peak}·Peak + {epsilon_mse}·[(1-{epsilon_mse})·mag + {epsilon_mse}·complex]")
     if lambda_peak > 0:
         print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ((SNR-0)/5), "
               f"range ~[0, {lambda_peak}]")
