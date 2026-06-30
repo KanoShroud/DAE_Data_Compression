@@ -13,40 +13,6 @@ from model import DAE
 from signal_gen import SignalSimulator
 
 
-class AdaptiveLambda(nn.Module):
-    """
-    自适应 λ 模块：根据 SNR 动态调整 MSE 和相关性损失的权重
-
-    λ(SNR) = λ_min + (λ_max - λ_min) · σ((SNR_threshold - SNR) / temperature)
-
-    低 SNR → λ 接近 λ_max（更重视 GCC 结构保留）
-    高 SNR → λ 接近 λ_min（更重视波形重建）
-
-    λ 始终限制在 [λ_min, λ_max] 范围内（默认 [0.23, 0.53]，以 λ=0.38 为中心），
-    平衡 GCC 结构保留与 MSE 波形重建。
-    """
-
-    def __init__(self, lambda_min=0.23, lambda_max=0.53,
-                 snr_threshold=0.0, temperature=5.0):
-        super().__init__()
-        self.lambda_min = lambda_min
-        self.lambda_max = lambda_max
-        self.snr_threshold = snr_threshold
-        self.temperature = temperature
-
-    def forward(self, snr):
-        """
-        参数:
-            snr: SNR 值 (dB)，标量或张量
-        返回:
-            λ 值，范围 [lambda_min, lambda_max]
-        """
-        raw = torch.sigmoid(
-            (self.snr_threshold - snr) / self.temperature
-        )
-        return self.lambda_min + (self.lambda_max - self.lambda_min) * raw
-
-
 def estimate_batch_snr(noisy, clean):
     """
     估计 batch 的平均 SNR
@@ -100,9 +66,9 @@ def gcc_torch(sig1_real, sig1_imag, sig2_real, sig2_imag, fft_len=None):
     """
     n = sig1_real.shape[-1]
     if fft_len is None:
-        fft_len = 1
-        while fft_len < 2 * n - 1:
-            fft_len <<= 1
+        # 与 evaluate.py 的 gcc_standard 保持一致，使用完整线性相关长度 2N-1。
+        # 旧实现使用 next power-of-two(2048)，会让训练和最终评估的 lag 域不一致。
+        fft_len = 2 * n - 1
 
     sig1 = torch.complex(sig1_real, sig1_imag)
     sig2 = torch.complex(sig2_real, sig2_imag)
@@ -115,6 +81,19 @@ def gcc_torch(sig1_real, sig1_imag, sig2_real, sig2_imag, fft_len=None):
     cc = torch.fft.fftshift(cc, dim=-1)
 
     return torch.abs(cc)
+
+
+def crop_gcc_same(cc, signal_len):
+    """
+    将完整 GCC 序列裁剪到 scipy.signal.correlation_lags(..., mode='same') 对应窗口。
+
+    对 N=1024，完整 lag 为 [-1023, 1023]，same 窗口为 [-512, 511]，
+    零延迟索引为 N//2。训练、Peak loss 和 evaluate.py 使用同一 lag 域。
+    """
+    if cc.shape[-1] == signal_len:
+        return cc
+    start = (cc.shape[-1] - signal_len) // 2
+    return cc[..., start:start + signal_len]
 
 
 def gcc_peak_loss(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
@@ -133,9 +112,7 @@ def gcc_peak_loss(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
     """
     n = y1_real.shape[-1]
     if fft_len is None:
-        fft_len = 1
-        while fft_len < 2 * n - 1:
-            fft_len <<= 1
+        fft_len = 2 * n - 1
 
     # 计算复数 GCC
     sig1 = torch.complex(y1_real, y1_imag)
@@ -146,13 +123,13 @@ def gcc_peak_loss(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
     cc = torch.fft.ifft(R)
     cc = torch.fft.fftshift(cc, dim=-1)
 
-    # 计算 GCC 幅度
-    cc_mag = torch.abs(cc)  # (batch, fft_len)
+    # 计算 GCC 幅度，并裁剪到 evaluate.py 使用的 same lag 窗口
+    cc_mag = crop_gcc_same(torch.abs(cc), n)  # (batch, n)
 
-    # 真实 TDOA 对应的索引（fftshift 后零延迟在 fft_len//2）
-    zero_idx = fft_len // 2
+    # 真实 TDOA 对应的索引（same 窗口中零延迟在 n//2）
+    zero_idx = n // 2
     true_idx = zero_idx + true_tdoa.long()
-    true_idx = torch.clamp(true_idx, 0, fft_len - 1)
+    true_idx = torch.clamp(true_idx, 0, n - 1)
 
     # 取真实 TDOA 位置的 GCC 幅度
     batch_idx = torch.arange(cc_mag.shape[0], device=cc_mag.device)
@@ -175,9 +152,7 @@ def gcc_peak_loss_per_sample(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_
     """
     n = y1_real.shape[-1]
     if fft_len is None:
-        fft_len = 1
-        while fft_len < 2 * n - 1:
-            fft_len <<= 1
+        fft_len = 2 * n - 1
 
     sig1 = torch.complex(y1_real, y1_imag)
     sig2 = torch.complex(y2_real, y2_imag)
@@ -187,10 +162,10 @@ def gcc_peak_loss_per_sample(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_
     cc = torch.fft.ifft(R)
     cc = torch.fft.fftshift(cc, dim=-1)
 
-    cc_mag = torch.abs(cc)
-    zero_idx = fft_len // 2
+    cc_mag = crop_gcc_same(torch.abs(cc), n)
+    zero_idx = n // 2
     true_idx = zero_idx + true_tdoa.long()
-    true_idx = torch.clamp(true_idx, 0, fft_len - 1)
+    true_idx = torch.clamp(true_idx, 0, n - 1)
 
     batch_idx = torch.arange(cc_mag.shape[0], device=cc_mag.device)
     peak_at_true = cc_mag[batch_idx, true_idx]
@@ -202,13 +177,13 @@ def gcc_peak_loss_per_sample(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_
 
 def adaptive_peak_lambda(snr, peak_max=0.15, snr_center=0.0, temperature=5.0):
     """
-    峰值损失权重：高 SNR 时峰可靠 → 权重大；低 SNR 时峰噪声主导 → 权重小。
+    峰值损失权重：低 SNR 时 GCC 主峰更易被噪声/多径破坏 → Peak 物理先验更强。
 
-    λ_peak(SNR) = peak_max · σ((SNR - snr_center) / temperature)
+    λ_peak(SNR) = peak_max · σ((snr_center - SNR) / temperature)
 
-    与 AdaptiveLambda 形成互补：
-      - 低 SNR：λ_corr 温和增强 + λ_peak 接近零（避免噪声梯度）
-      - 高 SNR：λ_corr 温和减弱 + λ_peak 接近 peak_max（峰值可靠，精调 TDOA）
+    设计动机：
+      - 低 SNR：GCC 形状被噪声破坏，真实 TDOA 处需要更强先验拉起梯度
+      - 高 SNR：Corr 形状匹配已较可靠，Peak 权重自然减弱，避免过度尖峰化
 
     参数:
         snr:          (batch,) 每样本 SNR (dB)
@@ -264,53 +239,75 @@ def fisher_tdoa_loss(y1_r, y1_i, y2_r, y2_i, c1_r, c1_i, c2_r, c2_i, fs=40e6):
 
 
 def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
-                   fold_idx, patience=20, weight_decay=1e-4, lambda_corr=0.0,
+                   fold_idx, patience=20, weight_decay=1e-4, corr_weight=1.0,
                    lambda_peak=0.0, beta_fi=0.0, epsilon_mse=1.0,
-                   adaptive_lambda=None):
+                   mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
+                   use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0):
     """
     在单个 fold 上训练模型，含早停机制。
 
-    统一损失（混合NMSE: 包络→复信号平滑过渡）:
-        L = 1.0·L_corr + λp·L_peak + ε·NMSE
-    NMSE在前50轮从纯包络平滑过渡到纯复数（α=epoch/50）。
-    ε由容量分配理论决定: CR=4(512维):0.75, CR=8(256维):0.50, CR=16(128维):0.03
+    统一损失（R20固定比例混合NMSE）:
+        NMSE_mix = (1-ε)·NMSE_mag + ε·NMSE_complex
+        L = corr_weight·L_corr + λp(SNR)·L_peak + ε_current·NMSE_mix
+    ε_current 仅控制NMSE总权重warmup；混合比例固定为 α=ε。
 
     参数:
         epsilon_mse:    NMSE正则项权重（统一公式，所有CR使用同一路径）
         lambda_peak:    PNCC 峰值损失最大权重
-        adaptive_lambda: 用于启用逐样本SNR估计（峰值权重）
+        corr_weight:    GCC形状损失显式权重（R20固定为1.0）
+        use_adaptive_peak: 是否启用逐样本SNR自适应Peak权重
     """
+    # R20.1 decouples total reconstruction pressure from complex-phase mixing.
+    # epsilon_mse remains a legacy alias when mse_weight_max/phase_mix are omitted.
+    if mse_weight_max is None:
+        mse_weight_max = epsilon_mse
+    if phase_mix is None:
+        phase_mix = epsilon_mse
+    phase_mix = float(max(0.0, min(1.0, phase_mix)))
+
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = StepLR(optimizer, step_size=30, gamma=0.5)
     criterion = nn.MSELoss()
 
     train_loss_hist = []
     val_loss_hist = []
+    train_nmse_mag_hist = []
+    train_nmse_complex_hist = []
+    val_nmse_mag_hist = []
+    val_nmse_complex_hist = []
     corr_hist = []
     peak_hist = []
     snr_hist = []
+    val_corr_hist = []
+    val_peak_hist = []
+    val_total_hist = []
     best_val_loss = float('inf')
     best_state = None
+    best_epoch = 0
     epochs_no_improve = 0
     stopped_epoch = epochs
+    warmup_ep = 100
+    if selection_start_epoch is None:
+        selection_start_epoch = warmup_ep
 
     for ep in range(epochs):
         # ε调度：warmup期间从0线性增加到目标值，先学GCC再学重建
-        warmup_ep = 100  # 所有CR统一warmup：ε余弦从0升至目标值
         progress = min((ep + 1) / warmup_ep, 1.0)
         eps_factor = 0.5 * (1.0 - math.cos(math.pi * progress)) if warmup_ep > 0 else 1.0
-        epsilon_current = epsilon_mse * eps_factor
+        mse_weight_current = mse_weight_max * eps_factor
         t_ep = time.time()
 
         model.train()
         ep_loss = 0.0
+        ep_nmse_mag = 0.0
+        ep_nmse_complex = 0.0
         ep_corr = 0.0
         ep_peak = 0.0
         ep_fi = 0.0
         ep_snr = 0.0
         n_batches = 0
         for batch in train_loader:
-            if (lambda_corr > 0 or lambda_peak > 0) and len(batch) >= 4:
+            if (corr_weight > 0 or lambda_peak > 0) and len(batch) >= 4:
                 # 配对数据：(X1_noisy, X1_clean, X2_noisy, X2_clean[, tdoa])
                 bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                 true_tdoa = batch[4].to(device) if len(batch) >= 5 else None
@@ -337,25 +334,27 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
                 nmse_mag = mag_mse / (sig_power + 1e-9)
                 nmse_complex = complex_mse / (sig_power + 1e-9)
-                env_ratio = 1.0 - epsilon_mse
-                nmse = env_ratio * nmse_mag + epsilon_mse * nmse_complex
+                env_ratio = 1.0 - phase_mix
+                nmse = env_ratio * nmse_mag + phase_mix * nmse_complex
 
                 # Clean 信号 GCC 不需要梯度
                 with torch.no_grad():
                     gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
                                           by2[:, 0, :], by2[:, 1, :])
+                    gcc_clean = crop_gcc_same(gcc_clean, by1.shape[-1])
                     gcc_clean_n = gcc_clean / (torch.max(torch.abs(gcc_clean), dim=-1, keepdim=True)[0] + 1e-9)
 
                 # DAE 输出 GCC 需要梯度
                 gcc_dae = gcc_torch(y1[:, 0, :], y1[:, 1, :],
                                     y2[:, 0, :], y2[:, 1, :])
+                gcc_dae = crop_gcc_same(gcc_dae, y1.shape[-1])
                 gcc_dae_n = gcc_dae / (torch.max(torch.abs(gcc_dae), dim=-1, keepdim=True)[0] + 1e-9)
 
                 # 逐样本 GCC 相关性损失
                 corr_per_sample = torch.mean((gcc_dae_n - gcc_clean_n) ** 2, dim=1)  # (batch,)
 
                 # 逐样本 SNR 估计（用于峰值损失的自适应权重 + 日志）
-                if adaptive_lambda is not None:
+                if use_adaptive_peak and lambda_peak > 0:
                     snr_per_sample = estimate_per_sample_snr(bx1, by1)  # (batch,)
                     avg_snr_batch = torch.mean(snr_per_sample).item()   # 用于日志
                 else:
@@ -371,7 +370,9 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                             y2[:, 0, :], y2[:, 1, :],
                             true_tdoa.float()
                         )
-                        peak_lambda = adaptive_peak_lambda(snr_per_sample, peak_max=lambda_peak)
+                        peak_lambda = adaptive_peak_lambda(
+                            snr_per_sample, peak_max=lambda_peak,
+                            snr_center=snr_threshold, temperature=lambda_temperature)
                         loss_peak = torch.mean(peak_lambda * peak_per_sample)
                     else:
                         loss_peak = lambda_peak * gcc_peak_loss(
@@ -388,14 +389,18 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         by1[:, 0, :], by1[:, 1, :], by2[:, 0, :], by2[:, 1, :]
                     )
 
-                # === L = 1.0·Corr + λp·Peak + ε·[(1-ε)·NMSE_mag + ε·NMSE_complex] ===
-                loss_mse_norm = torch.mean(nmse)  # 固定混合NMSE (α=ε)
+                # R20.1: decouple total reconstruction weight and mag/complex mixture.
+                loss_mse_norm = torch.mean(nmse)
+                loss_mse_mag = torch.mean(nmse_mag)
+                loss_mse_complex = torch.mean(nmse_complex)
                 loss_corr = torch.mean(corr_per_sample)
-                loss = loss_corr + loss_peak + epsilon_current * loss_mse_norm + beta_fi * loss_fi
+                loss = corr_weight * loss_corr + loss_peak + mse_weight_current * loss_mse_norm + beta_fi * loss_fi
 
                 loss.backward()
                 optimizer.step()
                 ep_loss += loss_mse_norm.item() * bx1.size(0)
+                ep_nmse_mag += loss_mse_mag.item() * bx1.size(0)
+                ep_nmse_complex += loss_mse_complex.item() * bx1.size(0)
                 ep_corr += loss_corr.item() * bx1.size(0)
                 ep_peak += loss_peak.item() * bx1.size(0)
                 ep_fi += loss_fi.item() * bx1.size(0)
@@ -409,9 +414,13 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 loss.backward()
                 optimizer.step()
                 # 注意: 此分支ep_loss仍为原始MSE（非NMSE），与配对分支不同
-                # 仅在 lambda_corr=0 且 lambda_peak=0 时触发，当前所有CR均使用配对数据
+                # 仅在 corr_weight=0 且 lambda_peak=0 时触发，当前所有CR均使用配对数据
                 ep_loss += loss.item() * bx.size(0)
+                ep_nmse_mag += loss.item() * bx.size(0)
+                ep_nmse_complex += loss.item() * bx.size(0)
         train_loss_hist.append(ep_loss / len(train_loader.dataset))
+        train_nmse_mag_hist.append(ep_nmse_mag / len(train_loader.dataset))
+        train_nmse_complex_hist.append(ep_nmse_complex / len(train_loader.dataset))
         corr_hist.append(ep_corr / len(train_loader.dataset) if n_batches > 0 else 0.0)
         peak_hist.append(ep_peak / len(train_loader.dataset) if n_batches > 0 else 0.0)
         snr_hist.append(ep_snr / len(train_loader.dataset) if n_batches > 0 else 0.0)
@@ -420,13 +429,15 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
         model.eval()
         val_mse = 0.0
+        val_mse_mag = 0.0
+        val_mse_complex = 0.0
         val_corr = 0.0
         val_peak = 0.0
         val_total = 0.0
         n_val = 0
         with torch.no_grad():
             for batch in val_loader:
-                if (lambda_corr > 0 or lambda_peak > 0) and len(batch) >= 4:
+                if (corr_weight > 0 or lambda_peak > 0) and len(batch) >= 4:
                     # 配对数据：计算复合损失（与训练目标完全一致，含peak loss）
                     bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                     true_tdoa_v = batch[4].to(device) if len(batch) >= 5 else None
@@ -444,31 +455,47 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     v_nmse_mag = vm_mag_mse / (v_sig_power + 1e-9)
                     v_complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
                     v_nmse_complex = v_complex_mse / (v_sig_power + 1e-9)
-                    v_env_ratio = 1.0 - epsilon_mse
-                    mse_v_norm = torch.mean(v_env_ratio * v_nmse_mag + epsilon_mse * v_nmse_complex)
+                    v_env_ratio = 1.0 - phase_mix
+                    mse_v_mag = torch.mean(v_nmse_mag)
+                    mse_v_complex = torch.mean(v_nmse_complex)
+                    mse_v_norm = torch.mean(v_env_ratio * v_nmse_mag + phase_mix * v_nmse_complex)
 
                     # GCC 分量（验证时也计算，确保早停反映真实目标）
                     gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
                                           by2[:, 0, :], by2[:, 1, :])
+                    gcc_clean = crop_gcc_same(gcc_clean, by1.shape[-1])
                     gcc_clean_n = gcc_clean / (torch.max(torch.abs(gcc_clean), dim=-1, keepdim=True)[0] + 1e-9)
                     gcc_dae = gcc_torch(y1[:, 0, :], y1[:, 1, :],
                                         y2[:, 0, :], y2[:, 1, :])
+                    gcc_dae = crop_gcc_same(gcc_dae, y1.shape[-1])
                     gcc_dae_n = gcc_dae / (torch.max(torch.abs(gcc_dae), dim=-1, keepdim=True)[0] + 1e-9)
                     corr_v = torch.mean((gcc_dae_n - gcc_clean_n) ** 2)
 
-                    # Peak 分量（验证时也计算，确保早停与训练目标完全一致）
+                    # Peak 分量：验证时使用与训练相同的逐样本SNR自适应权重
                     peak_v = torch.tensor(0.0, device=device)
                     if lambda_peak > 0 and true_tdoa_v is not None:
-                        peak_v = gcc_peak_loss(
-                            y1[:, 0, :], y1[:, 1, :],
-                            y2[:, 0, :], y2[:, 1, :],
-                            true_tdoa_v.float())
+                        if use_adaptive_peak:
+                            snr_per_sample_v = estimate_per_sample_snr(bx1, by1)
+                            peak_per_sample_v = gcc_peak_loss_per_sample(
+                                y1[:, 0, :], y1[:, 1, :],
+                                y2[:, 0, :], y2[:, 1, :],
+                                true_tdoa_v.float())
+                            peak_lambda_v = adaptive_peak_lambda(
+                                snr_per_sample_v, peak_max=lambda_peak,
+                                snr_center=snr_threshold, temperature=lambda_temperature)
+                            peak_v = torch.mean(peak_lambda_v * peak_per_sample_v)
+                        else:
+                            peak_v = lambda_peak * gcc_peak_loss(
+                                y1[:, 0, :], y1[:, 1, :],
+                                y2[:, 0, :], y2[:, 1, :],
+                                true_tdoa_v.float())
 
-                    # 验证集用静态 epsilon_mse（锚定），不用动态 epsilon_current！
-                    # 否则 warmup 期 ε 逐轮增大 → val_loss 虚高 → 无法破最佳记录 → 伪早停
-                    loss_v = corr_v + peak_v + epsilon_mse * mse_v_norm
+                    # Validation uses the final reconstruction weight for comparable selection.
+                    loss_v = corr_weight * corr_v + peak_v + mse_weight_max * mse_v_norm
 
                     val_mse += mse_v_norm.item() * bx1.size(0)
+                    val_mse_mag += mse_v_mag.item() * bx1.size(0)
+                    val_mse_complex += mse_v_complex.item() * bx1.size(0)
                     val_corr += corr_v.item() * bx1.size(0)
                     val_peak += peak_v.item() * bx1.size(0)
                     val_total += loss_v.item() * bx1.size(0)
@@ -478,21 +505,34 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     sig_pow = torch.mean(by ** 2)
                     nmse_v = criterion(model(bx), by).item() / (sig_pow.item() + 1e-9)
                     val_mse += nmse_v * bx.size(0)
+                    val_mse_mag += nmse_v * bx.size(0)
+                    val_mse_complex += nmse_v * bx.size(0)
                     val_total += nmse_v * bx.size(0)
                     n_val += bx.size(0)
 
         val_mse /= n_val
+        val_mse_mag /= n_val
+        val_mse_complex /= n_val
         val_corr /= n_val
         val_peak /= n_val
         val_loss = val_total / n_val  # 用于早停的复合损失 (corr + peak + ε·NMSE)
-        val_loss_hist.append(val_mse)  # NMSE轨迹供绘图
+        val_loss_hist.append(val_mse)  # Mixed NMSE trace for plotting.
+        val_nmse_mag_hist.append(val_mse_mag)
+        val_nmse_complex_hist.append(val_mse_complex)
+        val_corr_hist.append(val_corr)
+        val_peak_hist.append(val_peak)
+        val_total_hist.append(val_loss)
 
-        if val_loss < best_val_loss:
+        can_update_best = (ep + 1) >= selection_start_epoch
+        if can_update_best and val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            best_epoch = ep + 1
             epochs_no_improve = 0
-        else:
+        elif can_update_best:
             epochs_no_improve += 1
+        else:
+            epochs_no_improve = 0
 
         # Grace period: warmup全期 + 额外30轮锁死早停
         # Phase II初期模型从包络解过渡到复NMSE解，Corr/Peak短期恶化是相位修复的必需代价
@@ -505,16 +545,19 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         if (ep + 1) % 10 == 0:
             current_lr = scheduler.get_last_lr()[0]
             early_mark = " [EARLY STOP]" if epochs_no_improve >= patience else ""
-            corr_str = f" | Corr {ep_corr / len(train_loader.dataset):.5f}" if lambda_corr > 0 else ""
+            corr_str = f" | Corr {ep_corr / len(train_loader.dataset):.5f}" if corr_weight > 0 else ""
             peak_str = f" | Peak {ep_peak / len(train_loader.dataset):.5f}" if lambda_peak > 0 else ""
             fi_str = f" | FI {ep_fi / len(train_loader.dataset):.5f}" if beta_fi > 0 else ""
-            val_corr_str = f" | ValCorr {val_corr:.5f}" if lambda_corr > 0 else ""
+            val_corr_str = f" | ValCorr {val_corr:.5f}" if corr_weight > 0 else ""
             val_peak_str = f" | ValPeak {val_peak:.5f}" if lambda_peak > 0 else ""
-            snr_str = f" | SNR={ep_snr / len(train_loader.dataset):.1f}dB" if adaptive_lambda is not None and n_batches > 0 else ""
+            snr_str = f" | SNR={ep_snr / len(train_loader.dataset):.1f}dB" if use_adaptive_peak and n_batches > 0 else ""
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
                   f"TrainNMSE {train_loss_hist[-1]:.5f} | "
-                  f"ValNMSE {val_mse:.5f}{val_corr_str}{val_peak_str}{corr_str}{peak_str}{fi_str}{snr_str} | "
-                  f"ε={epsilon_current:.3f} | LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
+                  f"ValNMSE {val_mse:.5f}{val_corr_str}{val_peak_str} | "
+                  f"ValTotal {val_loss:.5f}{corr_str}{peak_str}{fi_str}{snr_str} | "
+                  f"mse_w={mse_weight_current:.3f} | phase_mix={phase_mix:.3f} | "
+                  f"NetComplex={mse_weight_current * phase_mix:.4f} | "
+                  f"LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
 
         if epochs_no_improve >= patience:
             stopped_epoch = ep + 1
@@ -522,44 +565,58 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                   f"(no improvement for {patience} epochs, epoch耗时 {ep_time:.1f}s)")
             break
 
+    if best_state is None:
+        best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        best_epoch = len(val_total_hist)
+        best_val_loss = val_total_hist[-1] if val_total_hist else float('inf')
     model.load_state_dict(best_state)
     return model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch, \
-        corr_hist, peak_hist, snr_hist
+        corr_hist, peak_hist, snr_hist, val_corr_hist, val_peak_hist, val_total_hist, \
+        train_nmse_mag_hist, train_nmse_complex_hist, val_nmse_mag_hist, val_nmse_complex_hist, best_epoch
 
 
 def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   batch_size=64, lr=0.0005, seed=42,
                   patience=20, weight_decay=1e-4, use_split=False,
                   channel_mode="random", n_fixed_channels=50, channel_pool_seed=42,
-                  sim=None, lambda_corr=0.0, lambda_peak=0.0, beta_fi=0.0,
+                  sim=None, corr_weight=1.0, lambda_peak=0.0, beta_fi=0.0,
                   epsilon_mse=1.0,
-                  use_adaptive_lambda=False, snr_threshold=0.0, lambda_temperature=5.0,
+                  mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
+                  use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0,
                   loss_config=None):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
     参数:
-        lambda_corr:          GCC 互相关损失权重
+        corr_weight:          GCC 互相关损失显式权重
         lambda_peak:          PNCC 峰值损失最大权重
         beta_fi:              Fisher 信息损失权重（0=不启用）
-        use_adaptive_lambda:  是否使用自适应 λ
-        snr_threshold:        自适应 λ SNR 中心点（dB）
-        lambda_temperature:   自适应 λ 温度参数
+        use_adaptive_peak:    是否使用SNR自适应Peak权重
+        snr_threshold:        Peak权重SNR中心点（dB）
+        lambda_temperature:   Peak权重sigmoid温度参数
         loss_config:           Per-CR损失配置字典 {epsilon_mse, lambda_peak}
                                覆盖同名的单个参数。
-                               统一公式: L = 1.0·L_corr + λp·L_peak + ε·NMSE。
-                               ε由容量分配理论决定（额外维度比例）。
+                               统一公式: L = corr_weight·L_corr + λp·L_peak + ε·NMSE。
+                               R20中ε为温和重建/相位引导强度。
     """
     # === loss_config 覆盖 ===
     # 每个CR的loss配置覆盖同名参数。统一公式:
-    #   L = 1.0·L_corr + λp·L_peak + ε·NMSE
-    # ε由容量分配理论（额外维度比例 (M-128)/M ）决定:
-    #   CR=4(512维, 75%额外): ε=0.75, λp=0.15
-    #   CR=8(256维, 50%额外): ε=0.50, λp=0.22
-    #   CR=16(128维, 0%额外): ε=0.03, λp=0.25
+    #   L = corr_weight·L_corr + λp·L_peak + ε·[(1-ε)·NMSE_mag + ε·NMSE_complex]
+    # R20中ε不再取大容量占比，而是作为温和重建/相位引导强度:
+    #   CR=4: ε=0.15, λp=0.15
+    #   CR=8: ε=0.08, λp=0.20
+    #   CR=16: ε=0.03, λp=0.25
     # Corr=1.0恒定的原因：瓶颈独立性（128维足够GCC），TDOA是所有CR的最终目标。
+    if mse_weight_max is None:
+        mse_weight_max = epsilon_mse
+    if phase_mix is None:
+        phase_mix = epsilon_mse
     if loss_config is not None:
-        epsilon_mse = loss_config.get('epsilon_mse', epsilon_mse)
+        legacy_eps = loss_config.get('epsilon_mse', epsilon_mse)
+        mse_weight_max = loss_config.get('mse_weight_max', legacy_eps)
+        phase_mix = loss_config.get('phase_mix', legacy_eps)
+        selection_start_epoch = loss_config.get('selection_start_epoch', selection_start_epoch)
+        epsilon_mse = legacy_eps
         lambda_peak = loss_config.get('lambda_peak', lambda_peak)
 
     # 固定全局随机种子，确保数据集生成、模型初始化和数据划分完全可复现
@@ -571,7 +628,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                               n_fixed_channels=n_fixed_channels,
                               channel_pool_seed=channel_pool_seed)
 
-    if lambda_corr > 0 or lambda_peak > 0:
+    if corr_weight > 0 or lambda_peak > 0:
         # 配对数据：X1 和 X2 来自同信道同噪声，用于 GCC 损失和峰值损失
         X1_n, X1_c, X2_n, X2_c, tdoa = sim.generate_paired_training_dataset(n_samples, seed=seed)
         dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c, tdoa)
@@ -596,9 +653,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
-    print(f"  Unified Loss (Fixed Blend, α=ε): L = 1.0·Corr + {lambda_peak}·Peak + {epsilon_mse}·[(1-{epsilon_mse})·mag + {epsilon_mse}·complex]")
+    print(f"  Unified Loss (R20.1 fixed blend): L = {corr_weight}*Corr + "
+          f"lambda_peak(SNR)*Peak + mse_weight_current*"
+          f"[(1-{phase_mix})*NMSE_mag + {phase_mix}*NMSE_complex]")
+    print(f"  mse_weight_max={mse_weight_max} | phase_mix={phase_mix} | "
+          f"selection_start_epoch={selection_start_epoch if selection_start_epoch is not None else 100}")
     if lambda_peak > 0:
-        print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ((SNR-0)/5), "
+        print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ(({snr_threshold}-SNR)/{lambda_temperature}), "
               f"range ~[0, {lambda_peak}]")
     print(f"  Training SNR: [-10, 10] dB uniform (eval-matched)")
     if beta_fi > 0:
@@ -618,6 +679,18 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'fold_corr_loss': [],
         'fold_peak_loss': [],
         'fold_avg_snr': [],
+        'fold_val_corr_loss': [],
+        'fold_val_peak_loss': [],
+        'fold_val_total_loss': [],
+        'fold_train_nmse_mag': [],
+        'fold_train_nmse_complex': [],
+        'fold_val_nmse_mag': [],
+        'fold_val_nmse_complex': [],
+        'fold_best_epoch': [],
+        'mse_weight_max': mse_weight_max,
+        'phase_mix': phase_mix,
+        'selection_start_epoch': selection_start_epoch if selection_start_epoch is not None else 100,
+        'diagnostics_version': 'R20.1',
     }
 
     best_model = None
@@ -638,19 +711,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         model = DAE(cr=cr).to(device)
         t_fold = time.time()
 
-        # 创建自适应 λ 实例（如果启用）
-        adaptive_lambda = None
-        if use_adaptive_lambda and lambda_corr > 0:
-            adaptive_lambda = AdaptiveLambda(
-                snr_threshold=snr_threshold, temperature=lambda_temperature).to(device)
-
-        model, train_loss, val_loss, best_val, stopped, corr_loss, peak_loss, avg_snr = \
+        model, train_loss, val_loss, best_val, stopped, corr_loss, peak_loss, avg_snr, \
+            val_corr_loss, val_peak_loss, val_total_loss, \
+            train_nmse_mag, train_nmse_complex, val_nmse_mag, val_nmse_complex, best_epoch = \
             train_one_fold(
                 device, model, train_loader, val_loader, epochs, lr,
                 fold_idx + 1, patience=patience, weight_decay=weight_decay,
-                lambda_corr=lambda_corr, lambda_peak=lambda_peak, beta_fi=beta_fi,
-                epsilon_mse=epsilon_mse,
-                adaptive_lambda=adaptive_lambda
+                corr_weight=corr_weight, lambda_peak=lambda_peak, beta_fi=beta_fi,
+                epsilon_mse=epsilon_mse, mse_weight_max=mse_weight_max,
+                phase_mix=phase_mix, selection_start_epoch=selection_start_epoch,
+                use_adaptive_peak=use_adaptive_peak,
+                snr_threshold=snr_threshold, lambda_temperature=lambda_temperature
             )
         fold_time = time.time() - t_fold
 
@@ -661,9 +732,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         cv_results['fold_corr_loss'].append(corr_loss)
         cv_results['fold_peak_loss'].append(peak_loss)
         cv_results['fold_avg_snr'].append(avg_snr)
+        cv_results['fold_val_corr_loss'].append(val_corr_loss)
+        cv_results['fold_val_peak_loss'].append(val_peak_loss)
+        cv_results['fold_val_total_loss'].append(val_total_loss)
+        cv_results['fold_train_nmse_mag'].append(train_nmse_mag)
+        cv_results['fold_train_nmse_complex'].append(train_nmse_complex)
+        cv_results['fold_val_nmse_mag'].append(val_nmse_mag)
+        cv_results['fold_val_nmse_complex'].append(val_nmse_complex)
+        cv_results['fold_best_epoch'].append(best_epoch)
 
         print(f"  Fold {fold_idx + 1} Best Val Loss: {best_val:.6f} "
-              f"(stopped at epoch {stopped},耗时 {fold_time:.1f}s)")
+              f"(best epoch {best_epoch}, stopped at epoch {stopped}, time {fold_time:.1f}s)")
 
         if best_val < best_overall_val:
             best_overall_val = best_val

@@ -44,10 +44,18 @@ def replot(result_dir):
         print(f"Run Configuration:")
         print(f"  Samples: {config['n_samples']} | Batch: {config['batch_size']} | LR: {config['lr']}")
         print(f"  K-Folds: {config['k_folds']} | Max Epochs: {config['max_epochs']} | Patience: {config['patience']}")
-        print(f"  λ_corr: {config['lambda_corr']} | λ_peak: {config['lambda_peak']} | "
-              f"Adaptive: {config['use_adaptive_lambda']}")
+        corr_weight = config.get('corr_weight', config.get('lambda_corr', 'N/A'))
+        use_adaptive_peak = config.get('use_adaptive_peak', config.get('use_adaptive_lambda', 'N/A'))
+        print(f"  Corr weight: {corr_weight} | λ_peak: {config['lambda_peak']} | "
+              f"Adaptive Peak: {use_adaptive_peak}")
         print(f"  Channel: {config['channel_mode']} ({config['n_fixed_channels']} fixed)")
         print(f"  CR List: {config['cr_list']}")
+        if 'diagnostics_version' in config:
+            print(f"  Diagnostics version: {config['diagnostics_version']}")
+        if 'fig2_diagnostic_trials' in config:
+            print(f"  Fig2 diagnostic trials: {config['fig2_diagnostic_trials']}")
+        if 'loss_config' in config:
+            print(f"  Loss config: {config['loss_config']}")
         print(f"{'='*60}\n")
     else:
         print("(No config found in plot_data.pkl — legacy data file)")

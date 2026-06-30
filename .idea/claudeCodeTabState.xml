@@ -1,22 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeTabState">
-    <option name="tabNames">
-      <map>
-        <entry key="0" value="Codex" />
-      </map>
-    </option>
     <option name="tabSessions">
       <map>
         <entry key="0">
           <value>
             <TabSessionState>
-              <option name="provider" value="codex" />
-              <option name="sessionId" value="019f11e6-5567-7651-9714-b6017c7f2c2c" />
-              <option name="cwd" value="F:\PythonWorkspace\DAE Data Compression" />
-              <option name="model" value="gpt-5.5" />
+              <option name="provider" value="claude" />
+              <option name="sessionId" value="e743aff2-aa22-43c1-a30b-48b032d763fb" />
+              <option name="model" value="claude-opus-4-7[1m]" />
               <option name="permissionMode" value="acceptEdits" />
-              <option name="reasoningEffort" value="high" />
             </TabSessionState>
           </value>
         </entry>

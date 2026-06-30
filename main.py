@@ -27,28 +27,34 @@ LR = 0.0005
 SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
-LAMBDA_CORR = 0.3        # GCC 互相关损失权重（0=纯 MSE，>0 启用相关性正则化）
+CORR_WEIGHT = 1.0        # GCC 互相关损失显式权重（R20固定为1.0，0=关闭）
 LAMBDA_PEAK = 0.25       # 全局默认（会被LOSS_CONFIG[cr]覆盖）
 BETA_FI = 0.0             # Fisher 损失已归档（GCC损失覆盖其功能）
 
-# ========== Per-CR 损失配置 (信封NMSE, 容量分配理论 v3) ==========
-# 统一公式: L = 1.0·L_corr + λ_peak·L_Peak + ε·NMSE_mag
-# NMSE_mag = ||y|-|s||²/|||s|||² (幅度包络, 与Corr无梯度冲突)
+# ========== Per-CR 损失配置 (R20固定比例混合NMSE) ==========
+# 统一公式: L = corr_weight·L_corr + λ_peak(SNR)·L_Peak
+#              + ε_current·[(1-ε)·NMSE_mag + ε·NMSE_complex]
+# NMSE_mag 约束幅度包络；微量 NMSE_complex 提供相位引导，突破纯包络相位地板。
 # Corr=1.0恒定的原因: TDOA是所有CR的最终目标（瓶颈独立性, 128维足够）
-# ε 控制额外维度用于包络重建的温和辅助, 不压制Corr优化:
-#   CR=4 (512维):  ε=0.15, λp=0.15 → 温和重建, 不内战
-#   CR=8 (256维):  ε=0.08, λp=0.20 → 轻度重建
-#   CR=16 (128维): ε=0.03, λp=0.25 → 纯TDOA
+# ε 同时控制NMSE总权重上限与复相位混合比例，净复相位梯度约为ε²:
+#   CR=4 (512维):  ε=0.15, λp=0.15 → 温和重建/相位引导
+#   CR=8 (256维):  ε=0.08, λp=0.20 → 轻度重建/弱相位引导
+#   CR=16 (128维): ε=0.03, λp=0.25 → 近纯TDOA
+# R20.1 note:
+#   epsilon_mse is a legacy alias kept for compatibility.
+#   mse_weight_max controls total reconstruction pressure.
+#   phase_mix controls the complex-NMSE fraction inside the mixed NMSE term.
 LOSS_CONFIG = {
-    4:  {'epsilon_mse': 0.15, 'lambda_peak': 0.15},
-    8:  {'epsilon_mse': 0.08, 'lambda_peak': 0.20},
-    16: {'epsilon_mse': 0.03, 'lambda_peak': 0.25},
+    4:  {'epsilon_mse': 0.15, 'mse_weight_max': 0.18, 'phase_mix': 0.25, 'lambda_peak': 0.15},
+    8:  {'epsilon_mse': 0.08, 'mse_weight_max': 0.10, 'phase_mix': 0.12, 'lambda_peak': 0.20},
+    16: {'epsilon_mse': 0.03, 'mse_weight_max': 0.03, 'phase_mix': 0.03, 'lambda_peak': 0.25},
 }
 
-# 自适应 Peak 配置（方案1）
-USE_ADAPTIVE_LAMBDA = True   # 是否启用逐样本SNR估计（用于自适应peak权重）
+# 自适应 Peak 配置（方案1）：低SNR时Peak先验更强，高SNR时自然减弱
+USE_ADAPTIVE_PEAK = True     # 是否启用逐样本SNR自适应Peak权重
 SNR_THRESHOLD = 0.0          # sigmoid 中心点 SNR (dB)
 LAMBDA_TEMPERATURE = 5.0     # sigmoid 温度参数
+FIG2_DIAGNOSTIC_TRIALS = 128  # extra samples saved in plot_data.pkl for Fig2 diagnostics
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -144,9 +150,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
             channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
             channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
-            lambda_corr=LAMBDA_CORR, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
+            corr_weight=CORR_WEIGHT, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
             epsilon_mse=0.03,
-            use_adaptive_lambda=USE_ADAPTIVE_LAMBDA,
+            use_adaptive_peak=USE_ADAPTIVE_PEAK,
             snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE,
             loss_config=LOSS_CONFIG[cr],
         )
@@ -172,7 +178,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         if n_cr == 1:
             axes_cv = axes_cv[:, np.newaxis]  # 保证 2D 索引
 
-        has_corr = LAMBDA_CORR > 0
+        has_corr = CORR_WEIGHT > 0
         has_peak = LAMBDA_PEAK > 0
 
         for col, cr in enumerate(CR_LIST):
@@ -188,10 +194,18 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             color=f'C{fi}', linewidth=0.8, label=lbl_t)
                 ax_mse.plot(cr_data['fold_val_loss'][fi], alpha=0.7,
                             color=f'C{fi}', linewidth=1.2, linestyle='--', label=lbl_v)
-            ax_mse.set_title(f'CR={cr} | NMSE (ε={LOSS_CONFIG[cr]["epsilon_mse"]})', fontsize=10, fontweight='bold')
-            ax_mse.set_ylabel('NMSE')
+                if 'fold_val_total_loss' in cr_data:
+                    ax_mse.plot(cr_data['fold_val_total_loss'][fi], alpha=0.55,
+                                color=f'C{fi}', linewidth=0.9, linestyle=':',
+                                label=f'ValTotal (F{fi+1})' if n_folds > 1 else 'ValTotal')
+            ax_mse.set_title(
+                f'CR={cr} | NMSE + ValTotal '
+                f'(w={LOSS_CONFIG[cr]["mse_weight_max"]}, mix={LOSS_CONFIG[cr]["phase_mix"]})',
+                fontsize=10, fontweight='bold'
+            )
+            ax_mse.set_ylabel('Value')
             ax_mse.grid(True, alpha=0.3)
-            ax_mse.legend(fontsize=6, framealpha=0.8, ncol=2)
+            ax_mse.legend(fontsize=5.5, framealpha=0.8, ncol=3)
 
             # --- Row 2: GCC Correlation Loss ---
             ax_corr = axes_cv[1, col]
@@ -199,7 +213,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 for fi in range(n_folds):
                     ax_corr.plot(cr_data['fold_corr_loss'][fi], alpha=0.5,
                                  color=f'C{fi}', linewidth=1.0,
-                                 label=f'F{fi+1}' if n_folds > 1 else 'Corr')
+                                 label=f'Train F{fi+1}' if n_folds > 1 else 'Train Corr')
+                    if 'fold_val_corr_loss' in cr_data:
+                        ax_corr.plot(cr_data['fold_val_corr_loss'][fi], alpha=0.75,
+                                     color=f'C{fi}', linewidth=1.0, linestyle='--',
+                                     label=f'Val F{fi+1}' if n_folds > 1 else 'Val Corr')
                 ax_corr.set_title(f'CR={cr} | GCC Correlation Loss', fontsize=10, fontweight='bold')
                 ax_corr.legend(fontsize=6, framealpha=0.8)
             else:
@@ -218,8 +236,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 for fi in range(n_folds):
                     ax_pk.plot(cr_data['fold_peak_loss'][fi], alpha=0.5,
                                color=f'C{fi}', linewidth=1.0,
-                               label=f'F{fi+1}' if n_folds > 1 else 'Peak')
-                ax_pk.set_title(f'CR={cr} | PNCC Peak Loss (λp={LOSS_CONFIG[cr]["lambda_peak"]})',
+                               label=f'Train F{fi+1}' if n_folds > 1 else 'Train Peak')
+                    if 'fold_val_peak_loss' in cr_data:
+                        ax_pk.plot(cr_data['fold_val_peak_loss'][fi], alpha=0.75,
+                                   color=f'C{fi}', linewidth=1.0, linestyle='--',
+                                   label=f'Val F{fi+1}' if n_folds > 1 else 'Val Peak')
+                ax_pk.set_title(f'CR={cr} | SNR-Adaptive Peak Loss (λp_max={LOSS_CONFIG[cr]["lambda_peak"]})',
                                 fontsize=9, fontweight='bold')
                 ax_pk.legend(fontsize=6, framealpha=0.8)
             else:
@@ -228,14 +250,20 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             ax_pk.set_xlabel('Epoch'); ax_pk.set_ylabel('Peak Loss')
             ax_pk.grid(True, alpha=0.3)
 
-        cfg_str = ", ".join([f"CR{cr}: ε={LOSS_CONFIG[cr]['epsilon_mse']}, λp={LOSS_CONFIG[cr]['lambda_peak']}" for cr in CR_LIST])
+        cfg_str = ", ".join([
+            f"CR{cr}: w={LOSS_CONFIG[cr]['mse_weight_max']}, "
+            f"mix={LOSS_CONFIG[cr]['phase_mix']}, λp={LOSS_CONFIG[cr]['lambda_peak']}"
+            for cr in CR_LIST
+        ])
         cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics  ({cfg_str})')
         fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
         save_figure(fig_cv, "Fig1_CV_training_curves")
 
         # 生成 Figure 2 的绘图数据（所有CR叠加）
-        snr_data_all = generate_snr_data_all(models_dict, sim, DEVICE)
+        snr_data_all = generate_snr_data_all(
+            models_dict, sim, DEVICE, diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
+        )
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
@@ -253,15 +281,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'seed_list': SEED_LIST,
                 'patience': PATIENCE,
                 'weight_decay': WEIGHT_DECAY,
-                'lambda_corr': LAMBDA_CORR,
+                'corr_weight': CORR_WEIGHT,
                 'lambda_peak': LAMBDA_PEAK,
-                'use_adaptive_lambda': USE_ADAPTIVE_LAMBDA,
+                'use_adaptive_peak': USE_ADAPTIVE_PEAK,
                 'snr_threshold': SNR_THRESHOLD,
                 'lambda_temperature': LAMBDA_TEMPERATURE,
+                'fig2_diagnostic_trials': FIG2_DIAGNOSTIC_TRIALS,
                 'channel_mode': CHANNEL_MODE,
                 'n_fixed_channels': N_FIXED_CHANNELS,
                 'cr_list': CR_LIST,
                 'loss_config': LOSS_CONFIG,
+                'diagnostics_version': 'R20.1',
             },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
