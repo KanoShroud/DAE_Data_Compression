@@ -13,45 +13,90 @@ from datetime import datetime
 
 from train import train_with_cv
 import pickle
-from evaluate import MonteCarloExperiment, plot_monte_carlo, plot_snr_comparison, plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all
+from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
+                      plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
+                      clean_peak_consistency)
 from signal_gen import SignalSimulator
 
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+EXPERIMENT_MODE = os.environ.get("DAE_EXPERIMENT_MODE", "paper_repro").lower()
 CR_LIST = [4, 8, 16]
-N_SAMPLES = 50000        # 训练样本数
-K_FOLDS = 3              # 论文k=5, 但随机信道下CV方差大, 3折已足够且节省40%时间
-MAX_EPOCHS = 150         # 最大训练轮数（早停可提前结束）
 BATCH_SIZE = 128
 LR = 0.0005
 SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
-CORR_WEIGHT = 1.0        # GCC 互相关损失显式权重（R20固定为1.0，0=关闭）
-LAMBDA_PEAK = 0.25       # 全局默认（会被LOSS_CONFIG[cr]覆盖）
-BETA_FI = 0.0             # Fisher 损失已归档（GCC损失覆盖其功能）
 
-# ========== Per-CR 损失配置 (R20固定比例混合NMSE) ==========
-# 统一公式: L = corr_weight·L_corr + λ_peak(SNR)·L_Peak
-#              + ε_current·[(1-ε)·NMSE_mag + ε·NMSE_complex]
-# NMSE_mag 约束幅度包络；微量 NMSE_complex 提供相位引导，突破纯包络相位地板。
-# Corr=1.0恒定的原因: TDOA是所有CR的最终目标（瓶颈独立性, 128维足够）
-# ε 同时控制NMSE总权重上限与复相位混合比例，净复相位梯度约为ε²:
-#   CR=4 (512维):  ε=0.15, λp=0.15 → 温和重建/相位引导
-#   CR=8 (256维):  ε=0.08, λp=0.20 → 轻度重建/弱相位引导
-#   CR=16 (128维): ε=0.03, λp=0.25 → 近纯TDOA
-# R20.1 note:
-#   epsilon_mse is a legacy alias kept for compatibility.
-#   mse_weight_max controls total reconstruction pressure.
-#   phase_mix controls the complex-NMSE fraction inside the mixed NMSE term.
-LOSS_CONFIG = {
+# R20.1 创新轨道配置：保留，必要时用 $env:DAE_EXPERIMENT_MODE='r20_1' 切回。
+R20_1_LOSS_CONFIG = {
     4:  {'epsilon_mse': 0.15, 'mse_weight_max': 0.18, 'phase_mix': 0.25, 'lambda_peak': 0.15},
     8:  {'epsilon_mse': 0.08, 'mse_weight_max': 0.10, 'phase_mix': 0.12, 'lambda_peak': 0.20},
     16: {'epsilon_mse': 0.03, 'mse_weight_max': 0.03, 'phase_mix': 0.03, 'lambda_peak': 0.25},
 }
 
-# 自适应 Peak 配置（方案1）：低SNR时Peak先验更强，高SNR时自然减弱
-USE_ADAPTIVE_PEAK = True     # 是否启用逐样本SNR自适应Peak权重
+# 论文复现基线轨道：关闭任务损失，仅使用复数实/虚 MSE。
+PAPER_REPRO_LOSS_CONFIG = {
+    cr: {'loss_mode': 'paper_mse', 'epsilon_mse': 1.0, 'mse_weight_max': 1.0,
+         'phase_mix': 1.0, 'lambda_peak': 0.0, 'selection_start_epoch': 1}
+    for cr in CR_LIST
+}
+
+if EXPERIMENT_MODE == "paper_repro":
+    N_SAMPLES = 10000        # 论文设置：50 snapshots × 200 trials
+    K_FOLDS = 5              # 论文使用 k=5
+    MAX_EPOCHS = 200         # 论文报告训练 200 epochs
+    CORR_WEIGHT = 0.0
+    LAMBDA_PEAK = 0.0
+    BETA_FI = 0.0
+    LOSS_CONFIG = PAPER_REPRO_LOSS_CONFIG
+    LOSS_MODE = "paper_mse"
+    USE_ADAPTIVE_PEAK = False
+    TRAIN_SNR_RANGE = (-10, 20)
+    EVAL_SNR_RANGE = np.arange(-10, 21, 2)
+    MONTE_CARLO_TRIALS = 200
+    FIG2_SNR_LIST = [-10, 0, 20]
+    DIAGNOSTICS_VERSION = "paper_repro_v2_urban8"
+    CHANNEL_MODE = "fixed"
+    N_FIXED_CHANNELS = 50
+    NLOS_PROB = 0.0
+    DELAY_LABEL_MODE = "los"
+    MULTIPATH_SCALE = 0.2
+    SCENARIO_MODE = "urban8"
+    NORMALIZATION_MODE = "per_observation_rms"
+    CV_GROUP_MODE = "snapshot"
+    EVALUATION_MODE = "urban_localization"
+    TDOA_SUB_SAMPLE = True
+    USE_LOS_ONLY = True
+elif EXPERIMENT_MODE in ("r20_1", "r20.1", "task"):
+    N_SAMPLES = 50000
+    K_FOLDS = 3
+    MAX_EPOCHS = 150
+    CORR_WEIGHT = 1.0
+    LAMBDA_PEAK = 0.25
+    BETA_FI = 0.0
+    LOSS_CONFIG = R20_1_LOSS_CONFIG
+    LOSS_MODE = "task"
+    USE_ADAPTIVE_PEAK = True
+    TRAIN_SNR_RANGE = (-10, 10)
+    EVAL_SNR_RANGE = np.arange(-10, 11, 1)
+    MONTE_CARLO_TRIALS = 1000
+    FIG2_SNR_LIST = [-10, -3, 3, 10]
+    DIAGNOSTICS_VERSION = "R20.1"
+    CHANNEL_MODE = "fixed"
+    N_FIXED_CHANNELS = 50
+    NLOS_PROB = 0.2
+    DELAY_LABEL_MODE = "strongest"
+    MULTIPATH_SCALE = 0.3
+    SCENARIO_MODE = "sv_pair"
+    NORMALIZATION_MODE = "none"
+    CV_GROUP_MODE = "sample"
+    EVALUATION_MODE = "pair_tdoa"
+    TDOA_SUB_SAMPLE = False
+    USE_LOS_ONLY = False
+else:
+    raise ValueError("EXPERIMENT_MODE must be 'paper_repro' or 'r20_1'")
+
 SNR_THRESHOLD = 0.0          # sigmoid 中心点 SNR (dB)
 LAMBDA_TEMPERATURE = 5.0     # sigmoid 温度参数
 FIG2_DIAGNOSTIC_TRIALS = 128  # extra samples saved in plot_data.pkl for Fig2 diagnostics
@@ -65,8 +110,6 @@ SEED_LIST = [SEED]
 USE_SPLIT = False        # True: 单次划分快速模式; False: K-fold CV
 
 # 信道模式 —— "fixed" 从固定信道池采样（匹配论文 50 snapshots）；"random" 每样本随机信道
-CHANNEL_MODE = "fixed"         # "fixed" 或 "random"
-N_FIXED_CHANNELS = 50          # 固定信道快照数（论文 50 snapshots）
 CHANNEL_POOL_SEED = 42         # 信道池生成种子
 
 # 全局随机种子 —— 确保训练与评估完全可复现
@@ -101,6 +144,15 @@ log_file = open(log_path, 'w', encoding='utf-8')
 sys.stdout = Tee(sys.__stdout__, log_file)
 sys.stderr = Tee(sys.__stderr__, log_file)
 print(f"[Log] {log_path}")
+print(f"[Config] EXPERIMENT_MODE={EXPERIMENT_MODE} | LOSS_MODE={LOSS_MODE}")
+print(f"[Config] Samples={N_SAMPLES} | K={K_FOLDS} | Epochs={MAX_EPOCHS} | "
+      f"TrainSNR={TRAIN_SNR_RANGE} | EvalSNR={list(EVAL_SNR_RANGE)}")
+print(f"[Config] Channel={CHANNEL_MODE} | fixed_channels={N_FIXED_CHANNELS} | "
+      f"nlos_prob={NLOS_PROB} | delay_label_mode={DELAY_LABEL_MODE} | "
+      f"multipath_scale={MULTIPATH_SCALE}")
+print(f"[Config] Scenario={SCENARIO_MODE} | normalization={NORMALIZATION_MODE} | "
+      f"cv_group={CV_GROUP_MODE} | eval={EVALUATION_MODE} | "
+      f"tdoa_sub_sample={TDOA_SUB_SAMPLE}")
 
 # ===================== 工具函数 =====================
 
@@ -140,7 +192,22 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
     # 1. 实例化 Simulator
     sim = SignalSimulator(channel_mode=CHANNEL_MODE,
                           n_fixed_channels=N_FIXED_CHANNELS,
-                          channel_pool_seed=CHANNEL_POOL_SEED)
+                          channel_pool_seed=CHANNEL_POOL_SEED,
+                          nlos_prob=NLOS_PROB,
+                          delay_label_mode=DELAY_LABEL_MODE,
+                          snr_train_range=TRAIN_SNR_RANGE,
+                          multipath_scale=MULTIPATH_SCALE,
+                          scenario_mode=SCENARIO_MODE,
+                          normalization_mode=NORMALIZATION_MODE)
+    clean_diag = None
+    if EXPERIMENT_MODE == "paper_repro":
+        clean_diag = clean_peak_consistency(sim, n_trials=256, snr_db=20)
+        print("[PaperRepro Check] Clean GCC vs LOS label: "
+              f"exact={clean_diag.get('match_rate', float('nan')):.3f}, "
+              f"within1={clean_diag.get('within_1_rate', float('nan')):.3f}, "
+              f"within2={clean_diag.get('within_2_rate', float('nan')):.3f}, "
+              f"mean_abs_err={clean_diag.get('mean_abs_peak_error', float('nan')):.2f}, "
+              f"false_peaks>0.5={clean_diag.get('mean_false_peaks_gt_05', float('nan')):.2f}")
 
     # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
     for cr in CR_LIST:
@@ -155,6 +222,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             use_adaptive_peak=USE_ADAPTIVE_PEAK,
             snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE,
             loss_config=LOSS_CONFIG[cr],
+            loss_mode=LOSS_MODE,
+            nlos_prob=NLOS_PROB,
+            delay_label_mode=DELAY_LABEL_MODE,
+            snr_train_range=TRAIN_SNR_RANGE,
+            multipath_scale=MULTIPATH_SCALE,
+            scenario_mode=SCENARIO_MODE,
+            normalization_mode=NORMALIZATION_MODE,
+            cv_group_mode=CV_GROUP_MODE,
         )
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
@@ -166,7 +241,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
     # 3. Monte Carlo 评估
     print("\n" + "=" * 40)
-    exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed)
+    if EVALUATION_MODE == "urban_localization":
+        exp = UrbanLocalizationExperiment(
+            models_dict, sim, DEVICE, seed=current_seed,
+            snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
+            sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
+            batch_size=BATCH_SIZE,
+        )
+    else:
+        exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed,
+                                   snr_range=EVAL_SNR_RANGE,
+                                   num_trials=MONTE_CARLO_TRIALS)
     mc_results = exp.run()
     all_seed_results[current_seed] = mc_results
 
@@ -198,11 +283,13 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     ax_mse.plot(cr_data['fold_val_total_loss'][fi], alpha=0.55,
                                 color=f'C{fi}', linewidth=0.9, linestyle=':',
                                 label=f'ValTotal (F{fi+1})' if n_folds > 1 else 'ValTotal')
-            ax_mse.set_title(
-                f'CR={cr} | NMSE + ValTotal '
-                f'(w={LOSS_CONFIG[cr]["mse_weight_max"]}, mix={LOSS_CONFIG[cr]["phase_mix"]})',
-                fontsize=10, fontweight='bold'
-            )
+            if LOSS_MODE == "paper_mse":
+                mse_title = f'CR={cr} | Paper Repro MSE'
+            else:
+                mse_title = (f'CR={cr} | NMSE + ValTotal '
+                             f'(w={LOSS_CONFIG[cr]["mse_weight_max"]}, '
+                             f'mix={LOSS_CONFIG[cr]["phase_mix"]})')
+            ax_mse.set_title(mse_title, fontsize=10, fontweight='bold')
             ax_mse.set_ylabel('Value')
             ax_mse.grid(True, alpha=0.3)
             ax_mse.legend(fontsize=5.5, framealpha=0.8, ncol=3)
@@ -250,11 +337,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             ax_pk.set_xlabel('Epoch'); ax_pk.set_ylabel('Peak Loss')
             ax_pk.grid(True, alpha=0.3)
 
-        cfg_str = ", ".join([
-            f"CR{cr}: w={LOSS_CONFIG[cr]['mse_weight_max']}, "
-            f"mix={LOSS_CONFIG[cr]['phase_mix']}, λp={LOSS_CONFIG[cr]['lambda_peak']}"
-            for cr in CR_LIST
-        ])
+        if LOSS_MODE == "paper_mse":
+            cfg_str = "Paper reproduction baseline: real/imag MSE only, LOS labels, no Corr/Peak"
+        else:
+            cfg_str = ", ".join([
+                f"CR{cr}: w={LOSS_CONFIG[cr]['mse_weight_max']}, "
+                f"mix={LOSS_CONFIG[cr]['phase_mix']}, λp={LOSS_CONFIG[cr]['lambda_peak']}"
+                for cr in CR_LIST
+            ])
         cv_title = (f'Figure 1: {K_FOLDS}-Fold CV Training Dynamics  ({cfg_str})')
         fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
@@ -262,7 +352,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         # 生成 Figure 2 的绘图数据（所有CR叠加）
         snr_data_all = generate_snr_data_all(
-            models_dict, sim, DEVICE, diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
+            models_dict, sim, DEVICE, snr_list=FIG2_SNR_LIST,
+            diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
         )
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
@@ -281,17 +372,33 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'seed_list': SEED_LIST,
                 'patience': PATIENCE,
                 'weight_decay': WEIGHT_DECAY,
+                'experiment_mode': EXPERIMENT_MODE,
+                'loss_mode': LOSS_MODE,
                 'corr_weight': CORR_WEIGHT,
                 'lambda_peak': LAMBDA_PEAK,
                 'use_adaptive_peak': USE_ADAPTIVE_PEAK,
                 'snr_threshold': SNR_THRESHOLD,
                 'lambda_temperature': LAMBDA_TEMPERATURE,
+                'train_snr_range': TRAIN_SNR_RANGE,
+                'eval_snr_range': [float(x) for x in EVAL_SNR_RANGE],
+                'monte_carlo_trials': MONTE_CARLO_TRIALS,
+                'fig2_snr_list': FIG2_SNR_LIST,
                 'fig2_diagnostic_trials': FIG2_DIAGNOSTIC_TRIALS,
                 'channel_mode': CHANNEL_MODE,
                 'n_fixed_channels': N_FIXED_CHANNELS,
+                'nlos_prob': NLOS_PROB,
+                'delay_label_mode': DELAY_LABEL_MODE,
+                'multipath_scale': MULTIPATH_SCALE,
+                'scenario_mode': SCENARIO_MODE,
+                'normalization_mode': NORMALIZATION_MODE,
+                'cv_group_mode': CV_GROUP_MODE,
+                'evaluation_mode': EVALUATION_MODE,
+                'tdoa_sub_sample': TDOA_SUB_SAMPLE,
+                'use_los_only': USE_LOS_ONLY,
+                'paper_repro_clean_peak_check': clean_diag,
                 'cr_list': CR_LIST,
                 'loss_config': LOSS_CONFIG,
-                'diagnostics_version': 'R20.1',
+                'diagnostics_version': DIAGNOSTICS_VERSION,
             },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
@@ -314,8 +421,8 @@ if len(SEED_LIST) > 1:
     for cr in CR_LIST:
         key = f'dae_{cr}'
         key_med = f'dae_{cr}_med'
-        # 取 SNR=0 dB 的结果做对比（索引 10，对应 snr=-10+10=0）
-        snr_idx = 10
+        # 取最接近 SNR=0 dB 的结果做对比，兼容不同 SNR 网格。
+        snr_idx = int(np.argmin(np.abs(np.asarray(EVAL_SNR_RANGE, dtype=float) - 0.0)))
         vals = []
         for s in SEED_LIST:
             r = all_seed_results[s][0]

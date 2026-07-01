@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
-from scipy import signal
+from scipy import signal, optimize
 
 
 def gcc_phat(sig1, sig2):
@@ -105,6 +105,25 @@ def _batch_peak_diagnostics(batch1, batch2, delays1, delays2, lags, gcc_func=gcc
     return _summarize_peak_metrics(metrics)
 
 
+def clean_peak_consistency(simulator, n_trials=256, snr_db=20, gcc_func=gcc_standard):
+    """
+    训练前数据/标签自检：统计 clean signal 的 GCC 峰是否落在标签 TDOA。
+
+    paper_repro 模式依赖 LOS 标签。如果 clean GCC 与标签明显不一致，
+    说明数据生成或多径设置仍不能作为可靠论文复现基线。
+    """
+    X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2 = simulator.generate_pair_batch(
+        n_trials, snr_db=snr_db
+    )
+    del X1_noisy, X2_noisy
+    lags = signal.correlation_lags(simulator.signal_len, simulator.signal_len, mode='same')
+    metrics = _batch_peak_diagnostics(
+        X1_clean.numpy(), X2_clean.numpy(), delays1, delays2, lags, gcc_func=gcc_func
+    )
+    metrics['snr_db'] = float(snr_db)
+    return metrics
+
+
 def _bootstrap_rmse_ci(se_values, rng, n_boot=200):
     se_values = np.asarray(se_values, dtype=float)
     if se_values.size == 0:
@@ -117,13 +136,177 @@ def _bootstrap_rmse_ci(se_values, rng, n_boot=200):
     return [float(np.percentile(rmse, 2.5)), float(np.percentile(rmse, 97.5))]
 
 
+def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True):
+    corr = np.abs(gcc_func(sig_i, sig_ref))
+    idx = int(np.argmax(corr))
+    lag = float(lags[idx])
+    if sub_sample and 0 < idx < len(corr) - 1:
+        y0, y1, y2 = corr[idx - 1], corr[idx], corr[idx + 1]
+        denom = y0 - 2.0 * y1 + y2
+        if abs(denom) > 1e-12:
+            delta = 0.5 * (y0 - y2) / denom
+            lag += float(np.clip(delta, -0.5, 0.5))
+    return lag
+
+
+def _localize_from_tdoa(uav_pos, ref_idx, tdoa_samples, fs, c, area_size):
+    uav_pos = np.asarray(uav_pos, dtype=float)
+    ref = uav_pos[ref_idx]
+    other_idx = [i for i in range(len(uav_pos)) if i != ref_idx and i in tdoa_samples]
+    if len(other_idx) < 3:
+        return None
+    delta_ranges = np.asarray([tdoa_samples[i] * c / fs for i in other_idx], dtype=float)
+    other_pos = uav_pos[other_idx]
+
+    def residual(p):
+        return (np.linalg.norm(p[None, :] - other_pos, axis=1)
+                - np.linalg.norm(p - ref)
+                - delta_ranges)
+
+    x0 = np.mean(uav_pos[[ref_idx] + other_idx], axis=0)
+    bounds = ([0.0, 0.0], [float(area_size[0]), float(area_size[1])])
+    try:
+        res = optimize.least_squares(residual, x0=x0, bounds=bounds, loss='soft_l1',
+                                     max_nfev=100)
+    except Exception:
+        return None
+    return res.x if np.all(np.isfinite(res.x)) else None
+
+
+def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
+                                    sub_sample=True, use_los_only=True):
+    errors = []
+    for bi in range(batch_np.shape[0]):
+        los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
+        if len(los_idx) < 4:
+            continue
+        ref_idx = int(los_idx[0])
+        lags = signal.correlation_lags(batch_np.shape[-1], batch_np.shape[-1], mode='same')
+        ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
+        tdoa = {}
+        for ui in los_idx:
+            ui = int(ui)
+            if ui == ref_idx:
+                continue
+            sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+            tdoa[ui] = _estimate_delay_from_corr(sig_i, ref_sig, lags, gcc_func,
+                                                  sub_sample=sub_sample)
+        est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+        if est is None:
+            continue
+        errors.append(float(np.linalg.norm(est - meta['source'][bi])))
+    return errors
+
+
+class UrbanLocalizationExperiment:
+    """
+    论文近似复现评估：8 UAV + oracle LOS 选择 + 多 TDOA 几何定位误差。
+    """
+
+    def __init__(self, models_dict, simulator, device, seed=None, gcc_method='standard',
+                 snr_range=None, num_trials=200, sub_sample=True, use_los_only=True,
+                 batch_size=64):
+        self.models_dict = models_dict
+        self.sim = simulator
+        self.device = device
+        self.seed = seed
+        self.snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 21, 2))
+        self.num_trials = int(num_trials)
+        self.sub_sample = bool(sub_sample)
+        self.use_los_only = bool(use_los_only)
+        self.batch_size = int(batch_size)
+        self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
+        self.gcc_method = gcc_method
+
+    def _run_models(self, X_noisy):
+        n_obs, n_uav = X_noisy.shape[:2]
+        flat = X_noisy.reshape(n_obs * n_uav, 2, self.sim.signal_len).to(self.device)
+        outputs = {}
+        for cr, model in self.models_dict.items():
+            model.eval()
+            chunks = []
+            with torch.no_grad():
+                for start in range(0, flat.shape[0], self.batch_size):
+                    chunks.append(model(flat[start:start + self.batch_size]).cpu())
+            outputs[cr] = torch.cat(chunks, dim=0).reshape(n_obs, n_uav, 2, self.sim.signal_len).numpy()
+        return outputs
+
+    def run(self):
+        print(f"Running Urban Localization Sweep (GCC method: {self.gcc_method}, "
+              f"sub_sample={self.sub_sample}, LOS-only={self.use_los_only})...")
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            print(f"  Urban localization random seed set to: {self.seed}")
+
+        ci_rng = np.random.default_rng(self.seed)
+        results = {
+            'metric': 'localization_m',
+            'raw': [], 'raw_med': [],
+            'clean': [], 'clean_med': [],
+            'trial_se': {'raw': [], 'clean': [], 'dae': {}},
+            'rmse_ci95': {'raw': [], 'clean': [], 'dae': {}},
+            'localization_config': {
+                'gcc_method': self.gcc_method,
+                'sub_sample': self.sub_sample,
+                'use_los_only': self.use_los_only,
+                'n_uavs': self.sim.n_uavs,
+                'area_size': self.sim.area_size,
+            },
+        }
+        for cr in self.models_dict.keys():
+            results[f'dae_{cr}'] = []
+            results[f'dae_{cr}_med'] = []
+            results['trial_se']['dae'][str(cr)] = []
+            results['rmse_ci95']['dae'][str(cr)] = []
+
+        for snr in self.snr_range:
+            X_noisy, X_clean, meta = self.sim.generate_urban_batch(self.num_trials, snr_db=float(snr))
+            raw_np = X_noisy.numpy()
+            clean_np = X_clean.numpy()
+            raw_err = _localization_errors_from_batch(
+                raw_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
+                sub_sample=self.sub_sample, use_los_only=self.use_los_only
+            )
+            clean_err = _localization_errors_from_batch(
+                clean_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
+                sub_sample=self.sub_sample, use_los_only=self.use_los_only
+            )
+            raw_se = np.square(raw_err) if raw_err else np.asarray([np.nan])
+            clean_se = np.square(clean_err) if clean_err else np.asarray([np.nan])
+            results['raw'].append(float(np.sqrt(np.nanmean(raw_se))))
+            results['raw_med'].append(float(np.sqrt(np.nanmedian(raw_se))))
+            results['clean'].append(float(np.sqrt(np.nanmean(clean_se))))
+            results['clean_med'].append(float(np.sqrt(np.nanmedian(clean_se))))
+            results['trial_se']['raw'].append([float(v) for v in raw_se if np.isfinite(v)])
+            results['trial_se']['clean'].append([float(v) for v in clean_se if np.isfinite(v)])
+            results['rmse_ci95']['raw'].append(_bootstrap_rmse_ci(raw_se[np.isfinite(raw_se)], ci_rng))
+            results['rmse_ci95']['clean'].append(_bootstrap_rmse_ci(clean_se[np.isfinite(clean_se)], ci_rng))
+
+            dae_outputs = self._run_models(X_noisy)
+            for cr, y_np in dae_outputs.items():
+                err = _localization_errors_from_batch(
+                    y_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
+                    sub_sample=self.sub_sample, use_los_only=self.use_los_only
+                )
+                se = np.square(err) if err else np.asarray([np.nan])
+                results[f'dae_{cr}'].append(float(np.sqrt(np.nanmean(se))))
+                results[f'dae_{cr}_med'].append(float(np.sqrt(np.nanmedian(se))))
+                results['trial_se']['dae'][str(cr)].append([float(v) for v in se if np.isfinite(v)])
+                results['rmse_ci95']['dae'][str(cr)].append(
+                    _bootstrap_rmse_ci(se[np.isfinite(se)], ci_rng)
+                )
+
+        return results, self.snr_range
+
+
 class MonteCarloExperiment:
     """
     蒙特卡洛实验类
     功能：在不同 SNR 下进行多次实验，统计 RMSE 和 Loss。
     """
 
-    def __init__(self, models_dict, simulator, device, seed=None, gcc_method='standard'):
+    def __init__(self, models_dict, simulator, device, seed=None, gcc_method='standard',
+                 snr_range=None, num_trials=1000):
         """
         参数:
             gcc_method: 'standard' (标准 GCC，默认) 或 'phat' (GCC-PHAT)
@@ -131,8 +314,8 @@ class MonteCarloExperiment:
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
-        self.snr_range = np.arange(-10, 11, 1)
-        self.num_trials = 1000
+        self.snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 11, 1))
+        self.num_trials = int(num_trials)
         self.seed = seed
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
         self.gcc_method = gcc_method
@@ -502,7 +685,12 @@ def plot_monte_carlo(mc_data):
 
     # 左图: Mean RMSE
     ax = axes[0]
+    metric = results.get('metric', 'tdoa_samples')
+    y_label = 'Localization RMSE [m]' if metric == 'localization_m' else 'TDOA RMSE [samples]'
+    title_prefix = 'Localization' if metric == 'localization_m' else 'TDOA'
     ax.plot(snr_range, results['raw'], 'b-s', label='Original data', linewidth=1.5)
+    if 'clean' in results:
+        ax.plot(snr_range, results['clean'], 'k--', label='Clean oracle', linewidth=1.2)
     ci_data = results.get('rmse_ci95', {})
     raw_ci = np.asarray(ci_data.get('raw', []), dtype=float)
     if raw_ci.shape == (len(snr_range), 2):
@@ -518,7 +706,7 @@ def plot_monte_carlo(mc_data):
             ax.fill_between(snr_range, dae_ci[:, 0], dae_ci[:, 1],
                             color=ax.lines[-1].get_color(), alpha=0.08, linewidth=0)
     ax.set_xlabel('SNR [dB]', fontsize=12)
-    ax.set_ylabel('TDOA RMSE [samples]', fontsize=12)
+    ax.set_ylabel(y_label, fontsize=12)
     ax.set_title('Mean RMSE (sensitive to outliers)', fontsize=11)
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.5)
@@ -527,6 +715,8 @@ def plot_monte_carlo(mc_data):
     if has_median:
         ax = axes[1]
         ax.plot(snr_range, results['raw_med'], 'b-s', label='Original data', linewidth=1.5)
+        if 'clean_med' in results:
+            ax.plot(snr_range, results['clean_med'], 'k--', label='Clean oracle', linewidth=1.2)
         for idx, key in enumerate(cr_keys):
             med_key = key + '_med'
             if med_key in results:
@@ -534,12 +724,12 @@ def plot_monte_carlo(mc_data):
                 cr_val = key[4:]
                 ax.plot(snr_range, results[med_key], style, label=f'Data with CR={cr_val}', linewidth=1.5)
         ax.set_xlabel('SNR [dB]', fontsize=12)
-        ax.set_ylabel('TDOA RMSE [samples]', fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
         ax.set_title('Median RMSE (robust, typical performance)', fontsize=11)
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.5)
 
-    fig.suptitle('Figure 3: Comparison of Localization Performance at Different CRs', fontsize=13)
+    fig.suptitle(f'Figure 3: Comparison of {title_prefix} Performance at Different CRs', fontsize=13)
     plt.tight_layout(rect=[0, 0, 1, 0.94])
     return fig
 

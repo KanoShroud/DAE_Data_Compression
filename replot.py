@@ -42,6 +42,8 @@ def replot(result_dir):
     if config:
         print(f"\n{'='*60}")
         print(f"Run Configuration:")
+        if 'experiment_mode' in config:
+            print(f"  Experiment mode: {config['experiment_mode']} | Loss mode: {config.get('loss_mode', 'N/A')}")
         print(f"  Samples: {config['n_samples']} | Batch: {config['batch_size']} | LR: {config['lr']}")
         print(f"  K-Folds: {config['k_folds']} | Max Epochs: {config['max_epochs']} | Patience: {config['patience']}")
         corr_weight = config.get('corr_weight', config.get('lambda_corr', 'N/A'))
@@ -49,6 +51,17 @@ def replot(result_dir):
         print(f"  Corr weight: {corr_weight} | λ_peak: {config['lambda_peak']} | "
               f"Adaptive Peak: {use_adaptive_peak}")
         print(f"  Channel: {config['channel_mode']} ({config['n_fixed_channels']} fixed)")
+        if 'nlos_prob' in config:
+            print(f"  NLOS prob: {config['nlos_prob']} | delay label: {config.get('delay_label_mode', 'N/A')} | "
+                  f"multipath scale: {config.get('multipath_scale', 'N/A')}")
+        if 'scenario_mode' in config:
+            print(f"  Scenario: {config['scenario_mode']} | normalization: {config.get('normalization_mode', 'N/A')} | "
+                  f"CV group: {config.get('cv_group_mode', 'N/A')}")
+        if 'evaluation_mode' in config:
+            print(f"  Evaluation: {config['evaluation_mode']} | sub-sample TDOA: "
+                  f"{config.get('tdoa_sub_sample', 'N/A')} | LOS-only: {config.get('use_los_only', 'N/A')}")
+        if 'eval_snr_range' in config:
+            print(f"  Eval SNR range: {config['eval_snr_range']}")
         print(f"  CR List: {config['cr_list']}")
         if 'diagnostics_version' in config:
             print(f"  Diagnostics version: {config['diagnostics_version']}")

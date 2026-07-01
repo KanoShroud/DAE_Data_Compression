@@ -7,7 +7,7 @@ import numpy as np
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, Subset
 from torch.optim.lr_scheduler import StepLR
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GroupKFold
 
 from model import DAE
 from signal_gen import SignalSimulator
@@ -242,7 +242,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    fold_idx, patience=20, weight_decay=1e-4, corr_weight=1.0,
                    lambda_peak=0.0, beta_fi=0.0, epsilon_mse=1.0,
                    mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
-                   use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0):
+                   use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0,
+                   loss_mode="task"):
     """
     在单个 fold 上训练模型，含早停机制。
 
@@ -265,6 +266,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         phase_mix = epsilon_mse
     phase_mix = float(max(0.0, min(1.0, phase_mix)))
 
+    task_loss_enabled = (loss_mode != "paper_mse") and (corr_weight > 0 or lambda_peak > 0 or beta_fi > 0)
+
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = StepLR(optimizer, step_size=30, gamma=0.5)
     criterion = nn.MSELoss()
@@ -286,13 +289,13 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     best_epoch = 0
     epochs_no_improve = 0
     stopped_epoch = epochs
-    warmup_ep = 100
+    warmup_ep = 100 if task_loss_enabled else 0
     if selection_start_epoch is None:
-        selection_start_epoch = warmup_ep
+        selection_start_epoch = warmup_ep if task_loss_enabled else 1
 
     for ep in range(epochs):
-        # ε调度：warmup期间从0线性增加到目标值，先学GCC再学重建
-        progress = min((ep + 1) / warmup_ep, 1.0)
+        # 任务驱动分支保留 warmup；论文复现分支使用标准 MSE，不做课程学习。
+        progress = min((ep + 1) / warmup_ep, 1.0) if warmup_ep > 0 else 1.0
         eps_factor = 0.5 * (1.0 - math.cos(math.pi * progress)) if warmup_ep > 0 else 1.0
         mse_weight_current = mse_weight_max * eps_factor
         t_ep = time.time()
@@ -307,7 +310,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         ep_snr = 0.0
         n_batches = 0
         for batch in train_loader:
-            if (corr_weight > 0 or lambda_peak > 0) and len(batch) >= 4:
+            if task_loss_enabled and len(batch) >= 4:
                 # 配对数据：(X1_noisy, X1_clean, X2_noisy, X2_clean[, tdoa])
                 bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                 true_tdoa = batch[4].to(device) if len(batch) >= 5 else None
@@ -407,14 +410,12 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 ep_snr += avg_snr_batch * bx1.size(0)
                 n_batches += 1
             else:
-                # 单信号数据：(noisy, clean) — 纯MSE训练（未使用GCC损失时）
+                # 单信号数据：(noisy, clean) — 论文复现基线：实部/虚部标准 MSE
                 bx, by = batch[0].to(device), batch[1].to(device)
                 optimizer.zero_grad()
                 loss = criterion(model(bx), by)
                 loss.backward()
                 optimizer.step()
-                # 注意: 此分支ep_loss仍为原始MSE（非NMSE），与配对分支不同
-                # 仅在 corr_weight=0 且 lambda_peak=0 时触发，当前所有CR均使用配对数据
                 ep_loss += loss.item() * bx.size(0)
                 ep_nmse_mag += loss.item() * bx.size(0)
                 ep_nmse_complex += loss.item() * bx.size(0)
@@ -437,7 +438,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         n_val = 0
         with torch.no_grad():
             for batch in val_loader:
-                if (corr_weight > 0 or lambda_peak > 0) and len(batch) >= 4:
+                if task_loss_enabled and len(batch) >= 4:
                     # 配对数据：计算复合损失（与训练目标完全一致，含peak loss）
                     bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                     true_tdoa_v = batch[4].to(device) if len(batch) >= 5 else None
@@ -502,12 +503,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     n_val += bx1.size(0)
                 else:
                     bx, by = batch[0].to(device), batch[1].to(device)
-                    sig_pow = torch.mean(by ** 2)
-                    nmse_v = criterion(model(bx), by).item() / (sig_pow.item() + 1e-9)
-                    val_mse += nmse_v * bx.size(0)
-                    val_mse_mag += nmse_v * bx.size(0)
-                    val_mse_complex += nmse_v * bx.size(0)
-                    val_total += nmse_v * bx.size(0)
+                    mse_v = criterion(model(bx), by).item()
+                    val_mse += mse_v * bx.size(0)
+                    val_mse_mag += mse_v * bx.size(0)
+                    val_mse_complex += mse_v * bx.size(0)
+                    val_total += mse_v * bx.size(0)
                     n_val += bx.size(0)
 
         val_mse /= n_val
@@ -534,10 +534,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         else:
             epochs_no_improve = 0
 
-        # Grace period: warmup全期 + 额外30轮锁死早停
-        # Phase II初期模型从包络解过渡到复NMSE解，Corr/Peak短期恶化是相位修复的必需代价
-        # 30轮缓冲确保训练不被"阵痛期"的暂时性Loss上升误杀
-        if ep < warmup_ep + 30:
+        # Grace period 仅用于任务驱动分支；论文复现 MSE 不需要锁死早停。
+        if task_loss_enabled and ep < warmup_ep + 30:
             epochs_no_improve = 0
 
         ep_time = time.time() - t_ep
@@ -551,12 +549,15 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             val_corr_str = f" | ValCorr {val_corr:.5f}" if corr_weight > 0 else ""
             val_peak_str = f" | ValPeak {val_peak:.5f}" if lambda_peak > 0 else ""
             snr_str = f" | SNR={ep_snr / len(train_loader.dataset):.1f}dB" if use_adaptive_peak and n_batches > 0 else ""
+            metric_name = "NMSE" if task_loss_enabled else "MSE"
+            loss_state_str = (f"mse_w={mse_weight_current:.3f} | phase_mix={phase_mix:.3f} | "
+                              f"NetComplex={mse_weight_current * phase_mix:.4f}"
+                              if task_loss_enabled else "paper_mse")
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
-                  f"TrainNMSE {train_loss_hist[-1]:.5f} | "
-                  f"ValNMSE {val_mse:.5f}{val_corr_str}{val_peak_str} | "
+                  f"Train{metric_name} {train_loss_hist[-1]:.5f} | "
+                  f"Val{metric_name} {val_mse:.5f}{val_corr_str}{val_peak_str} | "
                   f"ValTotal {val_loss:.5f}{corr_str}{peak_str}{fi_str}{snr_str} | "
-                  f"mse_w={mse_weight_current:.3f} | phase_mix={phase_mix:.3f} | "
-                  f"NetComplex={mse_weight_current * phase_mix:.4f} | "
+                  f"{loss_state_str} | "
                   f"LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
 
         if epochs_no_improve >= patience:
@@ -583,7 +584,11 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   epsilon_mse=1.0,
                   mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
                   use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0,
-                  loss_config=None):
+                  loss_config=None, loss_mode="task",
+                  nlos_prob=0.2, delay_label_mode="strongest",
+                  snr_train_range=(-10, 10), multipath_scale=0.3,
+                  scenario_mode="sv_pair", normalization_mode="none",
+                  cv_group_mode="sample"):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
@@ -598,6 +603,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                                覆盖同名的单个参数。
                                统一公式: L = corr_weight·L_corr + λp·L_peak + ε·NMSE。
                                R20中ε为温和重建/相位引导强度。
+        loss_mode:             "task" 使用R20.1任务驱动损失；"paper_mse" 使用论文式MSE复现基线。
+        cv_group_mode:         "sample" 随机样本划分；"snapshot" 按 urban snapshot 分组划分。
     """
     # === loss_config 覆盖 ===
     # 每个CR的loss配置覆盖同名参数。统一公式:
@@ -616,8 +623,19 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         mse_weight_max = loss_config.get('mse_weight_max', legacy_eps)
         phase_mix = loss_config.get('phase_mix', legacy_eps)
         selection_start_epoch = loss_config.get('selection_start_epoch', selection_start_epoch)
+        loss_mode = loss_config.get('loss_mode', loss_mode)
         epsilon_mse = legacy_eps
         lambda_peak = loss_config.get('lambda_peak', lambda_peak)
+
+    if loss_mode == "paper_mse":
+        corr_weight = 0.0
+        lambda_peak = 0.0
+        beta_fi = 0.0
+        use_adaptive_peak = False
+        mse_weight_max = 1.0
+        phase_mix = 1.0
+        if selection_start_epoch is None:
+            selection_start_epoch = 1
 
     # 固定全局随机种子，确保数据集生成、模型初始化和数据划分完全可复现
     torch.manual_seed(seed)
@@ -626,14 +644,27 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     if sim is None:
         sim = SignalSimulator(channel_mode=channel_mode,
                               n_fixed_channels=n_fixed_channels,
-                              channel_pool_seed=channel_pool_seed)
+                              channel_pool_seed=channel_pool_seed,
+                              nlos_prob=nlos_prob,
+                              delay_label_mode=delay_label_mode,
+                              snr_train_range=snr_train_range,
+                              multipath_scale=multipath_scale,
+                              scenario_mode=scenario_mode,
+                              normalization_mode=normalization_mode)
 
     if corr_weight > 0 or lambda_peak > 0:
         # 配对数据：X1 和 X2 来自同信道同噪声，用于 GCC 损失和峰值损失
         X1_n, X1_c, X2_n, X2_c, tdoa = sim.generate_paired_training_dataset(n_samples, seed=seed)
         dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c, tdoa)
     else:
-        X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
+        need_groups = cv_group_mode == "snapshot"
+        if need_groups:
+            X_noisy, X_clean, cv_groups = sim.generate_training_dataset(
+                n_samples, seed=seed, return_groups=True
+            )
+        else:
+            X_noisy, X_clean = sim.generate_training_dataset(n_samples, seed=seed)
+            cv_groups = None
         dataset = TensorDataset(X_noisy, X_clean)
 
     if use_split:
@@ -653,15 +684,20 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
-    print(f"  Unified Loss (R20.1 fixed blend): L = {corr_weight}*Corr + "
-          f"lambda_peak(SNR)*Peak + mse_weight_current*"
-          f"[(1-{phase_mix})*NMSE_mag + {phase_mix}*NMSE_complex]")
-    print(f"  mse_weight_max={mse_weight_max} | phase_mix={phase_mix} | "
-          f"selection_start_epoch={selection_start_epoch if selection_start_epoch is not None else 100}")
+    print(f"  Loss Mode: {loss_mode}")
+    if loss_mode == "paper_mse":
+        print("  Paper Repro Loss: real/imag MSE only (Corr/Peak/FI disabled)")
+    else:
+        print(f"  Unified Loss (R20.1 fixed blend): L = {corr_weight}*Corr + "
+              f"lambda_peak(SNR)*Peak + mse_weight_current*"
+              f"[(1-{phase_mix})*NMSE_mag + {phase_mix}*NMSE_complex]")
+        print(f"  mse_weight_max={mse_weight_max} | phase_mix={phase_mix} | "
+              f"selection_start_epoch={selection_start_epoch if selection_start_epoch is not None else 100}")
     if lambda_peak > 0:
         print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ(({snr_threshold}-SNR)/{lambda_temperature}), "
               f"range ~[0, {lambda_peak}]")
-    print(f"  Training SNR: [-10, 10] dB uniform (eval-matched)")
+    print(f"  Training SNR: [{snr_train_range[0]}, {snr_train_range[1]}] dB uniform")
+    print(f"  Scenario: {sim.scenario_mode} | normalization={sim.normalization_mode} | CV group={cv_group_mode}")
     if beta_fi > 0:
         print(f"  Fisher Loss: β_fi={beta_fi}")
     model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
@@ -690,7 +726,15 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'mse_weight_max': mse_weight_max,
         'phase_mix': phase_mix,
         'selection_start_epoch': selection_start_epoch if selection_start_epoch is not None else 100,
-        'diagnostics_version': 'R20.1',
+        'loss_mode': loss_mode,
+        'scenario_mode': sim.scenario_mode,
+        'normalization_mode': sim.normalization_mode,
+        'cv_group_mode': cv_group_mode,
+        'diagnostics_version': (
+            'paper_repro_v2_urban8'
+            if loss_mode == "paper_mse" and sim.scenario_mode == "urban8"
+            else ('paper_repro_v1' if loss_mode == "paper_mse" else 'R20.1')
+        ),
     }
 
     best_model = None
@@ -699,8 +743,16 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     if use_split:
         split_iterator = [(train_idx, val_idx)]
     else:
-        kf = KFold(n_splits=k, shuffle=True, random_state=seed)
-        split_iterator = list(kf.split(range(n_samples)))
+        if cv_group_mode == "snapshot" and cv_groups is not None:
+            groups_np = cv_groups.cpu().numpy() if hasattr(cv_groups, "cpu") else np.asarray(cv_groups)
+            n_groups = len(np.unique(groups_np))
+            if n_groups < k:
+                raise ValueError(f"snapshot GroupKFold needs at least {k} groups, got {n_groups}")
+            kf = GroupKFold(n_splits=k)
+            split_iterator = list(kf.split(range(n_samples), groups=groups_np))
+        else:
+            kf = KFold(n_splits=k, shuffle=True, random_state=seed)
+            split_iterator = list(kf.split(range(n_samples)))
 
     for fold_idx, (train_idx, val_idx) in enumerate(split_iterator):
         train_loader = DataLoader(Subset(dataset, train_idx),
@@ -721,7 +773,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 epsilon_mse=epsilon_mse, mse_weight_max=mse_weight_max,
                 phase_mix=phase_mix, selection_start_epoch=selection_start_epoch,
                 use_adaptive_peak=use_adaptive_peak,
-                snr_threshold=snr_threshold, lambda_temperature=lambda_temperature
+                snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
+                loss_mode=loss_mode
             )
         fold_time = time.time() - t_fold
 
