@@ -19,6 +19,10 @@ RESULT_DIR = "运行结果/20260601_145854"
 
 
 def save_figure(fig, filepath):
+    try:
+        fig.canvas.manager.set_window_title(os.path.splitext(os.path.basename(filepath))[0])
+    except Exception:
+        pass
     fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
 
@@ -46,6 +50,17 @@ def replot(result_dir):
             print(f"  Experiment mode: {config['experiment_mode']} | Loss mode: {config.get('loss_mode', 'N/A')}")
         print(f"  Samples: {config['n_samples']} | Batch: {config['batch_size']} | LR: {config['lr']}")
         print(f"  K-Folds: {config['k_folds']} | Max Epochs: {config['max_epochs']} | Patience: {config['patience']}")
+        if 'early_stopping' in config:
+            print(f"  Early stopping: {config['early_stopping']} | Restore best: {config.get('restore_best', 'N/A')} | "
+                  f"Final retrain: {config.get('final_retrain', 'N/A')} "
+                  f"({config.get('final_retrain_epochs', 'N/A')} epochs)")
+        if 'training_protocol' in config:
+            print(f"  Training protocol: {config['training_protocol']}")
+        if 'training_sample_unit' in config:
+            print(f"  Training sample unit: {config['training_sample_unit']}")
+        if 'resample_train_each_epoch' in config:
+            print(f"  Train resampling: {config['resample_train_each_epoch']} | "
+                  f"interval: {config.get('resample_interval', 'N/A')}")
         corr_weight = config.get('corr_weight', config.get('lambda_corr', 'N/A'))
         use_adaptive_peak = config.get('use_adaptive_peak', config.get('use_adaptive_lambda', 'N/A'))
         print(f"  Corr weight: {corr_weight} | λ_peak: {config['lambda_peak']} | "
@@ -60,6 +75,12 @@ def replot(result_dir):
         if 'evaluation_mode' in config:
             print(f"  Evaluation: {config['evaluation_mode']} | sub-sample TDOA: "
                   f"{config.get('tdoa_sub_sample', 'N/A')} | LOS-only: {config.get('use_los_only', 'N/A')}")
+        if 'urban_base_delay' in config:
+            print(f"  Urban base delay: {config.get('urban_base_delay', 'N/A')} | "
+                  f"min LOS: {config.get('urban_min_los', 'N/A')} | "
+                  f"train LOS-only: {config.get('urban_train_los_only', 'N/A')} | "
+                  f"fixed eval: {config.get('fixed_eval_set', 'N/A')} | "
+                  f"estimator: {config.get('localization_estimator', 'N/A')}")
         if 'eval_snr_range' in config:
             print(f"  Eval SNR range: {config['eval_snr_range']}")
         print(f"  CR List: {config['cr_list']}")

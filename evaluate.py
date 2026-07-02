@@ -136,7 +136,8 @@ def _bootstrap_rmse_ci(se_values, rng, n_boot=200):
     return [float(np.percentile(rmse, 2.5)), float(np.percentile(rmse, 97.5))]
 
 
-def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True):
+def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True,
+                              return_quality=False):
     corr = np.abs(gcc_func(sig_i, sig_ref))
     idx = int(np.argmax(corr))
     lag = float(lags[idx])
@@ -146,7 +147,18 @@ def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True):
         if abs(denom) > 1e-12:
             delta = 0.5 * (y0 - y2) / denom
             lag += float(np.clip(delta, -0.5, 0.5))
-    return lag
+    if not return_quality:
+        return lag
+
+    peak = float(corr[idx])
+    mask = np.ones_like(corr, dtype=bool)
+    lo = max(0, idx - 2)
+    hi = min(len(corr), idx + 3)
+    mask[lo:hi] = False
+    sidelobe = float(np.max(corr[mask])) if np.any(mask) else 0.0
+    sidelobe_ratio = sidelobe / (peak + 1e-12)
+    weight = float(np.clip(1.0 / (sidelobe_ratio + 1e-3), 0.05, 20.0))
+    return lag, weight, peak, sidelobe_ratio
 
 
 def _localize_from_tdoa(uav_pos, ref_idx, tdoa_samples, fs, c, area_size):
@@ -173,26 +185,140 @@ def _localize_from_tdoa(uav_pos, ref_idx, tdoa_samples, fs, c, area_size):
     return res.x if np.all(np.isfinite(res.x)) else None
 
 
+def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size):
+    """
+    WLS-style all-pair TDOA localization.
+
+    pair_measurements contains (i, j, delay_i_minus_j_samples, weight). The residual
+    is ||p-u_i|| - ||p-u_j|| - c*tau_ij.
+    """
+    if len(pair_measurements) < 3:
+        return None, {'success': False, 'cost': float('inf'), 'n_pairs': len(pair_measurements)}
+
+    uav_pos = np.asarray(uav_pos, dtype=float)
+    pairs = [(int(i), int(j), float(tau), float(w)) for i, j, tau, w in pair_measurements
+             if np.isfinite(tau) and np.isfinite(w) and w > 0]
+    if len(pairs) < 3:
+        return None, {'success': False, 'cost': float('inf'), 'n_pairs': len(pairs)}
+
+    idx_used = sorted(set([i for i, _, _, _ in pairs] + [j for _, j, _, _ in pairs]))
+    selected = uav_pos[idx_used]
+    delta_ranges = np.asarray([tau * c / fs for _, _, tau, _ in pairs], dtype=float)
+    weights = np.asarray([w for _, _, _, w in pairs], dtype=float)
+    weights = weights / (np.median(weights) + 1e-12)
+    sqrt_w = np.sqrt(np.clip(weights, 0.05, 20.0))
+
+    def residual(p):
+        vals = []
+        for (i, j, _, _), dr in zip(pairs, delta_ranges):
+            vals.append(np.linalg.norm(p - uav_pos[i]) - np.linalg.norm(p - uav_pos[j]) - dr)
+        return sqrt_w * np.asarray(vals)
+
+    bounds = ([0.0, 0.0], [float(area_size[0]), float(area_size[1])])
+    starts = [
+        np.mean(selected, axis=0),
+        np.asarray([area_size[0] / 2.0, area_size[1] / 2.0], dtype=float),
+    ]
+    starts.extend(selected)
+    starts.extend([
+        np.asarray([0.15 * area_size[0], 0.15 * area_size[1]]),
+        np.asarray([0.85 * area_size[0], 0.15 * area_size[1]]),
+        np.asarray([0.15 * area_size[0], 0.85 * area_size[1]]),
+        np.asarray([0.85 * area_size[0], 0.85 * area_size[1]]),
+    ])
+
+    best = None
+    best_cost = float('inf')
+    for x0 in starts:
+        x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
+        try:
+            res = optimize.least_squares(residual, x0=x0, bounds=bounds, loss='linear',
+                                         max_nfev=200)
+        except Exception:
+            continue
+        if res.success and np.all(np.isfinite(res.x)) and res.cost < best_cost:
+            best = res.x
+            best_cost = float(res.cost)
+
+    info = {
+        'success': best is not None,
+        'cost': best_cost,
+        'n_pairs': len(pairs),
+        'n_uavs': len(idx_used),
+    }
+    return best, info
+
+
+def _summarize_errors(errors, requested_count):
+    arr = np.asarray(errors, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return {
+            'rmse': float('nan'), 'median': float('nan'), 'trimmed_rmse': float('nan'),
+            'p90': float('nan'), 'p95': float('nan'), 'max': float('nan'),
+            'valid_count': 0, 'requested_count': int(requested_count), 'failure_rate': 1.0,
+            'se': [],
+        }
+    p95 = float(np.percentile(finite, 95))
+    trimmed = finite[finite <= p95]
+    return {
+        'rmse': float(np.sqrt(np.mean(finite ** 2))),
+        'median': float(np.median(finite)),
+        'trimmed_rmse': float(np.sqrt(np.mean(trimmed ** 2))) if trimmed.size else float('nan'),
+        'p90': float(np.percentile(finite, 90)),
+        'p95': p95,
+        'max': float(np.max(finite)),
+        'valid_count': int(finite.size),
+        'requested_count': int(requested_count),
+        'failure_rate': float(1.0 - finite.size / max(int(requested_count), 1)),
+        'se': [float(v) for v in finite ** 2],
+    }
+
+
 def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
-                                    sub_sample=True, use_los_only=True):
+                                    sub_sample=True, use_los_only=True,
+                                    estimator="all_pair_wls", oracle_geometry=False):
     errors = []
+    failures = 0
     for bi in range(batch_np.shape[0]):
         los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
         if len(los_idx) < 4:
+            failures += 1
             continue
-        ref_idx = int(los_idx[0])
         lags = signal.correlation_lags(batch_np.shape[-1], batch_np.shape[-1], mode='same')
-        ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
-        tdoa = {}
-        for ui in los_idx:
-            ui = int(ui)
-            if ui == ref_idx:
-                continue
-            sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
-            tdoa[ui] = _estimate_delay_from_corr(sig_i, ref_sig, lags, gcc_func,
-                                                  sub_sample=sub_sample)
-        est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+        pair_measurements = []
+        los_idx = [int(v) for v in los_idx]
+        for a in range(len(los_idx)):
+            for b in range(a + 1, len(los_idx)):
+                ui, uj = los_idx[a], los_idx[b]
+                if oracle_geometry:
+                    tau = (meta['distances'][bi, ui] - meta['distances'][bi, uj]) / (c / fs)
+                    weight = 20.0
+                else:
+                    sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+                    sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
+                    tau, weight, _, _ = _estimate_delay_from_corr(
+                        sig_i, sig_j, lags, gcc_func, sub_sample=sub_sample,
+                        return_quality=True
+                    )
+                pair_measurements.append((ui, uj, tau, weight))
+
+        if estimator != "all_pair_wls":
+            ref_idx = int(los_idx[0])
+            ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
+            tdoa = {}
+            for ui in los_idx:
+                if ui == ref_idx:
+                    continue
+                sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+                tdoa[ui] = _estimate_delay_from_corr(sig_i, ref_sig, lags, gcc_func,
+                                                      sub_sample=sub_sample)
+            est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+        else:
+            est, _ = _localize_from_tdoa_pairs(meta['uavs'][bi], pair_measurements,
+                                               fs, c, area_size)
         if est is None:
+            failures += 1
             continue
         errors.append(float(np.linalg.norm(est - meta['source'][bi])))
     return errors
@@ -205,7 +331,7 @@ class UrbanLocalizationExperiment:
 
     def __init__(self, models_dict, simulator, device, seed=None, gcc_method='standard',
                  snr_range=None, num_trials=200, sub_sample=True, use_los_only=True,
-                 batch_size=64):
+                 batch_size=64, fixed_eval_set=True, estimator="all_pair_wls"):
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
@@ -215,6 +341,8 @@ class UrbanLocalizationExperiment:
         self.sub_sample = bool(sub_sample)
         self.use_los_only = bool(use_los_only)
         self.batch_size = int(batch_size)
+        self.fixed_eval_set = bool(fixed_eval_set)
+        self.estimator = estimator
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
         self.gcc_method = gcc_method
 
@@ -243,6 +371,13 @@ class UrbanLocalizationExperiment:
             'metric': 'localization_m',
             'raw': [], 'raw_med': [],
             'clean': [], 'clean_med': [],
+            'raw_trimmed': [], 'clean_trimmed': [],
+            'raw_p90': [], 'clean_p90': [],
+            'raw_p95': [], 'clean_p95': [],
+            'raw_max': [], 'clean_max': [],
+            'raw_valid_count': [], 'clean_valid_count': [],
+            'raw_failure_rate': [], 'clean_failure_rate': [],
+            'geom': [], 'geom_med': [], 'geom_trimmed': [],
             'trial_se': {'raw': [], 'clean': [], 'dae': {}},
             'rmse_ci95': {'raw': [], 'clean': [], 'dae': {}},
             'localization_config': {
@@ -251,49 +386,84 @@ class UrbanLocalizationExperiment:
                 'use_los_only': self.use_los_only,
                 'n_uavs': self.sim.n_uavs,
                 'area_size': self.sim.area_size,
+                'fixed_eval_set': self.fixed_eval_set,
+                'estimator': self.estimator,
             },
         }
         for cr in self.models_dict.keys():
             results[f'dae_{cr}'] = []
             results[f'dae_{cr}_med'] = []
+            results[f'dae_{cr}_trimmed'] = []
+            results[f'dae_{cr}_p90'] = []
+            results[f'dae_{cr}_p95'] = []
+            results[f'dae_{cr}_max'] = []
+            results[f'dae_{cr}_valid_count'] = []
+            results[f'dae_{cr}_failure_rate'] = []
             results['trial_se']['dae'][str(cr)] = []
             results['rmse_ci95']['dae'][str(cr)] = []
 
         for snr in self.snr_range:
-            X_noisy, X_clean, meta = self.sim.generate_urban_batch(self.num_trials, snr_db=float(snr))
+            eval_seed = self.seed if self.fixed_eval_set else None
+            X_noisy, X_clean, meta = self.sim.generate_urban_batch(
+                self.num_trials, snr_db=float(snr), seed=eval_seed
+            )
             raw_np = X_noisy.numpy()
             clean_np = X_clean.numpy()
+            geom_err = _localization_errors_from_batch(
+                clean_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
+                sub_sample=self.sub_sample, use_los_only=self.use_los_only,
+                estimator=self.estimator, oracle_geometry=True
+            )
             raw_err = _localization_errors_from_batch(
                 raw_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
-                sub_sample=self.sub_sample, use_los_only=self.use_los_only
+                sub_sample=self.sub_sample, use_los_only=self.use_los_only,
+                estimator=self.estimator
             )
             clean_err = _localization_errors_from_batch(
                 clean_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
-                sub_sample=self.sub_sample, use_los_only=self.use_los_only
+                sub_sample=self.sub_sample, use_los_only=self.use_los_only,
+                estimator=self.estimator
             )
-            raw_se = np.square(raw_err) if raw_err else np.asarray([np.nan])
-            clean_se = np.square(clean_err) if clean_err else np.asarray([np.nan])
-            results['raw'].append(float(np.sqrt(np.nanmean(raw_se))))
-            results['raw_med'].append(float(np.sqrt(np.nanmedian(raw_se))))
-            results['clean'].append(float(np.sqrt(np.nanmean(clean_se))))
-            results['clean_med'].append(float(np.sqrt(np.nanmedian(clean_se))))
-            results['trial_se']['raw'].append([float(v) for v in raw_se if np.isfinite(v)])
-            results['trial_se']['clean'].append([float(v) for v in clean_se if np.isfinite(v)])
-            results['rmse_ci95']['raw'].append(_bootstrap_rmse_ci(raw_se[np.isfinite(raw_se)], ci_rng))
-            results['rmse_ci95']['clean'].append(_bootstrap_rmse_ci(clean_se[np.isfinite(clean_se)], ci_rng))
+            geom_stats = _summarize_errors(geom_err, self.num_trials)
+            raw_stats = _summarize_errors(raw_err, self.num_trials)
+            clean_stats = _summarize_errors(clean_err, self.num_trials)
+            for prefix, stats in [('geom', geom_stats), ('raw', raw_stats), ('clean', clean_stats)]:
+                results[prefix].append(stats['rmse'])
+                if prefix in ('raw', 'clean'):
+                    results[f'{prefix}_med'].append(stats['median'])
+                    results[f'{prefix}_trimmed'].append(stats['trimmed_rmse'])
+                    results[f'{prefix}_p90'].append(stats['p90'])
+                    results[f'{prefix}_p95'].append(stats['p95'])
+                    results[f'{prefix}_max'].append(stats['max'])
+                    results[f'{prefix}_valid_count'].append(stats['valid_count'])
+                    results[f'{prefix}_failure_rate'].append(stats['failure_rate'])
+                    results['trial_se'][prefix].append(stats['se'])
+                    results['rmse_ci95'][prefix].append(
+                        _bootstrap_rmse_ci(np.asarray(stats['se'], dtype=float), ci_rng)
+                    )
+                else:
+                    results['geom_med'].append(stats['median'])
+                    results['geom_trimmed'].append(stats['trimmed_rmse'])
 
             dae_outputs = self._run_models(X_noisy)
             for cr, y_np in dae_outputs.items():
                 err = _localization_errors_from_batch(
                     y_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
-                    sub_sample=self.sub_sample, use_los_only=self.use_los_only
+                    sub_sample=self.sub_sample, use_los_only=self.use_los_only,
+                    estimator=self.estimator
                 )
-                se = np.square(err) if err else np.asarray([np.nan])
-                results[f'dae_{cr}'].append(float(np.sqrt(np.nanmean(se))))
-                results[f'dae_{cr}_med'].append(float(np.sqrt(np.nanmedian(se))))
-                results['trial_se']['dae'][str(cr)].append([float(v) for v in se if np.isfinite(v)])
+                stats = _summarize_errors(err, self.num_trials)
+                results[f'dae_{cr}'].append(stats['rmse'])
+                results[f'dae_{cr}_med'].append(stats['median'])
+                results[f'dae_{cr}_trimmed'].append(stats['trimmed_rmse'])
+                results[f'dae_{cr}_p90'].append(stats['p90'])
+                results[f'dae_{cr}_p95'].append(stats['p95'])
+                results[f'dae_{cr}_max'].append(stats['max'])
+                results[f'dae_{cr}_valid_count'].append(stats['valid_count'])
+                results[f'dae_{cr}_failure_rate'].append(stats['failure_rate'])
+                results['trial_se']['dae'][str(cr)].append(stats['se'])
                 results['rmse_ci95']['dae'][str(cr)].append(
-                    _bootstrap_rmse_ci(se[np.isfinite(se)], ci_rng)
+                    _bootstrap_rmse_ci(np.asarray(stats['se'], dtype=float), ci_rng)
                 )
 
         return results, self.snr_range
@@ -411,7 +581,7 @@ def plot_training_loss(loss_hist):
     return fig
 
 
-def generate_snr_data(model, sim, device, snr_list=None):
+def generate_snr_data(model, sim, device, snr_list=None, demo_seed=20260701):
     """生成 Figure 2 所需的绘图数据，可保存供 replot.py 重绘"""
     if snr_list is None:
         snr_list = [-10, -3, 3, 10]
@@ -424,7 +594,9 @@ def generate_snr_data(model, sim, device, snr_list=None):
 
     data_list = []
     for snr in snr_list:
-        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(1, snr_db=snr)
+        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(
+            1, snr_db=snr, seed=demo_seed
+        )
         with torch.no_grad():
             x1_rec = model(X1_n.to(device)).cpu()
             x2_rec = model(X2_n.to(device)).cpu()
@@ -465,7 +637,8 @@ def generate_snr_data(model, sim, device, snr_list=None):
     return data_list
 
 
-def generate_snr_data_all(models_dict, sim, device, snr_list=None, diagnostic_trials=128):
+def generate_snr_data_all(models_dict, sim, device, snr_list=None, diagnostic_trials=128,
+                          demo_seed=20260701):
     """
     生成所有CR的SNR对比数据（多CR叠加绘图用）。
 
@@ -487,7 +660,9 @@ def generate_snr_data_all(models_dict, sim, device, snr_list=None, diagnostic_tr
     print(f"--- Generating SNR comparison data (all CRs) for {snr_list} ---")
     data_dict = {}
     for snr in snr_list:
-        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(1, snr_db=snr)
+        X1_n, X1_c, X2_n, X2_c, d1, d2 = sim.generate_pair_batch(
+            1, snr_db=snr, seed=demo_seed
+        )
 
         noisy1 = X1_n[0, 0, :].numpy() + 1j * X1_n[0, 1, :].numpy()
         clean1 = X1_c[0, 0, :].numpy() + 1j * X1_c[0, 1, :].numpy()
@@ -528,7 +703,7 @@ def generate_snr_data_all(models_dict, sim, device, snr_list=None, diagnostic_tr
         diagnostics = {'diagnostic_trials': int(diagnostic_trials), 'dae': {}}
         if diagnostic_trials and diagnostic_trials > 0:
             X1_nd, X1_cd, X2_nd, X2_cd, d1d, d2d = sim.generate_pair_batch(
-                diagnostic_trials, snr_db=snr
+                diagnostic_trials, snr_db=snr, seed=demo_seed + 1000
             )
             diagnostics['raw_peak'] = _batch_peak_diagnostics(
                 X1_nd.numpy(), X2_nd.numpy(), d1d, d2d, lags, gcc_func=gcc_standard
@@ -671,16 +846,18 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
     return fig
 
 
-def plot_monte_carlo(mc_data):
+def plot_monte_carlo(mc_data, show_ci=False):
     results, snr_range = mc_data
     has_median = 'raw_med' in results
-    ncols = 2 if has_median else 1
-    fig, axes = plt.subplots(1, ncols, figsize=(8 * ncols, 5.5))
+    has_trimmed = 'raw_trimmed' in results
+    ncols = 3 if has_trimmed else (2 if has_median else 1)
+    fig_width = 5.0 * ncols
+    fig, axes = plt.subplots(1, ncols, figsize=(fig_width, 4.8), constrained_layout=True)
     if ncols == 1:
         axes = [axes]
 
     # 动态提取 CR 值（支持任意 CR_LIST）
-    cr_keys = sorted([k for k in results.keys() if k.startswith('dae_') and not k.endswith('_med')],
+    cr_keys = sorted([k for k in results.keys() if k.startswith('dae_') and k[4:].isdigit()],
                      key=lambda x: int(x[4:]))
 
     # 左图: Mean RMSE
@@ -691,9 +868,12 @@ def plot_monte_carlo(mc_data):
     ax.plot(snr_range, results['raw'], 'b-s', label='Original data', linewidth=1.5)
     if 'clean' in results:
         ax.plot(snr_range, results['clean'], 'k--', label='Clean oracle', linewidth=1.2)
+    if 'geom' in results:
+        ax.plot(snr_range, results['geom'], color='0.45', linestyle=':', label='Geometry oracle',
+                linewidth=1.1)
     ci_data = results.get('rmse_ci95', {})
     raw_ci = np.asarray(ci_data.get('raw', []), dtype=float)
-    if raw_ci.shape == (len(snr_range), 2):
+    if show_ci and raw_ci.shape == (len(snr_range), 2):
         ax.fill_between(snr_range, raw_ci[:, 0], raw_ci[:, 1],
                         color='blue', alpha=0.10, linewidth=0)
     marker_styles = ['m-*', 'g-o', 'r-+', 'c-^', 'y-d']
@@ -702,7 +882,7 @@ def plot_monte_carlo(mc_data):
         cr_val = key[4:]
         ax.plot(snr_range, results[key], style, label=f'Data with CR={cr_val}', linewidth=1.5)
         dae_ci = np.asarray(ci_data.get('dae', {}).get(str(cr_val), []), dtype=float)
-        if dae_ci.shape == (len(snr_range), 2):
+        if show_ci and dae_ci.shape == (len(snr_range), 2):
             ax.fill_between(snr_range, dae_ci[:, 0], dae_ci[:, 1],
                             color=ax.lines[-1].get_color(), alpha=0.08, linewidth=0)
     ax.set_xlabel('SNR [dB]', fontsize=12)
@@ -717,6 +897,9 @@ def plot_monte_carlo(mc_data):
         ax.plot(snr_range, results['raw_med'], 'b-s', label='Original data', linewidth=1.5)
         if 'clean_med' in results:
             ax.plot(snr_range, results['clean_med'], 'k--', label='Clean oracle', linewidth=1.2)
+        if 'geom_med' in results:
+            ax.plot(snr_range, results['geom_med'], color='0.45', linestyle=':',
+                    label='Geometry oracle', linewidth=1.1)
         for idx, key in enumerate(cr_keys):
             med_key = key + '_med'
             if med_key in results:
@@ -729,8 +912,29 @@ def plot_monte_carlo(mc_data):
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.5)
 
-    fig.suptitle(f'Figure 3: Comparison of {title_prefix} Performance at Different CRs', fontsize=13)
-    plt.tight_layout(rect=[0, 0, 1, 0.94])
+    # 第三图: Trimmed RMSE（去掉最坏 5% 定位异常值）
+    if has_trimmed:
+        ax = axes[2]
+        ax.plot(snr_range, results['raw_trimmed'], 'b-s', label='Original data', linewidth=1.5)
+        if 'clean_trimmed' in results:
+            ax.plot(snr_range, results['clean_trimmed'], 'k--', label='Clean oracle', linewidth=1.2)
+        if 'geom_trimmed' in results:
+            ax.plot(snr_range, results['geom_trimmed'], color='0.45', linestyle=':',
+                    label='Geometry oracle', linewidth=1.1)
+        for idx, key in enumerate(cr_keys):
+            trim_key = key + '_trimmed'
+            if trim_key in results:
+                style = marker_styles[idx % len(marker_styles)]
+                cr_val = key[4:]
+                ax.plot(snr_range, results[trim_key], style, label=f'Data with CR={cr_val}',
+                        linewidth=1.5)
+        ax.set_xlabel('SNR [dB]', fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+        ax.set_title('Trimmed RMSE (95% inliers)', fontsize=11)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.5)
+
+    fig.suptitle(f'Figure 3: Comparison of {title_prefix} Performance at Different CRs', fontsize=12)
     return fig
 
 

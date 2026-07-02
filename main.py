@@ -16,12 +16,18 @@ import pickle
 from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
                       plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
                       clean_peak_consistency)
+from model import DAE
 from signal_gen import SignalSimulator
 
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 EXPERIMENT_MODE = os.environ.get("DAE_EXPERIMENT_MODE", "paper_repro").lower()
+PAPER_REPRO_MODES = ("paper_repro", "paper_repro_fast_final", "paper_repro_eval_only")
+BASELINE_RESULT_ID = "20260702_000925"
+BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "运行结果", BASELINE_RESULT_ID)
 CR_LIST = [4, 8, 16]
+FAST_FINAL_EPOCHS_BY_CR = {4: 197, 8: 197, 16: 197}
 BATCH_SIZE = 128
 LR = 0.0005
 SEED = 42
@@ -42,10 +48,33 @@ PAPER_REPRO_LOSS_CONFIG = {
     for cr in CR_LIST
 }
 
-if EXPERIMENT_MODE == "paper_repro":
-    N_SAMPLES = 10000        # 论文设置：50 snapshots × 200 trials
-    K_FOLDS = 5              # 论文使用 k=5
+if EXPERIMENT_MODE in PAPER_REPRO_MODES:
+    N_SAMPLES = 10000        # 单 UAV waveform 训练样本数；urban snapshot 数由 N_FIXED_CHANNELS 控制
+    K_FOLDS = 5              # 论文使用 k=5；fast/eval 模式只保留为配置记录
     MAX_EPOCHS = 200         # 论文报告训练 200 epochs
+    EARLY_STOPPING = False
+    RESTORE_BEST = True
+    FINAL_RETRAIN = True
+    FINAL_RETRAIN_EPOCHS = None
+    TRAINING_PROTOCOL = "cv_best_epoch_final_train"
+    RESAMPLE_TRAIN_EACH_EPOCH = True
+    RESAMPLE_INTERVAL = 5
+    RUN_TRAINING = True
+    MODEL_SOURCE_DIR = os.environ.get("DAE_MODEL_DIR", BASELINE_RESULT_DIR)
+    if EXPERIMENT_MODE == "paper_repro_fast_final":
+        MAX_EPOCHS = 197
+        K_FOLDS = 0
+        TRAINING_PROTOCOL = "fixed_epoch_final_only"
+        FINAL_RETRAIN_EPOCHS = None  # resolved per CR from FAST_FINAL_EPOCHS_BY_CR
+    elif EXPERIMENT_MODE == "paper_repro_eval_only":
+        MAX_EPOCHS = 0
+        K_FOLDS = 0
+        RUN_TRAINING = False
+        FINAL_RETRAIN = False
+        RESTORE_BEST = False
+        TRAINING_PROTOCOL = "eval_only_pretrained"
+    elif EXPERIMENT_MODE == "paper_repro":
+        MODEL_SOURCE_DIR = None
     CORR_WEIGHT = 0.0
     LAMBDA_PEAK = 0.0
     BETA_FI = 0.0
@@ -55,23 +84,41 @@ if EXPERIMENT_MODE == "paper_repro":
     TRAIN_SNR_RANGE = (-10, 20)
     EVAL_SNR_RANGE = np.arange(-10, 21, 2)
     MONTE_CARLO_TRIALS = 200
-    FIG2_SNR_LIST = [-10, 0, 20]
-    DIAGNOSTICS_VERSION = "paper_repro_v2_urban8"
+    FIG2_SNR_LIST = [-10, 0, 10, 20]
+    DIAGNOSTICS_VERSION = {
+        "paper_repro": "paper_repro_v3_1_epoch_final_train",
+        "paper_repro_fast_final": "paper_repro_v3_1_fast_final",
+        "paper_repro_eval_only": "paper_repro_v3_1_eval_only",
+    }[EXPERIMENT_MODE]
     CHANNEL_MODE = "fixed"
     N_FIXED_CHANNELS = 50
     NLOS_PROB = 0.0
     DELAY_LABEL_MODE = "los"
     MULTIPATH_SCALE = 0.2
     SCENARIO_MODE = "urban8"
-    NORMALIZATION_MODE = "per_observation_rms"
+    NORMALIZATION_MODE = "per_observation_noisy_rms"
     CV_GROUP_MODE = "snapshot"
     EVALUATION_MODE = "urban_localization"
     TDOA_SUB_SAMPLE = True
     USE_LOS_ONLY = True
+    URBAN_BASE_DELAY = 16
+    URBAN_MIN_LOS = 5
+    URBAN_TRAIN_LOS_ONLY = True
+    FIXED_EVAL_SET = True
+    LOCALIZATION_ESTIMATOR = "all_pair_wls"
 elif EXPERIMENT_MODE in ("r20_1", "r20.1", "task"):
     N_SAMPLES = 50000
     K_FOLDS = 3
     MAX_EPOCHS = 150
+    EARLY_STOPPING = True
+    RESTORE_BEST = True
+    FINAL_RETRAIN = False
+    FINAL_RETRAIN_EPOCHS = None
+    TRAINING_PROTOCOL = "cv_earlystop_best_fold"
+    RESAMPLE_TRAIN_EACH_EPOCH = False
+    RESAMPLE_INTERVAL = 1
+    RUN_TRAINING = True
+    MODEL_SOURCE_DIR = None
     CORR_WEIGHT = 1.0
     LAMBDA_PEAK = 0.25
     BETA_FI = 0.0
@@ -94,12 +141,32 @@ elif EXPERIMENT_MODE in ("r20_1", "r20.1", "task"):
     EVALUATION_MODE = "pair_tdoa"
     TDOA_SUB_SAMPLE = False
     USE_LOS_ONLY = False
+    URBAN_BASE_DELAY = 16
+    URBAN_MIN_LOS = 4
+    URBAN_TRAIN_LOS_ONLY = False
+    FIXED_EVAL_SET = False
+    LOCALIZATION_ESTIMATOR = "single_ref"
 else:
-    raise ValueError("EXPERIMENT_MODE must be 'paper_repro' or 'r20_1'")
+    raise ValueError("EXPERIMENT_MODE must be 'paper_repro', 'paper_repro_fast_final', "
+                     "'paper_repro_eval_only', or 'r20_1'")
 
 SNR_THRESHOLD = 0.0          # sigmoid 中心点 SNR (dB)
 LAMBDA_TEMPERATURE = 5.0     # sigmoid 温度参数
 FIG2_DIAGNOSTIC_TRIALS = 128  # extra samples saved in plot_data.pkl for Fig2 diagnostics
+
+# Lightweight smoke-test overrides. Defaults above define the formal experiment.
+N_SAMPLES = int(os.environ.get("DAE_N_SAMPLES", N_SAMPLES))
+BATCH_SIZE = int(os.environ.get("DAE_BATCH_SIZE", BATCH_SIZE))
+K_FOLDS = int(os.environ.get("DAE_K_FOLDS", K_FOLDS))
+MAX_EPOCHS = int(os.environ.get("DAE_MAX_EPOCHS", MAX_EPOCHS))
+MONTE_CARLO_TRIALS = int(os.environ.get("DAE_MONTE_CARLO_TRIALS", MONTE_CARLO_TRIALS))
+FIG2_DIAGNOSTIC_TRIALS = int(os.environ.get("DAE_FIG2_DIAGNOSTIC_TRIALS", FIG2_DIAGNOSTIC_TRIALS))
+N_FIXED_CHANNELS = int(os.environ.get("DAE_N_FIXED_CHANNELS", N_FIXED_CHANNELS))
+if "DAE_FAST_FINAL_EPOCHS" in os.environ:
+    _fast_ep = int(os.environ["DAE_FAST_FINAL_EPOCHS"])
+    FAST_FINAL_EPOCHS_BY_CR = {cr: _fast_ep for cr in CR_LIST}
+    if TRAINING_PROTOCOL == "fixed_epoch_final_only":
+        MAX_EPOCHS = _fast_ep
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -153,6 +220,16 @@ print(f"[Config] Channel={CHANNEL_MODE} | fixed_channels={N_FIXED_CHANNELS} | "
 print(f"[Config] Scenario={SCENARIO_MODE} | normalization={NORMALIZATION_MODE} | "
       f"cv_group={CV_GROUP_MODE} | eval={EVALUATION_MODE} | "
       f"tdoa_sub_sample={TDOA_SUB_SAMPLE}")
+print(f"[Config] early_stopping={EARLY_STOPPING} | restore_best={RESTORE_BEST} | "
+      f"final_retrain={FINAL_RETRAIN} | final_epochs={FINAL_RETRAIN_EPOCHS} | "
+      f"protocol={TRAINING_PROTOCOL}")
+print(f"[Config] train_resample={RESAMPLE_TRAIN_EACH_EPOCH} | "
+      f"resample_interval={RESAMPLE_INTERVAL}")
+print(f"[Config] run_training={RUN_TRAINING} | model_source_dir={MODEL_SOURCE_DIR}")
+if SCENARIO_MODE == "urban8":
+    print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
+          f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
+          f"localization_estimator={LOCALIZATION_ESTIMATOR}")
 
 # ===================== 工具函数 =====================
 
@@ -163,6 +240,10 @@ def save_figure(fig, filename_stem):
     SVG 为矢量图形，可无损缩放，适合论文插图。
     图形窗口在程序末尾统一弹出，避免重复显示。
     """
+    try:
+        fig.canvas.manager.set_window_title(filename_stem)
+    except Exception:
+        pass
     filepath = os.path.join(RESULT_DIR, f"{filename_stem}.svg")
     fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
@@ -188,6 +269,16 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
     models_dict = {}
     cv_results_dict = {}
+    source_plot_data = None
+    source_cv_results_dict = {}
+    if not RUN_TRAINING:
+        source_pkl = os.path.join(MODEL_SOURCE_DIR, "plot_data.pkl")
+        if not os.path.exists(source_pkl):
+            raise FileNotFoundError(f"eval_only requires source plot_data.pkl: {source_pkl}")
+        with open(source_pkl, 'rb') as f:
+            source_plot_data = pickle.load(f)
+        source_cv_results_dict = source_plot_data.get('cv_results_dict', {})
+        print(f"[EvalOnly] Loaded source plot data: {source_pkl}")
 
     # 1. 实例化 Simulator
     sim = SignalSimulator(channel_mode=CHANNEL_MODE,
@@ -198,9 +289,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                           snr_train_range=TRAIN_SNR_RANGE,
                           multipath_scale=MULTIPATH_SCALE,
                           scenario_mode=SCENARIO_MODE,
-                          normalization_mode=NORMALIZATION_MODE)
+                          normalization_mode=NORMALIZATION_MODE,
+                          urban_base_delay=URBAN_BASE_DELAY,
+                          urban_min_los=URBAN_MIN_LOS,
+                          urban_train_los_only=URBAN_TRAIN_LOS_ONLY)
     clean_diag = None
-    if EXPERIMENT_MODE == "paper_repro":
+    if EXPERIMENT_MODE in PAPER_REPRO_MODES:
         clean_diag = clean_peak_consistency(sim, n_trials=256, snr_db=20)
         print("[PaperRepro Check] Clean GCC vs LOS label: "
               f"exact={clean_diag.get('match_rate', float('nan')):.3f}, "
@@ -211,30 +305,62 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
     # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
     for cr in CR_LIST:
-        model, cv_results = train_with_cv(
-            DEVICE, cr=cr, k=K_FOLDS, n_samples=N_SAMPLES,
-            epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=current_seed,
-            patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
-            channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
-            channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
-            corr_weight=CORR_WEIGHT, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
-            epsilon_mse=0.03,
-            use_adaptive_peak=USE_ADAPTIVE_PEAK,
-            snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE,
-            loss_config=LOSS_CONFIG[cr],
-            loss_mode=LOSS_MODE,
-            nlos_prob=NLOS_PROB,
-            delay_label_mode=DELAY_LABEL_MODE,
-            snr_train_range=TRAIN_SNR_RANGE,
-            multipath_scale=MULTIPATH_SCALE,
-            scenario_mode=SCENARIO_MODE,
-            normalization_mode=NORMALIZATION_MODE,
-            cv_group_mode=CV_GROUP_MODE,
-        )
+        if RUN_TRAINING:
+            final_epochs_for_cr = (
+                FAST_FINAL_EPOCHS_BY_CR[cr]
+                if TRAINING_PROTOCOL == "fixed_epoch_final_only"
+                else FINAL_RETRAIN_EPOCHS
+            )
+            model, cv_results = train_with_cv(
+                DEVICE, cr=cr, k=K_FOLDS, n_samples=N_SAMPLES,
+                epochs=MAX_EPOCHS, batch_size=BATCH_SIZE, lr=LR, seed=current_seed,
+                patience=PATIENCE, weight_decay=WEIGHT_DECAY, use_split=USE_SPLIT,
+                channel_mode=CHANNEL_MODE, n_fixed_channels=N_FIXED_CHANNELS,
+                channel_pool_seed=CHANNEL_POOL_SEED, sim=sim,
+                corr_weight=CORR_WEIGHT, lambda_peak=LAMBDA_PEAK, beta_fi=BETA_FI,
+                epsilon_mse=0.03,
+                use_adaptive_peak=USE_ADAPTIVE_PEAK,
+                snr_threshold=SNR_THRESHOLD, lambda_temperature=LAMBDA_TEMPERATURE,
+                loss_config=LOSS_CONFIG[cr],
+                loss_mode=LOSS_MODE,
+                nlos_prob=NLOS_PROB,
+                delay_label_mode=DELAY_LABEL_MODE,
+                snr_train_range=TRAIN_SNR_RANGE,
+                multipath_scale=MULTIPATH_SCALE,
+                scenario_mode=SCENARIO_MODE,
+                normalization_mode=NORMALIZATION_MODE,
+                cv_group_mode=CV_GROUP_MODE,
+                urban_base_delay=URBAN_BASE_DELAY,
+                urban_min_los=URBAN_MIN_LOS,
+                urban_train_los_only=URBAN_TRAIN_LOS_ONLY,
+                early_stopping=EARLY_STOPPING,
+                restore_best=RESTORE_BEST,
+                final_retrain=FINAL_RETRAIN,
+                final_epochs=final_epochs_for_cr,
+                training_protocol=TRAINING_PROTOCOL,
+                resample_train_each_epoch=RESAMPLE_TRAIN_EACH_EPOCH,
+                resample_interval=RESAMPLE_INTERVAL,
+            )
+        else:
+            model_path = os.path.join(MODEL_SOURCE_DIR, f"model_cr{cr}.pt")
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"eval_only requires source model: {model_path}")
+            model = DAE(cr=cr).to(DEVICE)
+            state = torch.load(model_path, map_location=DEVICE)
+            model.load_state_dict(state)
+            model.eval()
+            cv_results = source_cv_results_dict.get(cr, source_cv_results_dict.get(str(cr)))
+            if cv_results is None:
+                raise KeyError(f"source plot_data.pkl has no cv_results for CR={cr}")
+            cv_results = dict(cv_results)
+            cv_results['training_protocol'] = TRAINING_PROTOCOL
+            cv_results['model_source_dir'] = MODEL_SOURCE_DIR
+            cv_results['diagnostics_version'] = DIAGNOSTICS_VERSION
+            print(f"[EvalOnly] Loaded CR={cr} model: {model_path}")
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
 
-        # 每个CR训练完立即保存模型，防止后续CR崩溃丢失已完成结果
+        # 每个CR训练/加载完立即保存模型，保持结果文件结构兼容。
         model_path = os.path.join(RESULT_DIR, f"model_cr{cr}.pt")
         torch.save(model.state_dict(), model_path)
         print(f"[Saved] {model_path}")
@@ -246,7 +372,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             models_dict, sim, DEVICE, seed=current_seed,
             snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
             sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
-            batch_size=BATCH_SIZE,
+            batch_size=BATCH_SIZE, fixed_eval_set=FIXED_EVAL_SET,
+            estimator=LOCALIZATION_ESTIMATOR,
         )
     else:
         exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed,
@@ -338,7 +465,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             ax_pk.grid(True, alpha=0.3)
 
         if LOSS_MODE == "paper_mse":
-            cfg_str = "Paper reproduction baseline: real/imag MSE only, LOS labels, no Corr/Peak"
+            if TRAINING_PROTOCOL == "cv_best_epoch_final_train":
+                cfg_str = ("Paper reproduction baseline: CV fixed 200 epochs + "
+                           "full-data final train, real/imag MSE only")
+            elif TRAINING_PROTOCOL == "fixed_epoch_final_only":
+                cfg_str = ("Paper reproduction fast final-only baseline, "
+                           "real/imag MSE only")
+            elif TRAINING_PROTOCOL == "eval_only_pretrained":
+                cfg_str = ("Paper reproduction eval-only from frozen v3.1 models, "
+                           "real/imag MSE only")
+            else:
+                cfg_str = f"Paper reproduction baseline: {TRAINING_PROTOCOL}, real/imag MSE only"
         else:
             cfg_str = ", ".join([
                 f"CR{cr}: w={LOSS_CONFIG[cr]['mse_weight_max']}, "
@@ -364,6 +501,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'mc_results': mc_results,
             'config': {
                 'n_samples': N_SAMPLES,
+                'training_sample_unit': 'single_uav_waveform',
                 'batch_size': BATCH_SIZE,
                 'k_folds': K_FOLDS,
                 'max_epochs': MAX_EPOCHS,
@@ -371,6 +509,16 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'seed': current_seed,
                 'seed_list': SEED_LIST,
                 'patience': PATIENCE,
+                'early_stopping': EARLY_STOPPING,
+                'restore_best': RESTORE_BEST,
+                'final_retrain': FINAL_RETRAIN,
+                'final_retrain_epochs': FINAL_RETRAIN_EPOCHS,
+                'training_protocol': TRAINING_PROTOCOL,
+                'run_training': RUN_TRAINING,
+                'model_source_dir': MODEL_SOURCE_DIR,
+                'fast_final_epochs_by_cr': FAST_FINAL_EPOCHS_BY_CR,
+                'resample_train_each_epoch': RESAMPLE_TRAIN_EACH_EPOCH,
+                'resample_interval': RESAMPLE_INTERVAL,
                 'weight_decay': WEIGHT_DECAY,
                 'experiment_mode': EXPERIMENT_MODE,
                 'loss_mode': LOSS_MODE,
@@ -395,6 +543,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'evaluation_mode': EVALUATION_MODE,
                 'tdoa_sub_sample': TDOA_SUB_SAMPLE,
                 'use_los_only': USE_LOS_ONLY,
+                'urban_base_delay': URBAN_BASE_DELAY,
+                'urban_min_los': URBAN_MIN_LOS,
+                'urban_train_los_only': URBAN_TRAIN_LOS_ONLY,
+                'fixed_eval_set': FIXED_EVAL_SET,
+                'localization_estimator': LOCALIZATION_ESTIMATOR,
                 'paper_repro_clean_peak_check': clean_diag,
                 'cr_list': CR_LIST,
                 'loss_config': LOSS_CONFIG,
@@ -406,12 +559,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             pickle.dump(plot_data, f)
         print(f"[Saved] {pkl_path}")
 
-        # 绘制 Figure 2 和 3
-        fig_mc = plot_monte_carlo(mc_results)
-        save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
-
+        # 绘制 Figure 2 和 3。创建顺序与本地文件序号保持一致，避免窗口标题混乱。
         fig_snr = plot_snr_comparison_multi(cr_list=CR_LIST, data_dict=snr_data_all)
         save_figure(fig_snr, "Fig2_SNR_Comparison")
+
+        fig_mc = plot_monte_carlo(mc_results)
+        save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
 
 # ===================== 多 seed 汇总 =====================
 if len(SEED_LIST) > 1:
@@ -440,9 +593,11 @@ print(f"时间戳: {TIMESTAMP}")
 print(f"{'='*60}")
 
 # 阻塞等待用户关闭所有图片窗口后退出
-if plt.get_fignums():
+if plt.get_fignums() and os.environ.get("DAE_NO_SHOW", "0") != "1":
     print("\n所有图片已显示。关闭图片窗口后程序自动退出。")
     plt.show()
+else:
+    plt.close('all')
 
 print("程序运行完毕。")
 

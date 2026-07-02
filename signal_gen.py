@@ -58,7 +58,9 @@ class SignalSimulator:
                  nlos_prob=0.2, delay_label_mode="strongest",
                  snr_train_range=(-10, 10), multipath_scale=0.3,
                  scenario_mode="sv_pair", n_uavs=8,
-                 area_size=(200.0, 260.0), normalization_mode="none"):
+                 area_size=(200.0, 260.0), normalization_mode="none",
+                 urban_base_delay=16, urban_min_los=4,
+                 urban_train_los_only=False):
         """
         参数:
             signal_len:         信号长度（采样点数）
@@ -74,14 +76,20 @@ class SignalSimulator:
             scenario_mode:      "sv_pair" 历史两路信道；"urban8" 论文近似 8 UAV 城市场景
             n_uavs:             urban8 模式下 UAV 数量
             area_size:          urban8 区域尺寸，单位 m
-            normalization_mode: "none"、"per_sample_rms" 或 "per_observation_rms"
+            normalization_mode: "none"、"per_sample_rms"、"per_observation_rms" 或
+                                "per_observation_noisy_rms"
+            urban_base_delay:   urban8 直达径绝对保护延迟；TDOA 由不同 UAV 延迟差给出，可正可负
+            urban_min_los:      urban8 snapshot 至少包含的 LOS UAV 数量
+            urban_train_los_only: urban8 训练数据只展开 LOS UAV，与 LOS-only 定位评估对齐
         """
         if delay_label_mode not in ("strongest", "los"):
             raise ValueError("delay_label_mode must be 'strongest' or 'los'")
         if scenario_mode not in ("sv_pair", "urban8"):
             raise ValueError("scenario_mode must be 'sv_pair' or 'urban8'")
-        if normalization_mode not in ("none", "per_sample_rms", "per_observation_rms"):
-            raise ValueError("normalization_mode must be 'none', 'per_sample_rms', or 'per_observation_rms'")
+        if normalization_mode not in ("none", "per_sample_rms", "per_observation_rms",
+                                      "per_observation_noisy_rms"):
+            raise ValueError("normalization_mode must be 'none', 'per_sample_rms', "
+                             "'per_observation_rms', or 'per_observation_noisy_rms'")
         self.signal_len = signal_len
         self.samples_per_symbol = 2
         self.fs = 40e6
@@ -98,6 +106,9 @@ class SignalSimulator:
         self.n_uavs = int(n_uavs)
         self.area_size = tuple(float(v) for v in area_size)
         self.normalization_mode = normalization_mode
+        self.urban_base_delay = float(urban_base_delay)
+        self.urban_min_los = int(urban_min_los)
+        self.urban_train_los_only = bool(urban_train_los_only)
         # RRC 滤波器群延迟（采样点）：mode='same' 引入 (len(rrc)-1)//2 = 8 样本延迟
         # 发射端 + 接收端 RRC 各一次 → 总计 16 样本
         # TDOA 计算中两路抵消，不影响差值；仅在需要绝对延迟时需要补偿
@@ -125,7 +136,7 @@ class SignalSimulator:
                              for i in range(x.shape[0])])
 
     def _normalize_complex_pair(self, noisy, clean):
-        if self.normalization_mode in ("none", "per_observation_rms"):
+        if self.normalization_mode in ("none", "per_observation_rms", "per_observation_noisy_rms"):
             return noisy, clean
         scale = np.sqrt(np.mean(np.abs(clean) ** 2)) + 1e-9
         return noisy / scale, clean / scale
@@ -172,9 +183,10 @@ class SignalSimulator:
         return True
 
     def _sample_free_point(self, rng):
-        w, h = self.area_size
+        area_w, area_h = self.area_size
         for _ in range(10000):
-            pt = np.array([rng.uniform(8.0, w - 8.0), rng.uniform(8.0, h - 8.0)])
+            pt = np.array([rng.uniform(8.0, area_w - 8.0),
+                           rng.uniform(8.0, area_h - 8.0)])
             if not self._point_in_building(pt):
                 return pt
         raise RuntimeError("failed to sample a free point in urban scene")
@@ -207,7 +219,7 @@ class SignalSimulator:
         rng = np.random.default_rng(seed)
         self._urban_buildings = self._make_urban_buildings()
         snapshots = []
-        w, h = self.area_size
+        area_w, area_h = self.area_size
         base_angles = np.linspace(0, 2 * np.pi, self.n_uavs, endpoint=False)
         for sid in range(n_snapshots):
             for _ in range(2000):
@@ -217,25 +229,38 @@ class SignalSimulator:
                 uavs = []
                 for r, a, j in zip(radius, base_angles, jitter):
                     pt = source + r * np.array([np.cos(a + j), np.sin(a + j)])
-                    pt[0] = np.clip(pt[0], 5.0, w - 5.0)
-                    pt[1] = np.clip(pt[1], 5.0, h - 5.0)
+                    pt[0] = np.clip(pt[0], 5.0, area_w - 5.0)
+                    pt[1] = np.clip(pt[1], 5.0, area_h - 5.0)
                     if self._point_in_building(pt):
                         pt = self._sample_free_point(rng)
                     uavs.append(pt)
                 uavs = np.asarray(uavs, dtype=float)
                 los = np.asarray([self._is_los(source, u) for u in uavs], dtype=bool)
-                if np.sum(los) >= 4:
+                if np.sum(los) >= self.urban_min_los:
                     distances = np.linalg.norm(uavs - source[None, :], axis=1)
+                    channels, delays, delay_float = [], [], []
+                    for ui in range(self.n_uavs):
+                        channel_h, label_delay, float_delay = self._urban_channel(
+                            distances[ui], bool(los[ui]), rng=rng
+                        )
+                        channels.append(channel_h)
+                        delays.append(label_delay)
+                        delay_float.append(float_delay)
                     snapshots.append({
                         'snapshot_id': sid,
                         'source': source,
                         'uavs': uavs,
                         'los': los,
                         'distances': distances,
+                        'channels': np.asarray(channels, dtype=complex),
+                        'delays': np.asarray(delays, dtype=int),
+                        'delay_float': np.asarray(delay_float, dtype=float),
                     })
                     break
             else:
-                raise RuntimeError("failed to build an urban snapshot with at least 4 LOS UAVs")
+                raise RuntimeError(
+                    f"failed to build an urban snapshot with at least {self.urban_min_los} LOS UAVs"
+                )
         self._urban_snapshots = snapshots
         los_counts = [int(np.sum(s['los'])) for s in snapshots]
         print(f"[SignalSimulator] urban8 snapshots generated: {len(snapshots)} "
@@ -254,25 +279,27 @@ class SignalSimulator:
         base_signal_shaped = self._apply_rrc(base_signal, axis=1)
         return base_signal_shaped + 1j * np.zeros_like(base_signal_shaped)
 
-    def _urban_channel(self, distance_m, is_los):
+    def _urban_channel(self, distance_m, is_los, rng=None):
+        rng_uniform = rng.uniform if rng is not None else np.random.uniform
+        rng_random = rng.random if rng is not None else np.random.random
+        rng_integers = rng.integers if rng is not None else np.random.randint
         h = np.zeros(self.signal_len, dtype=complex)
-        base_delay = 80
-        los_delay_float = base_delay + distance_m / self.sample_distance_m
+        los_delay_float = self.urban_base_delay + distance_m / self.sample_distance_m
         los_delay = int(np.clip(round(los_delay_float), 0, self.signal_len - 1))
         path_gain = (50.0 / max(distance_m, 20.0)) ** 1.2
         direct_gain = path_gain if is_los else path_gain * 0.12
         self._add_fractional_tap(h, los_delay_float, direct_gain)
 
-        n_paths = np.random.randint(2, 5) if is_los else np.random.randint(4, 8)
+        n_paths = int(rng_integers(2, 5)) if is_los else int(rng_integers(4, 8))
         for _ in range(n_paths):
-            extra = np.random.randint(3, 38 if is_los else 70)
-            tap_delay = min(los_delay_float + extra + np.random.uniform(-0.5, 0.5),
+            extra = int(rng_integers(3, 38 if is_los else 70))
+            tap_delay = min(los_delay_float + extra + rng_uniform(-0.5, 0.5),
                             self.signal_len - 1)
             decay = np.exp(-extra / (18.0 if is_los else 28.0))
-            rayleigh = np.sqrt(-2 * np.log(np.random.uniform(1e-10, 1.0)))
+            rayleigh = np.sqrt(-2 * np.log(rng_uniform(1e-10, 1.0)))
             nlos_boost = 1.0 if is_los else 2.5
             gain = path_gain * self.multipath_scale * nlos_boost * decay * rayleigh
-            phase = np.random.uniform(0, 2 * np.pi)
+            phase = rng_uniform(0, 2 * np.pi)
             self._add_fractional_tap(h, tap_delay, gain * np.exp(1j * phase))
 
         if self.delay_label_mode == "los":
@@ -333,9 +360,9 @@ class SignalSimulator:
             los_mask[bi] = snap['los']
             snapshot_ids[bi] = snap['snapshot_id']
             for ui in range(self.n_uavs):
-                h, label_delay, float_delay = self._urban_channel(
-                    snap['distances'][ui], bool(snap['los'][ui])
-                )
+                h = snap['channels'][ui]
+                label_delay = int(snap['delays'][ui])
+                float_delay = float(snap['delay_float'][ui])
                 x_noisy, x_clean = self._apply_channel_noise_complex(u_batch[bi], h, snrs[bi])
                 noisy[bi, ui] = np.stack([x_noisy.real, x_noisy.imag], axis=0)
                 clean[bi, ui] = np.stack([x_clean.real, x_clean.imag], axis=0)
@@ -343,6 +370,10 @@ class SignalSimulator:
                 delay_float[bi, ui] = float_delay
             if self.normalization_mode == "per_observation_rms":
                 scale = np.sqrt(np.mean(clean[bi] ** 2)) + 1e-9
+                noisy[bi] /= scale
+                clean[bi] /= scale
+            elif self.normalization_mode == "per_observation_noisy_rms":
+                scale = np.sqrt(np.mean(noisy[bi] ** 2)) + 1e-9
                 noisy[bi] /= scale
                 clean[bi] /= scale
 
@@ -353,6 +384,8 @@ class SignalSimulator:
             'source': sources,
             'uavs': uavs,
             'los': los_mask,
+            'distances': np.asarray([self._urban_snapshots[int(si)]['distances']
+                                     for si in snapshot_ids], dtype=float),
             'delays': delays,
             'delay_float': delay_float,
             'snapshot_id': snapshot_ids,
@@ -360,6 +393,83 @@ class SignalSimulator:
             'buildings': self._urban_buildings,
         }
         return torch.tensor(noisy).float(), torch.tensor(clean).float(), meta
+
+    def build_urban_training_plan(self, n_samples, seed=42):
+        """
+        为 urban8 训练构造固定的 waveform 采样计划。
+
+        计划只固定 snapshot 与 UAV 选择；具体基带符号、SNR 和噪声可在后续按
+        不同 seed 重新生成。这样 CV 分组稳定，同时训练集可做轻量重采样增强。
+        """
+        if self.scenario_mode != "urban8":
+            raise RuntimeError("build_urban_training_plan requires scenario_mode='urban8'")
+
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        snapshot_indices = []
+        uav_indices = []
+        n_snapshots = len(self._urban_snapshots)
+        while len(snapshot_indices) < n_samples:
+            si = int(np.random.randint(0, n_snapshots))
+            snap = self._urban_snapshots[si]
+            if self.urban_train_los_only:
+                candidates = np.where(snap['los'])[0]
+            else:
+                candidates = np.arange(self.n_uavs)
+            if len(candidates) == 0:
+                continue
+            # 随机化同一 observation 内的 UAV 展开顺序，避免固定低编号 UAV 偏置。
+            candidates = np.random.permutation(candidates)
+            for ui in candidates:
+                snapshot_indices.append(si)
+                uav_indices.append(int(ui))
+                if len(snapshot_indices) >= n_samples:
+                    break
+
+        np.random.set_state(rng_state)
+        return (np.asarray(snapshot_indices, dtype=int),
+                np.asarray(uav_indices, dtype=int))
+
+    def generate_urban_training_dataset_from_plan(self, snapshot_indices, uav_indices,
+                                                  seed=42, return_groups=False):
+        """
+        按固定 snapshot/UAV 计划生成 urban8 单 UAV waveform 训练集。
+
+        每次调用可使用不同 seed 重新采样基带符号、训练 SNR 和噪声；snapshot
+        几何与信道保持固定，CV group 仍由 snapshot 决定。
+        """
+        if self.scenario_mode != "urban8":
+            raise RuntimeError("generate_urban_training_dataset_from_plan requires scenario_mode='urban8'")
+        snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+        uav_indices = np.asarray(uav_indices, dtype=int)
+        if len(snapshot_indices) != len(uav_indices):
+            raise ValueError("snapshot_indices and uav_indices must have the same length")
+
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        batch_cap = 500
+        noisy_list, clean_list = [], []
+        for start in range(0, len(snapshot_indices), batch_cap):
+            end = min(start + batch_cap, len(snapshot_indices))
+            snap_chunk = snapshot_indices[start:end]
+            uav_chunk = uav_indices[start:end]
+            Xn, Xc, _ = self.generate_urban_batch(len(snap_chunk), snr_db=None,
+                                                  snapshot_indices=snap_chunk)
+            row_idx = torch.arange(len(snap_chunk), dtype=torch.long)
+            uav_idx = torch.tensor(uav_chunk, dtype=torch.long)
+            noisy_list.append(Xn[row_idx, uav_idx])
+            clean_list.append(Xc[row_idx, uav_idx])
+
+        X_noisy = torch.cat(noisy_list, dim=0)
+        X_clean = torch.cat(clean_list, dim=0)
+        groups = torch.tensor(snapshot_indices, dtype=torch.long)
+
+        np.random.set_state(rng_state)
+        if return_groups:
+            return X_noisy, X_clean, groups
+        return X_noisy, X_clean
 
     def _build_channel_pool(self, n_channels, seed):
         """
@@ -442,7 +552,7 @@ class SignalSimulator:
         print(f"[SignalSimulator] 固定信道池已生成: {n_channels} 条信道 "
               f"(seed={seed}, nlos_prob={self.nlos_prob}, label={self.delay_label_mode})")
 
-    def generate_pair_batch(self, batch_size, snr_db=None):
+    def generate_pair_batch(self, batch_size, snr_db=None, seed=None):
         """
         生成配对的 UAV 接收信号（两路独立链路）
 
@@ -454,7 +564,8 @@ class SignalSimulator:
             X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2
         """
         if self.scenario_mode == "urban8":
-            X_noisy, X_clean, meta = self.generate_urban_batch(batch_size, snr_db=snr_db)
+            X_noisy, X_clean, meta = self.generate_urban_batch(batch_size, snr_db=snr_db,
+                                                               seed=seed)
             x1n, x1c, x2n, x2c = [], [], [], []
             d1, d2 = [], []
             for i in range(batch_size):
@@ -472,6 +583,12 @@ class SignalSimulator:
             return (torch.stack(x1n, dim=0), torch.stack(x1c, dim=0),
                     torch.stack(x2n, dim=0), torch.stack(x2c, dim=0),
                     d1, d2)
+
+        if seed is not None:
+            rng_state = np.random.get_state()
+            np.random.seed(seed)
+        else:
+            rng_state = None
 
         u_t = self._make_base_signal(batch_size)
 
@@ -541,6 +658,9 @@ class SignalSimulator:
         X1_noisy, X1_clean, delays1 = apply_channel_and_noise(u_t)
         X2_noisy, X2_clean, delays2 = apply_channel_and_noise(u_t)
 
+        if rng_state is not None:
+            np.random.set_state(rng_state)
+
         return X1_noisy, X1_clean, X2_noisy, X2_clean, delays1, delays2
 
     def generate_training_dataset(self, n_samples, seed=42, return_groups=False):
@@ -564,20 +684,12 @@ class SignalSimulator:
         group_list = []
 
         if self.scenario_mode == "urban8":
-            n_obs_total = int(np.ceil(n_samples / self.n_uavs))
-            for start in range(0, n_obs_total, batch_cap):
-                end = min(start + batch_cap, n_obs_total)
-                bs = end - start
-                Xn, Xc, meta = self.generate_urban_batch(bs, snr_db=None)
-                noisy_list.append(Xn.reshape(-1, 2, self.signal_len))
-                clean_list.append(Xc.reshape(-1, 2, self.signal_len))
-                groups = np.repeat(meta['snapshot_id'], self.n_uavs)
-                group_list.append(torch.tensor(groups, dtype=torch.long))
-            X_noisy = torch.cat(noisy_list, dim=0)[:n_samples]
-            X_clean = torch.cat(clean_list, dim=0)[:n_samples]
+            snapshot_indices, uav_indices = self.build_urban_training_plan(n_samples, seed=seed)
+            X_noisy, X_clean, groups = self.generate_urban_training_dataset_from_plan(
+                snapshot_indices, uav_indices, seed=seed, return_groups=True
+            )
             np.random.set_state(rng_state)
             if return_groups:
-                groups = torch.cat(group_list, dim=0)[:n_samples]
                 return X_noisy, X_clean, groups
             return X_noisy, X_clean
 

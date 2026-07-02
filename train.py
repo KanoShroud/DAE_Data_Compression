@@ -5,12 +5,56 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader, Subset
+from torch.utils.data import TensorDataset, DataLoader, Subset, Dataset
 from torch.optim.lr_scheduler import StepLR
 from sklearn.model_selection import KFold, GroupKFold
 
 from model import DAE
 from signal_gen import SignalSimulator
+
+
+class RefreshableUrbanWaveformDataset(Dataset):
+    """
+    固定 snapshot/UAV 计划、按 epoch 周期性重采样 waveform 的 urban8 训练集。
+
+    验证集仍使用固定 TensorDataset；只有训练集刷新基带符号、SNR 与噪声，
+    用来缓解 fixed dataset 在 200 epoch 训练下的记忆化。
+    """
+    def __init__(self, sim, snapshot_indices, uav_indices, base_seed=42,
+                 refresh_interval=1):
+        self.sim = sim
+        self.snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+        self.uav_indices = np.asarray(uav_indices, dtype=int)
+        self.base_seed = int(base_seed)
+        self.refresh_interval = max(1, int(refresh_interval))
+        self._refresh_id = None
+        self.X_noisy = None
+        self.X_clean = None
+        self.set_epoch(0)
+
+    def set_epoch(self, epoch):
+        refresh_id = int(epoch) // self.refresh_interval
+        if refresh_id == self._refresh_id:
+            return
+        seed = self.base_seed + refresh_id
+        self.X_noisy, self.X_clean = self.sim.generate_urban_training_dataset_from_plan(
+            self.snapshot_indices, self.uav_indices, seed=seed, return_groups=False
+        )
+        self._refresh_id = refresh_id
+
+    def __len__(self):
+        return len(self.snapshot_indices)
+
+    def __getitem__(self, idx):
+        return self.X_noisy[idx], self.X_clean[idx]
+
+
+def _refresh_epoch_dataset(dataset, epoch):
+    """支持 DataLoader.dataset 或 Subset.dataset 上的 set_epoch(epoch)。"""
+    if hasattr(dataset, "set_epoch"):
+        dataset.set_epoch(epoch)
+    elif isinstance(dataset, Subset) and hasattr(dataset.dataset, "set_epoch"):
+        dataset.dataset.set_epoch(epoch)
 
 
 def estimate_batch_snr(noisy, clean):
@@ -243,7 +287,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    lambda_peak=0.0, beta_fi=0.0, epsilon_mse=1.0,
                    mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
                    use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0,
-                   loss_mode="task"):
+                   loss_mode="task", early_stopping=True, restore_best=True):
     """
     在单个 fold 上训练模型，含早停机制。
 
@@ -294,6 +338,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         selection_start_epoch = warmup_ep if task_loss_enabled else 1
 
     for ep in range(epochs):
+        _refresh_epoch_dataset(train_loader.dataset, ep)
+
         # 任务驱动分支保留 warmup；论文复现分支使用标准 MSE，不做课程学习。
         progress = min((ep + 1) / warmup_ep, 1.0) if warmup_ep > 0 else 1.0
         eps_factor = 0.5 * (1.0 - math.cos(math.pi * progress)) if warmup_ep > 0 else 1.0
@@ -542,7 +588,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
         if (ep + 1) % 10 == 0:
             current_lr = scheduler.get_last_lr()[0]
-            early_mark = " [EARLY STOP]" if epochs_no_improve >= patience else ""
+            early_mark = " [EARLY STOP]" if early_stopping and epochs_no_improve >= patience else ""
             corr_str = f" | Corr {ep_corr / len(train_loader.dataset):.5f}" if corr_weight > 0 else ""
             peak_str = f" | Peak {ep_peak / len(train_loader.dataset):.5f}" if lambda_peak > 0 else ""
             fi_str = f" | FI {ep_fi / len(train_loader.dataset):.5f}" if beta_fi > 0 else ""
@@ -560,17 +606,23 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                   f"{loss_state_str} | "
                   f"LR: {current_lr:.6f} | {ep_time:.1f}s{early_mark}")
 
-        if epochs_no_improve >= patience:
+        if early_stopping and epochs_no_improve >= patience:
             stopped_epoch = ep + 1
             print(f"  Fold {fold_idx} Early stopping at Epoch {stopped_epoch} "
                   f"(no improvement for {patience} epochs, epoch耗时 {ep_time:.1f}s)")
             break
+    else:
+        stopped_epoch = epochs
 
     if best_state is None:
         best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         best_epoch = len(val_total_hist)
         best_val_loss = val_total_hist[-1] if val_total_hist else float('inf')
-    model.load_state_dict(best_state)
+    if restore_best:
+        model.load_state_dict(best_state)
+    else:
+        best_epoch = len(val_total_hist)
+        best_val_loss = val_total_hist[-1] if val_total_hist else float('inf')
     return model, train_loss_hist, val_loss_hist, best_val_loss, stopped_epoch, \
         corr_hist, peak_hist, snr_hist, val_corr_hist, val_peak_hist, val_total_hist, \
         train_nmse_mag_hist, train_nmse_complex_hist, val_nmse_mag_hist, val_nmse_complex_hist, best_epoch
@@ -588,7 +640,11 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   nlos_prob=0.2, delay_label_mode="strongest",
                   snr_train_range=(-10, 10), multipath_scale=0.3,
                   scenario_mode="sv_pair", normalization_mode="none",
-                  cv_group_mode="sample"):
+                  cv_group_mode="sample", urban_base_delay=16, urban_min_los=4,
+                  urban_train_los_only=False, early_stopping=True,
+                  restore_best=True, final_retrain=False, final_epochs=None,
+                  training_protocol=None, resample_train_each_epoch=False,
+                  resample_interval=1):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
@@ -605,6 +661,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                                R20中ε为温和重建/相位引导强度。
         loss_mode:             "task" 使用R20.1任务驱动损失；"paper_mse" 使用论文式MSE复现基线。
         cv_group_mode:         "sample" 随机样本划分；"snapshot" 按 urban snapshot 分组划分。
+        resample_train_each_epoch:
+                               urban8 MSE 复现轨道下，训练集按固定 snapshot/UAV
+                               计划周期性重采样 waveform，验证集保持固定。
     """
     # === loss_config 覆盖 ===
     # 每个CR的loss配置覆盖同名参数。统一公式:
@@ -650,7 +709,21 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                               snr_train_range=snr_train_range,
                               multipath_scale=multipath_scale,
                               scenario_mode=scenario_mode,
-                              normalization_mode=normalization_mode)
+                              normalization_mode=normalization_mode,
+                              urban_base_delay=urban_base_delay,
+                              urban_min_los=urban_min_los,
+                              urban_train_los_only=urban_train_los_only)
+
+    dynamic_urban_train = (
+        bool(resample_train_each_epoch)
+        and loss_mode == "paper_mse"
+        and scenario_mode == "urban8"
+        and corr_weight == 0.0
+        and lambda_peak == 0.0
+    )
+
+    urban_snapshot_plan = None
+    urban_uav_plan = None
 
     if corr_weight > 0 or lambda_peak > 0:
         # 配对数据：X1 和 X2 来自同信道同噪声，用于 GCC 损失和峰值损失
@@ -658,7 +731,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c, tdoa)
     else:
         need_groups = cv_group_mode == "snapshot"
-        if need_groups:
+        if dynamic_urban_train:
+            urban_snapshot_plan, urban_uav_plan = sim.build_urban_training_plan(n_samples, seed=seed)
+            X_noisy, X_clean, cv_groups = sim.generate_urban_training_dataset_from_plan(
+                urban_snapshot_plan, urban_uav_plan, seed=seed, return_groups=True
+            )
+        elif need_groups:
             X_noisy, X_clean, cv_groups = sim.generate_training_dataset(
                 n_samples, seed=seed, return_groups=True
             )
@@ -667,7 +745,10 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
             cv_groups = None
         dataset = TensorDataset(X_noisy, X_clean)
 
-    if use_split:
+    if training_protocol == "fixed_epoch_final_only":
+        suffix = "Fast Final-Only Training"
+        n_folds_actual = 0
+    elif use_split:
         # 单次 80/20 train/val 划分 (快速模式)
         n_train = int(n_samples * 0.8)
         indices = torch.randperm(n_samples, generator=torch.Generator().manual_seed(seed))
@@ -683,7 +764,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"\n{'='*60}")
     print(f"Training DAE (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
-    print(f"  Early Stopping Patience: {patience} | Weight Decay: {weight_decay}")
+    early_stop_text = f"patience={patience}" if early_stopping else "disabled"
+    print(f"  Early Stopping: {early_stop_text} | Restore Best: {restore_best} | "
+          f"Weight Decay: {weight_decay}")
     print(f"  Loss Mode: {loss_mode}")
     if loss_mode == "paper_mse":
         print("  Paper Repro Loss: real/imag MSE only (Corr/Peak/FI disabled)")
@@ -698,6 +781,14 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
               f"range ~[0, {lambda_peak}]")
     print(f"  Training SNR: [{snr_train_range[0]}, {snr_train_range[1]}] dB uniform")
     print(f"  Scenario: {sim.scenario_mode} | normalization={sim.normalization_mode} | CV group={cv_group_mode}")
+    if sim.scenario_mode == "urban8":
+        print(f"  Urban: base_delay={sim.urban_base_delay:g} samples | "
+              f"min_los={sim.urban_min_los} | train_los_only={sim.urban_train_los_only}")
+        print(f"  Urban sample unit: single-UAV waveform | planned waveforms={n_samples}")
+        if dynamic_urban_train:
+            n_groups = len(np.unique(urban_snapshot_plan))
+            print(f"  Train waveform resampling: enabled every {max(1, int(resample_interval))} epoch(s) "
+                  f"on fixed snapshot/UAV plan ({n_groups} snapshots)")
     if beta_fi > 0:
         print(f"  Fisher Loss: β_fi={beta_fi}")
     model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
@@ -730,12 +821,98 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'scenario_mode': sim.scenario_mode,
         'normalization_mode': sim.normalization_mode,
         'cv_group_mode': cv_group_mode,
+        'early_stopping': early_stopping,
+        'restore_best': restore_best,
+        'final_retrain': final_retrain,
+        'final_epochs': final_epochs if final_epochs is not None else epochs,
+        'final_epoch_policy': 'configured',
+        'resample_train_each_epoch': bool(resample_train_each_epoch),
+        'resample_interval': max(1, int(resample_interval)),
+        'training_protocol': training_protocol or (
+            'cv_fixed_best_fold' if not final_retrain else 'cv_then_final_retrain'
+        ),
         'diagnostics_version': (
-            'paper_repro_v2_urban8'
+            ('paper_repro_v3_1_epoch_final_train'
+             if training_protocol == "cv_best_epoch_final_train"
+             else ('paper_repro_v3_1_fast_final'
+                   if training_protocol == "fixed_epoch_final_only"
+                   else 'paper_repro_v3_urban8_fair_eval'))
             if loss_mode == "paper_mse" and sim.scenario_mode == "urban8"
             else ('paper_repro_v1' if loss_mode == "paper_mse" else 'R20.1')
         ),
     }
+
+    if training_protocol == "fixed_epoch_final_only":
+        final_epochs_resolved = int(final_epochs if final_epochs is not None else epochs)
+        final_epochs_resolved = max(1, final_epochs_resolved)
+        cv_results['final_epoch_policy'] = 'configured_fast_final'
+        cv_results['final_epochs'] = final_epochs_resolved
+
+        print(f"\n  Fast final-only training on all {n_samples} samples for "
+              f"{final_epochs_resolved} fixed epochs...")
+        torch.manual_seed(seed + 10000 + int(cr))
+        np.random.seed(seed + 10000 + int(cr))
+        final_model = DAE(cr=cr).to(device)
+        if dynamic_urban_train:
+            final_train_dataset = RefreshableUrbanWaveformDataset(
+                sim, urban_snapshot_plan, urban_uav_plan,
+                base_seed=seed + 200000 + int(cr) * 1000,
+                refresh_interval=resample_interval,
+            )
+        else:
+            final_train_dataset = dataset
+        full_train_loader = DataLoader(final_train_dataset, batch_size=batch_size, shuffle=True)
+        full_val_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        final_model, final_train_loss, final_val_loss, final_best_val, final_stopped, \
+            final_corr_loss, final_peak_loss, final_avg_snr, final_val_corr_loss, \
+            final_val_peak_loss, final_val_total_loss, final_train_nmse_mag, \
+            final_train_nmse_complex, final_val_nmse_mag, final_val_nmse_complex, \
+            final_best_epoch = train_one_fold(
+                device, final_model, full_train_loader, full_val_loader, final_epochs_resolved, lr,
+                "Final", patience=final_epochs_resolved + 1, weight_decay=weight_decay,
+                corr_weight=corr_weight, lambda_peak=lambda_peak, beta_fi=beta_fi,
+                epsilon_mse=epsilon_mse, mse_weight_max=mse_weight_max,
+                phase_mix=phase_mix, selection_start_epoch=1,
+                use_adaptive_peak=use_adaptive_peak,
+                snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
+                loss_mode=loss_mode, early_stopping=False, restore_best=False
+            )
+        cv_results.update({
+            'fold_train_loss': [final_train_loss],
+            'fold_val_loss': [final_val_loss],
+            'fold_best_val': [final_best_val],
+            'fold_stopped_epoch': [final_stopped],
+            'fold_corr_loss': [final_corr_loss],
+            'fold_peak_loss': [final_peak_loss],
+            'fold_avg_snr': [final_avg_snr],
+            'fold_val_corr_loss': [final_val_corr_loss],
+            'fold_val_peak_loss': [final_val_peak_loss],
+            'fold_val_total_loss': [final_val_total_loss],
+            'fold_train_nmse_mag': [final_train_nmse_mag],
+            'fold_train_nmse_complex': [final_train_nmse_complex],
+            'fold_val_nmse_mag': [final_val_nmse_mag],
+            'fold_val_nmse_complex': [final_val_nmse_complex],
+            'fold_best_epoch': [final_best_epoch],
+            'final_train_loss': final_train_loss,
+            'final_val_loss': final_val_loss,
+            'final_val_total_loss': final_val_total_loss,
+            'final_best_val': final_best_val,
+            'final_stopped_epoch': final_stopped,
+            'final_best_epoch': final_best_epoch,
+            'final_corr_loss': final_corr_loss,
+            'final_peak_loss': final_peak_loss,
+            'final_val_corr_loss': final_val_corr_loss,
+            'final_val_peak_loss': final_val_peak_loss,
+            'final_train_nmse_mag': final_train_nmse_mag,
+            'final_train_nmse_complex': final_train_nmse_complex,
+            'final_val_nmse_mag': final_val_nmse_mag,
+            'final_val_nmse_complex': final_val_nmse_complex,
+        })
+        t_train_total = time.time() - t_train_start
+        print(f"  Fast final-only complete: ValTotal={final_best_val:.6f} "
+              f"(epoch {final_best_epoch}), time {t_train_total:.1f}s "
+              f"({t_train_total/60:.1f}min)")
+        return final_model, cv_results
 
     best_model = None
     best_overall_val = float('inf')
@@ -755,8 +932,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
             split_iterator = list(kf.split(range(n_samples)))
 
     for fold_idx, (train_idx, val_idx) in enumerate(split_iterator):
-        train_loader = DataLoader(Subset(dataset, train_idx),
-                                  batch_size=batch_size, shuffle=True)
+        if dynamic_urban_train:
+            train_dataset = RefreshableUrbanWaveformDataset(
+                sim,
+                urban_snapshot_plan[np.asarray(train_idx, dtype=int)],
+                urban_uav_plan[np.asarray(train_idx, dtype=int)],
+                base_seed=seed + 100000 + fold_idx * 1000,
+                refresh_interval=resample_interval,
+            )
+        else:
+            train_dataset = Subset(dataset, train_idx)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(Subset(dataset, val_idx),
                                 batch_size=batch_size, shuffle=False)
 
@@ -774,7 +960,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 phase_mix=phase_mix, selection_start_epoch=selection_start_epoch,
                 use_adaptive_peak=use_adaptive_peak,
                 snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
-                loss_mode=loss_mode
+                loss_mode=loss_mode, early_stopping=early_stopping,
+                restore_best=restore_best
             )
         fold_time = time.time() - t_fold
 
@@ -808,6 +995,69 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     print(f"  Average Stop Epoch: {avg_stop:.1f}")
     print(f"  Selected model with Val Loss: {best_overall_val:.6f}")
     print(f"  Training Time: {t_train_total:.1f}s ({t_train_total/60:.1f}min)")
+
+    if final_retrain:
+        if final_epochs is None:
+            if training_protocol == "cv_best_epoch_final_train":
+                final_epochs_resolved = int(round(float(np.median(cv_results['fold_best_epoch']))))
+                cv_results['final_epoch_policy'] = 'median_cv_best_epoch'
+            else:
+                final_epochs_resolved = int(epochs)
+                cv_results['final_epoch_policy'] = 'max_epochs_default'
+        else:
+            final_epochs_resolved = int(final_epochs)
+            cv_results['final_epoch_policy'] = 'configured'
+        final_epochs_resolved = max(1, final_epochs_resolved)
+        cv_results['final_epochs'] = final_epochs_resolved
+
+        print(f"\n  Final retrain on all {n_samples} samples for {final_epochs_resolved} fixed epochs "
+              f"(policy={cv_results['final_epoch_policy']})...")
+        torch.manual_seed(seed + 10000 + int(cr))
+        np.random.seed(seed + 10000 + int(cr))
+        final_model = DAE(cr=cr).to(device)
+        if dynamic_urban_train:
+            final_train_dataset = RefreshableUrbanWaveformDataset(
+                sim, urban_snapshot_plan, urban_uav_plan,
+                base_seed=seed + 200000 + int(cr) * 1000,
+                refresh_interval=resample_interval,
+            )
+        else:
+            final_train_dataset = dataset
+        full_train_loader = DataLoader(final_train_dataset, batch_size=batch_size, shuffle=True)
+        full_val_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        final_model, final_train_loss, final_val_loss, final_best_val, final_stopped, \
+            final_corr_loss, final_peak_loss, final_avg_snr, final_val_corr_loss, \
+            final_val_peak_loss, final_val_total_loss, final_train_nmse_mag, \
+            final_train_nmse_complex, final_val_nmse_mag, final_val_nmse_complex, \
+            final_best_epoch = train_one_fold(
+                device, final_model, full_train_loader, full_val_loader, final_epochs_resolved, lr,
+                "Final", patience=final_epochs_resolved + 1, weight_decay=weight_decay,
+                corr_weight=corr_weight, lambda_peak=lambda_peak, beta_fi=beta_fi,
+                epsilon_mse=epsilon_mse, mse_weight_max=mse_weight_max,
+                phase_mix=phase_mix, selection_start_epoch=1,
+                use_adaptive_peak=use_adaptive_peak,
+                snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
+                loss_mode=loss_mode, early_stopping=False, restore_best=False
+            )
+        cv_results.update({
+            'final_train_loss': final_train_loss,
+            'final_val_loss': final_val_loss,
+            'final_val_total_loss': final_val_total_loss,
+            'final_best_val': final_best_val,
+            'final_stopped_epoch': final_stopped,
+            'final_best_epoch': final_best_epoch,
+            'final_corr_loss': final_corr_loss,
+            'final_peak_loss': final_peak_loss,
+            'final_val_corr_loss': final_val_corr_loss,
+            'final_val_peak_loss': final_val_peak_loss,
+            'final_train_nmse_mag': final_train_nmse_mag,
+            'final_train_nmse_complex': final_train_nmse_complex,
+            'final_val_nmse_mag': final_val_nmse_mag,
+            'final_val_nmse_complex': final_val_nmse_complex,
+        })
+        best_model = final_model
+        print(f"  Final retrain complete: final ValTotal={final_best_val:.6f} "
+              f"(epoch {final_best_epoch})")
 
     return best_model, cv_results
 
