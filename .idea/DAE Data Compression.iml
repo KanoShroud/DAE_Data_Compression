@@ -3,6 +3,8 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/参考文献" />
+      <excludeFolder url="file://$MODULE_DIR$/运行结果" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.10 (DAE Data Compression) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
