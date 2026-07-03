@@ -324,6 +324,49 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
     return errors
 
 
+def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
+                                               direct_estimator, sub_sample=True,
+                                               use_los_only=True,
+                                               estimator="all_pair_wls"):
+    errors = []
+    for bi in range(batch_np.shape[0]):
+        los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
+        los_idx = [int(v) for v in los_idx]
+        if len(los_idx) < 4:
+            continue
+
+        if estimator != "all_pair_wls":
+            ref_idx = int(los_idx[0])
+            ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
+            tdoa = {}
+            for ui in los_idx:
+                if ui == ref_idx:
+                    continue
+                sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+                tdoa[ui] = direct_estimator.estimate_pair(
+                    sig_i, ref_sig, sub_sample=sub_sample, return_quality=False
+                )
+            est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+        else:
+            pair_measurements = []
+            for a in range(len(los_idx)):
+                for b in range(a + 1, len(los_idx)):
+                    ui, uj = los_idx[a], los_idx[b]
+                    sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+                    sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
+                    tau, weight, _, _ = direct_estimator.estimate_pair(
+                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True
+                    )
+                    pair_measurements.append((ui, uj, tau, weight))
+            est, _ = _localize_from_tdoa_pairs(
+                meta['uavs'][bi], pair_measurements, fs, c, area_size
+            )
+        if est is None:
+            continue
+        errors.append(float(np.linalg.norm(est - meta['source'][bi])))
+    return errors
+
+
 def _corr_half_width(corr_norm, peak_idx):
     corr_norm = np.asarray(corr_norm, dtype=float)
     if corr_norm.size == 0:
@@ -610,7 +653,8 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
                                 snr_range=None, num_trials=200, sub_sample=True,
                                 use_los_only=True, batch_size=64,
                                 fixed_eval_set=True, estimator="all_pair_wls",
-                                gcc_method="standard", title="Fig6"):
+                                gcc_method="standard", title="Fig6",
+                                direct_estimators=None):
     """
     Generic urban localization comparison by method name.
 
@@ -620,7 +664,8 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
     """
     snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 21, 2))
     gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
-    method_order = ["Raw", "Clean", "Geometry"] + list(models_dict.keys())
+    direct_estimators = direct_estimators or {}
+    method_order = ["Raw", "Clean", "Geometry"] + list(models_dict.keys()) + list(direct_estimators.keys())
     results = {
         "metric": "localization_m",
         "title": title,
@@ -647,7 +692,9 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
     }
 
     print(f"Running {title} method comparison "
-          f"(methods={list(models_dict.keys())}, GCC={gcc_method}, estimator={estimator})...")
+          f"(waveform_methods={list(models_dict.keys())}, "
+          f"direct_methods={list(direct_estimators.keys())}, "
+          f"GCC={gcc_method}, estimator={estimator})...")
     for snr in snr_range:
         eval_seed = seed if fixed_eval_set else None
         X_noisy, X_clean, meta = simulator.generate_urban_batch(
@@ -682,6 +729,12 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
                 sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator
             )
+        for label, direct_estimator in direct_estimators.items():
+            base_inputs[label] = _localization_errors_from_direct_estimator(
+                raw_np, meta, simulator.fs, simulator.c, simulator.area_size,
+                direct_estimator, sub_sample=sub_sample, use_los_only=use_los_only,
+                estimator=estimator
+            )
 
         diagnostic_inputs = {"Raw": raw_np, "Clean": clean_np}
         diagnostic_inputs.update(model_outputs)
@@ -693,6 +746,15 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             dst_diag = results["method_diagnostics"].setdefault(label, {})
             for key, value in diag.items():
                 dst_diag.setdefault(key, []).append(value)
+        for label, direct_estimator in direct_estimators.items():
+            if hasattr(direct_estimator, "diagnostics"):
+                diag = direct_estimator.diagnostics(
+                    raw_np, meta, simulator.fs, simulator.c,
+                    use_los_only=use_los_only, sub_sample=sub_sample
+                )
+                dst_diag = results["method_diagnostics"].setdefault(label, {})
+                for key, value in diag.items():
+                    dst_diag.setdefault(key, []).append(value)
 
         line = [f"SNR={snr:g}dB"]
         for label in method_order:
@@ -704,6 +766,28 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
         print("  " + " | ".join(line))
 
     return results, snr_range
+
+
+def filter_method_comparison_data(method_data, method_order, config_updates=None):
+    """Create a plotting/export view from a shared method-comparison result."""
+    results, snr_range = method_data
+    config_updates = config_updates or {}
+    methods = results.get("methods", {})
+    diagnostics = results.get("method_diagnostics", {})
+    order = [label for label in method_order if label in methods]
+    filtered = {
+        "metric": results.get("metric", "localization_m"),
+        "title": config_updates.get("title", results.get("title", "")),
+        "method_order": order,
+        "methods": {label: methods[label] for label in order},
+        "method_diagnostics": {
+            label: diagnostics.get(label, {}) for label in order
+            if label in diagnostics
+        },
+        "config": dict(results.get("config", {})),
+    }
+    filtered["config"].update(config_updates)
+    return filtered, snr_range
 
 
 class MonteCarloExperiment:
@@ -1190,7 +1274,9 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
     results, snr_range = method_data
     methods = results["methods"]
     config = results.get("config", {})
-    if plot_kind == "supplement":
+    if plot_kind == "taskaware":
+        order = config.get("taskaware_method_order", results.get("method_order", list(methods.keys())))
+    elif plot_kind == "supplement":
         order = config.get("supplement_method_order", results.get("method_order", list(methods.keys())))
     else:
         order = config.get("main_method_order", results.get("method_order", list(methods.keys())))
@@ -1206,6 +1292,14 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
                          label="Geometry oracle"),
         "DFT-Fisher": dict(color="#54278f", marker="X", linestyle="-.", linewidth=1.6,
                            label="DFT Fisher"),
+        "DFT-SCS-lite": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.5,
+                             label="DFT SCS-lite"),
+        "DFT-SCS-lite-Direct": dict(color="#756bb1", marker=">", linestyle="-", linewidth=1.6,
+                                    label="DFT SCS-lite direct"),
+        "DFT-Fisher-Direct": dict(color="#54278f", marker="X", linestyle="-", linewidth=1.7,
+                                  label="DFT Fisher direct"),
+        "DFT-train-power-Direct": dict(color="#9e9ac8", marker=">", linestyle="--", linewidth=1.4,
+                                       label="DFT train-power direct"),
         "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
                                label="DFT train-band"),
         "DFT-train-power": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.5,
@@ -1233,6 +1327,8 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
     baseline_cr = config.get("baseline_cr", 16)
     if plot_kind == "supplement":
         fig, ax = plt.subplots(1, 1, figsize=(8.8, 5.0))
+    elif plot_kind == "taskaware":
+        fig, ax = plt.subplots(1, 1, figsize=(8.2, 5.0))
     else:
         fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
     plotted_for_zoom = []
@@ -1282,10 +1378,21 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
 
     ax.set_xlabel("SNR [dB]", fontsize=12)
     ax.set_ylabel(y_label, fontsize=12)
-    if plot_kind == "supplement":
-        title = f"Figure 6 Supplement: Baseline Sensitivity (CR={baseline_cr})"
+    if plot_kind == "taskaware":
+        title = config.get(
+            "taskaware_title",
+            f"Figure 7: Task-Aware Baselines (CR={baseline_cr})"
+        )
+    elif plot_kind == "supplement":
+        title = config.get(
+            "supplement_title",
+            f"Figure 6 Supplement: Baseline Sensitivity (CR={baseline_cr})"
+        )
     else:
-        title = f"Figure 6: Localization Performance with Traditional Baselines (CR={baseline_cr})"
+        title = config.get(
+            "main_title",
+            f"Figure 6: Localization Performance with Traditional Baselines (CR={baseline_cr})"
+        )
     ax.set_title(title, fontsize=12)
     ax.grid(True, alpha=0.45)
     if plot_kind == "main" and config.get("fig6_show_zoom_inset", True):

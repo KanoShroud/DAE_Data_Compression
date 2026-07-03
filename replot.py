@@ -141,13 +141,23 @@ def replot(result_dir):
     fig6_results = data.get('fig6_results')
     if fig6_results is not None:
         baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig6_config = fig6_results[0].get('config', {})
         fig_methods = plot_method_comparison(fig6_results, plot_kind="main")
         save_figure(fig_methods, os.path.join(
-            result_dir, f"Fig6_Traditional_Baselines_CR{baseline_cr}.svg"
+            result_dir, f"{fig6_config.get('main_figure_filename', f'Fig6_Traditional_Baselines_CR{baseline_cr}')}.svg"
         ))
         fig_methods_supp = plot_method_comparison(fig6_results, plot_kind="supplement")
         save_figure(fig_methods_supp, os.path.join(
-            result_dir, f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}.svg"
+            result_dir, f"{fig6_config.get('supplement_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}')}.svg"
+        ))
+
+    fig7_results = data.get('fig7_results')
+    if fig7_results is not None:
+        baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig7_config = fig7_results[0].get('config', {})
+        fig_task = plot_method_comparison(fig7_results, plot_kind="taskaware")
+        save_figure(fig_task, os.path.join(
+            result_dir, f"{fig7_config.get('taskaware_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}')}.svg"
         ))
 
     if plt.get_fignums():

@@ -192,10 +192,10 @@ def _collect_group_values(methods, prefix, metric_key):
     return np.vstack(values), valid_labels
 
 
-def export_fig6_group_summary(fig6_results, out_dir):
-    if not fig6_results:
+def export_method_group_summary(method_results, out_dir, table_prefix="fig6"):
+    if not method_results:
         return
-    results, snr_range = fig6_results
+    results, snr_range = method_results
     methods = results.get("methods", {})
     config = results.get("config", {})
     prefixes = []
@@ -223,15 +223,16 @@ def export_fig6_group_summary(fig6_results, out_dir):
     if rows:
         fields = ["SNR_dB", "group", "n_members", "rmse_mean", "rmse_std",
                   "rmse_min", "rmse_max", "members"]
-        write_csv(os.path.join(out_dir, "fig6_random_group_summary.csv"), rows, fields)
-        write_markdown_table(os.path.join(out_dir, "fig6_random_group_summary.md"), rows, fields)
+        write_csv(os.path.join(out_dir, f"{table_prefix}_random_group_summary.csv"), rows, fields)
+        write_markdown_table(os.path.join(out_dir, f"{table_prefix}_random_group_summary.md"), rows, fields)
 
 
-def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
-    if not fig6_results:
-        print("[Skip] No fig6_results found in plot_data.pkl")
+def export_method_baselines(method_results, out_dir, table_prefix="fig6",
+                            export_figures=True, figure_kinds=None):
+    if not method_results:
+        print(f"[Skip] No {table_prefix}_results found in plot_data.pkl")
         return
-    results, snr_range = fig6_results
+    results, snr_range = method_results
     methods = results.get("methods", {})
     order = results.get("method_order", list(methods.keys()))
     rows = []
@@ -248,8 +249,12 @@ def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
         fields.extend([f"{label}_mean_rmse_m",
                        f"{label}_median_rmse_m",
                        f"{label}_trimmed_rmse_m"])
-    write_csv(os.path.join(out_dir, "fig6_traditional_baselines.csv"), rows, fields)
-    write_markdown_table(os.path.join(out_dir, "fig6_traditional_baselines.md"), rows, fields)
+    baseline_table = (
+        "fig6_traditional_baselines"
+        if table_prefix == "fig6" else f"{table_prefix}_baselines"
+    )
+    write_csv(os.path.join(out_dir, f"{baseline_table}.csv"), rows, fields)
+    write_markdown_table(os.path.join(out_dir, f"{baseline_table}.md"), rows, fields)
 
     diagnostics = results.get("method_diagnostics", {})
     diag_rows = []
@@ -271,28 +276,52 @@ def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
             diag_rows.append(row)
     if diag_rows:
         diag_fields = ["SNR_dB", "method"] + diag_keys
-        write_csv(os.path.join(out_dir, "fig6_method_diagnostics.csv"),
+        write_csv(os.path.join(out_dir, f"{table_prefix}_method_diagnostics.csv"),
                   diag_rows, diag_fields)
-        write_markdown_table(os.path.join(out_dir, "fig6_method_diagnostics.md"),
+        write_markdown_table(os.path.join(out_dir, f"{table_prefix}_method_diagnostics.md"),
                              diag_rows, diag_fields)
 
-    export_fig6_group_summary(fig6_results, out_dir)
+    export_method_group_summary(method_results, out_dir, table_prefix=table_prefix)
 
     if export_figures:
-        fig = plot_method_comparison(fig6_results, plot_kind="main")
-        baseline_cr = results.get("config", {}).get("baseline_cr", 16)
-        path = os.path.join(out_dir, f"Fig6_Traditional_Baselines_CR{baseline_cr}.svg")
-        fig.savefig(path, format="svg", bbox_inches="tight")
-        plt.close(fig)
-        print(f"[Saved] {path}")
-
-        fig = plot_method_comparison(fig6_results, plot_kind="supplement")
-        path = os.path.join(out_dir, f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}.svg")
-        fig.savefig(path, format="svg", bbox_inches="tight")
-        plt.close(fig)
-        print(f"[Saved] {path}")
+        config = results.get("config", {})
+        baseline_cr = config.get("baseline_cr", 16)
+        if figure_kinds is None:
+            figure_kinds = [
+                ("main", config.get("main_figure_filename", f"Fig6_Traditional_Baselines_CR{baseline_cr}")),
+                ("supplement", config.get("supplement_figure_filename", f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}")),
+            ]
+        for plot_kind, filename_stem in figure_kinds:
+            fig = plot_method_comparison(method_results, plot_kind=plot_kind)
+            path = os.path.join(out_dir, f"{filename_stem}.svg")
+            fig.savefig(path, format="svg", bbox_inches="tight")
+            plt.close(fig)
+            print(f"[Saved] {path}")
     else:
-        print("[Skip] Fig6 SVG export to tables/ disabled; root result folder already contains Fig6 SVG.")
+        print(f"[Skip] {table_prefix} SVG export to tables/ disabled; root result folder already contains SVG.")
+
+
+def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
+    export_method_baselines(
+        fig6_results, out_dir, table_prefix="fig6",
+        export_figures=export_figures,
+    )
+
+
+def export_fig7_baselines(fig7_results, out_dir, export_figures=True):
+    if not fig7_results:
+        print("[Skip] No fig7_results found in plot_data.pkl")
+        return
+    results, _ = fig7_results
+    config = results.get("config", {})
+    baseline_cr = config.get("baseline_cr", 16)
+    export_method_baselines(
+        fig7_results, out_dir, table_prefix="fig7",
+        export_figures=export_figures,
+        figure_kinds=[
+            ("taskaware", config.get("taskaware_figure_filename", f"Fig7_TaskAware_Baselines_CR{baseline_cr}")),
+        ],
+    )
 
 
 def export_summary_md(data, result_dir, out_dir):
@@ -329,6 +358,9 @@ def export_summary_md(data, result_dir, out_dir):
                     f"Hadamard rule `{meta.get('hadamard_row_rule', 'N/A')}`, "
                     f"PCA source `{meta.get('pca_training_source', config.get('baseline_pca_train_source'))}`, "
                     f"PCA samples `{meta.get('pca_training_samples', config.get('baseline_pca_samples'))}`\n\n")
+        if data.get("fig7_results") is not None:
+            f.write("- Fig7 task-aware baselines: available; direct DFT methods share the same "
+                    "evaluation set, LOS mask, communication budget, and WLS localization chain.\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")
@@ -338,8 +370,9 @@ def export_summary_md(data, result_dir, out_dir):
         f.write("- Geometry oracle checks the WLS geometry/sign lower bound.\n")
         f.write("- Clean oracle checks the clean waveform GCC + WLS upper bound under finite bandwidth.\n")
         f.write("- Mean RMSE is the main metric; median and trimmed RMSE diagnose outlier sensitivity.\n")
-        f.write("- DFT-Fisher selects DFT bins by average spectral power weighted by squared frequency, "
-                "a practical RMS-bandwidth/Fisher-information proxy for TDOA.\n")
+        f.write("- DFT-SCS-lite is the Chen-style reconstruction baseline approximation. "
+                "DFT-Fisher and DFT direct variants, when present, are task-aware diagnostics "
+                "rather than strict Chen Fig.6 reproduction methods.\n")
     print(f"[Saved] {path}")
 
 
@@ -356,6 +389,8 @@ def export(result_dir, export_fig6_figures=True):
     export_fig2_diagnostics(data["snr_data"], out_dir)
     export_paper_figures(data["mc_results"], out_dir)
     export_fig6_baselines(data.get("fig6_results"), out_dir,
+                          export_figures=bool(export_fig6_figures))
+    export_fig7_baselines(data.get("fig7_results"), out_dir,
                           export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)
     print("[Done] Export complete.")

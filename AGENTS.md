@@ -32,7 +32,7 @@
   - 必要时用 `D:\Software\anaconda3\envs\PyTorch\python.exe` 做 PyTorch 冒烟测试。
 - 涉及损失函数时必须同步检查训练集与验证集目标是否一致。
 - 涉及 GCC/TDOA 时必须检查训练、验证、评估使用的 lag window 和相关定义是否一致。
-- 涉及 Fig1/Fig2/Fig3 时必须检查图例、坐标轴、曲线含义和 pkl 字段是否一致。
+- 涉及图片生成时必须检查图例、坐标轴、曲线含义和 pkl 字段是否一致。
 
 ## Git 与分支规则
 
@@ -51,9 +51,11 @@
 
 - `运行结果/`
 - `__pycache__/`
+- `参考文献/`
 - `*.pyc`
 - `*.pyo`
 - `*.pyd`
+- `*.xml`
 
 建议继续忽略但未必已写入 `.gitignore` 的内容：
 

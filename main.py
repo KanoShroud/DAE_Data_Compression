@@ -16,10 +16,11 @@ import pickle
 from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
                       plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
                       clean_peak_consistency, run_urban_method_comparison,
-                      plot_method_comparison)
+                      plot_method_comparison, filter_method_comparison_data)
 from model import DAE
 from signal_gen import SignalSimulator
 from baselines import build_traditional_baselines
+from task_baselines import DirectDFTTDOAEstimator
 
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -50,13 +51,14 @@ USER_FAST_FINAL_EPOCHS = None
 # Fig6 传统 baseline 配置。
 USER_RUN_TRADITIONAL_BASELINES = True
 USER_BASELINE_CR = 16
-USER_BASELINE_DFT_MODE = "fisher_power"  # "fisher_power"、"train_band"、"train_power"、"uniform"、"center"、"random"
+USER_BASELINE_DFT_MODE = "scs_lite"  # "scs_lite"、"fisher_power"、"train_band"、"train_power"、"center"、"random"
 USER_BASELINE_HADAMARD_MODE = "salari"   # "salari"、"random"、"sequency"
 USER_BASELINE_PCA_TRAIN_SOURCE = "noisy" # "noisy"、"clean"、"noisy_fixed"、"clean_fixed"
 USER_BASELINE_PCA_FIXED_SNR_DB = 0.0
 USER_BASELINE_PCA_SAMPLES = None         # None 表示使用 N_SAMPLES
 USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = True
 USER_BASELINE_RANDOM_VARIANT_SEEDS = 5
+USER_RUN_TASK_AWARE_BASELINES = True
 USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权重重复复制到新结果目录
 USER_FIG6_SHOW_ZOOM_INSET = True
 USER_FIG6_ZOOM_SNR_MIN = 8.0
@@ -239,6 +241,9 @@ BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = _cfg_bool(
 BASELINE_RANDOM_VARIANT_SEEDS = _cfg(
     "DAE_BASELINE_RANDOM_VARIANT_SEEDS", USER_BASELINE_RANDOM_VARIANT_SEEDS, 5, int
 )
+RUN_TASK_AWARE_BASELINES = _cfg_bool(
+    "DAE_RUN_TASK_AWARE_BASELINES", USER_RUN_TASK_AWARE_BASELINES, True
+)
 EVAL_ONLY_COPY_MODELS = _cfg_bool(
     "DAE_EVAL_ONLY_COPY_MODELS", USER_EVAL_ONLY_COPY_MODELS, False
 )
@@ -341,6 +346,7 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"pca_source={BASELINE_PCA_TRAIN_SOURCE} | "
       f"diagnostic_variants={BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS} | "
       f"random_variant_seeds={BASELINE_RANDOM_VARIANT_SEEDS} | "
+      f"task_aware_baselines={RUN_TASK_AWARE_BASELINES} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
       f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
 if SCENARIO_MODE == "urban8":
@@ -626,6 +632,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         )
 
         fig6_results = None
+        fig7_results = None
+        baseline_all_results = None
         traditional_baseline_meta = None
         if RUN_TRADITIONAL_BASELINES:
             if EVALUATION_MODE != "urban_localization":
@@ -648,30 +656,84 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 print(f"[Fig6] Baseline feature budget: {traditional_baseline_meta}")
                 fig6_models = dict(traditional_models)
                 fig6_models[f"DAE-CR{BASELINE_CR}"] = models_dict[BASELINE_CR]
-                fig6_results = run_urban_method_comparison(
+                direct_estimators = {}
+                if RUN_TASK_AWARE_BASELINES:
+                    for src_label, dst_label in [
+                        ("DFT-SCS-lite", "DFT-SCS-lite-Direct"),
+                        ("DFT-Fisher", "DFT-Fisher-Direct"),
+                        ("DFT-train-power", "DFT-train-power-Direct"),
+                    ]:
+                        model = traditional_models.get(src_label)
+                        if model is not None and hasattr(model, "selected_bins"):
+                            direct_estimators[dst_label] = DirectDFTTDOAEstimator(
+                                model.selected_bins.detach().cpu().numpy(),
+                                signal_len=sim.signal_len,
+                                label=dst_label,
+                            )
+
+                baseline_all_results = run_urban_method_comparison(
                     fig6_models, sim, DEVICE, seed=current_seed,
                     snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
                     sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
                     batch_size=BATCH_SIZE, fixed_eval_set=FIXED_EVAL_SET,
                     estimator=LOCALIZATION_ESTIMATOR,
-                    title=f"Fig6_CR{BASELINE_CR}_Traditional_Baselines",
+                    title=f"Baseline_Method_Comparison_CR{BASELINE_CR}",
+                    direct_estimators=direct_estimators,
                 )
-                fig6_results[0]["config"]["baseline_cr"] = BASELINE_CR
-                fig6_results[0]["config"]["traditional_baseline_meta"] = traditional_baseline_meta
-                fig6_results[0]["config"]["fig6_show_zoom_inset"] = FIG6_SHOW_ZOOM_INSET
-                fig6_results[0]["config"]["fig6_zoom_snr_min"] = FIG6_ZOOM_SNR_MIN
                 dft_main = traditional_baseline_meta.get("dft_main_label", "DFT")
                 had_main = traditional_baseline_meta.get("hadamard_main_label", "Hadamard")
-                fig6_results[0]["config"]["main_method_order"] = unique_order([
+                common_config = {
+                    "baseline_cr": BASELINE_CR,
+                    "traditional_baseline_meta": traditional_baseline_meta,
+                    "fig6_show_zoom_inset": FIG6_SHOW_ZOOM_INSET,
+                    "fig6_zoom_snr_min": FIG6_ZOOM_SNR_MIN,
+                }
+                baseline_all_results[0]["config"].update(common_config)
+                baseline_all_results[0]["config"]["task_aware_direct_methods"] = list(direct_estimators.keys())
+
+                fig6_main_order = unique_order([
                     "Raw", f"DAE-CR{BASELINE_CR}", dft_main, had_main, "PCA"
                 ])
-                fig6_results[0]["config"]["supplement_method_order"] = unique_order([
+                fig6_supp_order = unique_order([
                     "Raw", f"DAE-CR{BASELINE_CR}", dft_main, "DFT-Fisher",
                     "DFT-train-band", "DFT-train-power", "DFT-bandlimited",
-                    "DFT-uniform", "DFT-random*", had_main,
+                    "DFT-SCS-lite", "DFT-random*", had_main,
                     "Hadamard-sequency", "Hadamard-block-2",
                     "Hadamard-random*", "PCA"
                 ])
+                fig6_keep = unique_order(["Raw", "Clean", "Geometry"] + list(fig6_models.keys()))
+                fig6_results = filter_method_comparison_data(
+                    baseline_all_results, fig6_keep,
+                    {
+                        **common_config,
+                        "main_method_order": fig6_main_order,
+                        "supplement_method_order": fig6_supp_order,
+                        "main_title": f"Figure 6: Chen-Style Traditional Baselines (CR={BASELINE_CR})",
+                        "supplement_title": f"Figure 6 Supplement: Baseline Sensitivity (CR={BASELINE_CR})",
+                        "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
+                        "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
+                        "table_prefix": "fig6",
+                    },
+                )
+
+                if RUN_TASK_AWARE_BASELINES and direct_estimators:
+                    fig7_order = unique_order([
+                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT-SCS-lite",
+                        "DFT-Fisher", "DFT-SCS-lite-Direct",
+                        "DFT-Fisher-Direct", "DFT-train-power-Direct",
+                        had_main, "PCA"
+                    ])
+                    fig7_keep = unique_order(fig6_keep + list(direct_estimators.keys()))
+                    fig7_results = filter_method_comparison_data(
+                        baseline_all_results, fig7_keep,
+                        {
+                            **common_config,
+                            "taskaware_method_order": fig7_order,
+                            "taskaware_title": f"Figure 7: Task-Aware Baseline Track (CR={BASELINE_CR})",
+                            "taskaware_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}",
+                            "table_prefix": "fig7",
+                        },
+                    )
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
@@ -680,6 +742,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'snr_cr': CR_LIST,
             'mc_results': mc_results,
             'fig6_results': fig6_results,
+            'fig7_results': fig7_results,
+            'baseline_all_results': baseline_all_results,
             'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
                 'n_samples': N_SAMPLES,
@@ -723,6 +787,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'baseline_pca_fixed_snr_db': BASELINE_PCA_FIXED_SNR_DB,
                 'baseline_include_diagnostic_variants': BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
                 'baseline_random_variant_seeds': BASELINE_RANDOM_VARIANT_SEEDS,
+                'run_task_aware_baselines': RUN_TASK_AWARE_BASELINES,
                 'eval_only_copy_models': EVAL_ONLY_COPY_MODELS,
                 'fig6_show_zoom_inset': FIG6_SHOW_ZOOM_INSET,
                 'fig6_zoom_snr_min': FIG6_ZOOM_SNR_MIN,
@@ -763,9 +828,22 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         if fig6_results is not None:
             fig_methods = plot_method_comparison(fig6_results, plot_kind="main")
-            save_figure(fig_methods, f"Fig6_Traditional_Baselines_CR{BASELINE_CR}")
+            fig6_name = fig6_results[0].get("config", {}).get(
+                "main_figure_filename", f"Fig6_Traditional_Baselines_CR{BASELINE_CR}"
+            )
+            save_figure(fig_methods, fig6_name)
             fig_methods_supp = plot_method_comparison(fig6_results, plot_kind="supplement")
-            save_figure(fig_methods_supp, f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}")
+            fig6_supp_name = fig6_results[0].get("config", {}).get(
+                "supplement_figure_filename", f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}"
+            )
+            save_figure(fig_methods_supp, fig6_supp_name)
+
+        if fig7_results is not None:
+            fig_task = plot_method_comparison(fig7_results, plot_kind="taskaware")
+            fig7_name = fig7_results[0].get("config", {}).get(
+                "taskaware_figure_filename", f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}"
+            )
+            save_figure(fig_task, fig7_name)
 
         try:
             from export_results import export as export_result_tables

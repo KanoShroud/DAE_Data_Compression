@@ -325,6 +325,9 @@ def _sample_pca_waveforms(simulator, n_samples, seed=42, source="noisy",
 def _baseline_name(base, mode, main_name):
     mode = str(mode).lower()
     if base == "dft":
+        if mode in ("scs_lite", "spectral_cs_lite", "partial_fourier",
+                    "partial_fourier_uniform", "chen_dft", "uniform"):
+            return "DFT-SCS-lite"
         if mode in ("fisher", "fisher_power", "tdoa_fisher", "rms_band", "rms_power", "high_fi"):
             return "DFT-Fisher"
         if mode in ("train_band", "train_contiguous", "train_power_band", "data_power_band"):
@@ -366,6 +369,10 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
     had_label = _baseline_name("hadamard", hadamard_mode, "Hadamard")
     dft_selected_bins = None
     dft_mode_l = str(dft_mode).lower()
+    dft_model_mode = "uniform" if dft_mode_l in (
+        "scs_lite", "spectral_cs_lite", "partial_fourier",
+        "partial_fourier_uniform", "chen_dft"
+    ) else dft_mode
     if dft_mode_l in ("fisher", "fisher_power", "tdoa_fisher", "rms_band", "rms_power", "high_fi"):
         dft_selected_bins = _fisher_power_bins(
             pca_waveforms, latent_real_dim(signal_len, cr) // 2
@@ -377,7 +384,7 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             pca_waveforms, latent_real_dim(signal_len, cr) // 2
         )
     baselines[dft_label] = DFTCompressionBaseline(
-        signal_len=signal_len, cr=cr, mode=dft_mode, seed=seed + 11,
+        signal_len=signal_len, cr=cr, mode=dft_model_mode, seed=seed + 11,
         selected_bins=dft_selected_bins
     ).to(device)
     baselines[had_label] = HadamardProjectionBaseline(
@@ -385,6 +392,10 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
     ).to(device)
 
     if include_diagnostic_variants:
+        if dft_label != "DFT-SCS-lite":
+            baselines["DFT-SCS-lite"] = DFTCompressionBaseline(
+                signal_len=signal_len, cr=cr, mode="uniform", seed=seed + 27
+            ).to(device)
         if dft_label != "DFT-Fisher":
             selected = _fisher_power_bins(
                 pca_waveforms, latent_real_dim(signal_len, cr) // 2
@@ -410,10 +421,6 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
         if dft_label != "DFT-bandlimited":
             baselines["DFT-bandlimited"] = DFTCompressionBaseline(
                 signal_len=signal_len, cr=cr, mode="center", seed=seed + 31
-            ).to(device)
-        if dft_label != "DFT":
-            baselines["DFT-uniform"] = DFTCompressionBaseline(
-                signal_len=signal_len, cr=cr, mode="uniform", seed=seed + 33
             ).to(device)
         if dft_label != "DFT-random":
             for ridx in range(int(random_variant_seeds)):
@@ -461,7 +468,22 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             else "contiguous_power_band" if dft_mode_l in (
                 "train_band", "train_contiguous", "train_power_band", "data_power_band"
             )
+            else "uniform_partial_fourier_scs_lite" if dft_mode_l in (
+                "scs_lite", "spectral_cs_lite", "partial_fourier",
+                "partial_fourier_uniform", "chen_dft", "uniform"
+            )
             else str(dft_mode)
+        ),
+        "dft_literature_basis": (
+            "Chen Fig.6-style traditional DFT baseline approximated as fixed "
+            "partial-Fourier transform coding under the same real-scalar budget."
+        ),
+        "dft_oracle_level": (
+            "no train-set target oracle for DFT-SCS-lite; train_power/train_band and "
+            "fisher variants are diagnostic or task-aware ablations"
+        ),
+        "dft_fisher_role": (
+            "task-aware ablation; not the strict Chen-style DFT baseline"
         ),
         "dft_fisher_selected_bins": (
             [int(v) for v in dft_selected_bins.tolist()]
