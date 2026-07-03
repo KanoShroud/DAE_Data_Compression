@@ -324,6 +324,126 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
     return errors
 
 
+def _corr_half_width(corr_norm, peak_idx):
+    corr_norm = np.asarray(corr_norm, dtype=float)
+    if corr_norm.size == 0:
+        return float('nan')
+    peak = float(corr_norm[int(peak_idx)])
+    threshold = 0.5 * peak
+    left = int(peak_idx)
+    right = int(peak_idx)
+    while left > 0 and corr_norm[left - 1] >= threshold:
+        left -= 1
+    while right < corr_norm.size - 1 and corr_norm[right + 1] >= threshold:
+        right += 1
+    return float(right - left + 1)
+
+
+def _urban_waveform_diagnostics(batch_np, clean_np, meta, fs, c, gcc_func,
+                                sub_sample=True, use_los_only=True):
+    """
+    Diagnostics for waveform-output Fig.6 methods under the same urban batch.
+
+    The metrics are not used by the localization solver. They explain whether a
+    method fails because of waveform reconstruction, spectral distortion, or GCC
+    peak structure.
+    """
+    batch_np = np.asarray(batch_np, dtype=np.float32)
+    clean_np = np.asarray(clean_np, dtype=np.float32)
+    y = batch_np[:, :, 0, :] + 1j * batch_np[:, :, 1, :]
+    clean = clean_np[:, :, 0, :] + 1j * clean_np[:, :, 1, :]
+    sig_power = float(np.mean(np.abs(clean) ** 2)) + 1e-9
+    complex_nmse = float(np.mean(np.abs(y - clean) ** 2) / sig_power)
+    mag_nmse = float(np.mean((np.abs(y) - np.abs(clean)) ** 2) / sig_power)
+
+    psd_mse = []
+    psd_active_mse = []
+    psd_linear_nmse = []
+    # The system bandwidth is close to the full Nyquist span for Fs=40 MHz; keep
+    # the mask explicit so later bandwidth changes remain auditable.
+    f_ref = None
+    for bi in range(batch_np.shape[0]):
+        for ui in range(batch_np.shape[1]):
+            f_y, p_y = signal.periodogram(y[bi, ui], fs=fs, return_onesided=False,
+                                           scaling='density', detrend=False)
+            _, p_c = signal.periodogram(clean[bi, ui], fs=fs, return_onesided=False,
+                                         scaling='density', detrend=False)
+            if f_ref is None:
+                f_ref = np.fft.fftshift(f_y)
+                band_mask = np.abs(f_ref) <= (fs / 2.0)
+            p_y_db = 10 * np.log10(np.fft.fftshift(p_y) + 1e-30)
+            p_c_db = 10 * np.log10(np.fft.fftshift(p_c) + 1e-30)
+            psd_mse.append(float(np.mean((p_y_db[band_mask] - p_c_db[band_mask]) ** 2)))
+            p_y_shift = np.fft.fftshift(p_y)
+            p_c_shift = np.fft.fftshift(p_c)
+            active = p_c_shift >= (np.max(p_c_shift) * 1e-4)
+            if np.any(active):
+                psd_active_mse.append(float(np.mean((p_y_db[active] - p_c_db[active]) ** 2)))
+            psd_linear_nmse.append(float(
+                np.mean((p_y_shift - p_c_shift) ** 2) / (np.mean(p_c_shift ** 2) + 1e-30)
+            ))
+
+    lags = signal.correlation_lags(batch_np.shape[-1], batch_np.shape[-1], mode='same')
+    abs_tdoa_err = []
+    tdoa_weights = []
+    sidelobe_ratio = []
+    peak_width = []
+    false_peaks = []
+    peak_count = []
+    for bi in range(batch_np.shape[0]):
+        los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
+        los_idx = [int(v) for v in los_idx]
+        for a in range(len(los_idx)):
+            for b in range(a + 1, len(los_idx)):
+                ui, uj = los_idx[a], los_idx[b]
+                sig_i = y[bi, ui]
+                sig_j = y[bi, uj]
+                tau, weight, _, side = _estimate_delay_from_corr(
+                    sig_i, sig_j, lags, gcc_func, sub_sample=sub_sample,
+                    return_quality=True
+                )
+                true_tau = ((meta['distances'][bi, ui] - meta['distances'][bi, uj])
+                            / (c / fs))
+                corr_norm = _norm_abs_corr(gcc_func(sig_i, sig_j))
+                peak_idx = int(np.argmax(corr_norm))
+                peaks, _ = signal.find_peaks(corr_norm, height=0.5)
+                err = float(abs(tau - true_tau))
+                abs_tdoa_err.append(err)
+                tdoa_weights.append(float(weight))
+                sidelobe_ratio.append(float(side))
+                peak_width.append(_corr_half_width(corr_norm, peak_idx))
+                false_peaks.append(float(np.sum(np.abs(lags[peaks] - true_tau) > 2.0)))
+                peak_count.append(float(len(peaks)))
+
+    def _mean(values):
+        values = np.asarray(values, dtype=float)
+        return float(np.mean(values)) if values.size else float('nan')
+
+    err_arr = np.asarray(abs_tdoa_err, dtype=float)
+    weight_arr = np.asarray(tdoa_weights, dtype=float)
+    if err_arr.size and np.sum(weight_arr) > 0:
+        weighted_err = float(np.sum(weight_arr * err_arr) / (np.sum(weight_arr) + 1e-12))
+    else:
+        weighted_err = float('nan')
+
+    return {
+        "complex_nmse": complex_nmse,
+        "mag_nmse": mag_nmse,
+        "psd_db_mse": _mean(psd_mse),
+        "psd_active_db_mse": _mean(psd_active_mse),
+        "psd_linear_nmse": _mean(psd_linear_nmse),
+        "gcc_mean_abs_tdoa_error_samples": _mean(abs_tdoa_err),
+        "gcc_weighted_abs_tdoa_error_samples": weighted_err,
+        "gcc_median_abs_tdoa_error_samples": float(np.median(abs_tdoa_err)) if abs_tdoa_err else float('nan'),
+        "gcc_within_1_sample_rate": float(np.mean(err_arr <= 1.0)) if err_arr.size else float('nan'),
+        "gcc_within_2_sample_rate": float(np.mean(err_arr <= 2.0)) if err_arr.size else float('nan'),
+        "gcc_mean_sidelobe_ratio": _mean(sidelobe_ratio),
+        "gcc_mean_peak_width_samples": _mean(peak_width),
+        "gcc_mean_false_peaks_gt_05": _mean(false_peaks),
+        "gcc_mean_num_peaks_gt_05": _mean(peak_count),
+    }
+
+
 class UrbanLocalizationExperiment:
     """
     论文近似复现评估：8 UAV + oracle LOS 选择 + 多 TDOA 几何定位误差。
@@ -467,6 +587,123 @@ class UrbanLocalizationExperiment:
                 )
 
         return results, self.snr_range
+
+
+def _run_named_models(models_dict, X_noisy, simulator, device, batch_size=64):
+    n_obs, n_uav = X_noisy.shape[:2]
+    flat = X_noisy.reshape(n_obs * n_uav, 2, simulator.signal_len).to(device)
+    outputs = {}
+    for label, model in models_dict.items():
+        model.eval()
+        chunks = []
+        with torch.no_grad():
+            for start in range(0, flat.shape[0], int(batch_size)):
+                y = model(flat[start:start + int(batch_size)])
+                chunks.append(y.detach().cpu())
+        outputs[label] = torch.cat(chunks, dim=0).reshape(
+            n_obs, n_uav, 2, simulator.signal_len
+        ).numpy()
+    return outputs
+
+
+def run_urban_method_comparison(models_dict, simulator, device, seed=None,
+                                snr_range=None, num_trials=200, sub_sample=True,
+                                use_los_only=True, batch_size=64,
+                                fixed_eval_set=True, estimator="all_pair_wls",
+                                gcc_method="standard", title="Fig6"):
+    """
+    Generic urban localization comparison by method name.
+
+    This is used for Chen-2025-style Fig.6 baselines. Every method must output a
+    reconstructed waveform with shape (B, 2, signal_len), so all methods share
+    the same GCC and WLS localization chain.
+    """
+    snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 21, 2))
+    gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
+    method_order = ["Raw", "Clean", "Geometry"] + list(models_dict.keys())
+    results = {
+        "metric": "localization_m",
+        "title": title,
+        "method_order": method_order,
+        "methods": {
+            label: {
+                "rmse": [], "median": [], "trimmed_rmse": [],
+                "p90": [], "p95": [], "max": [],
+                "valid_count": [], "failure_rate": [],
+            }
+            for label in method_order
+        },
+        "method_diagnostics": {label: {} for label in method_order},
+        "config": {
+            "gcc_method": gcc_method,
+            "sub_sample": bool(sub_sample),
+            "use_los_only": bool(use_los_only),
+            "n_uavs": simulator.n_uavs,
+            "area_size": simulator.area_size,
+            "fixed_eval_set": bool(fixed_eval_set),
+            "estimator": estimator,
+            "num_trials": int(num_trials),
+        },
+    }
+
+    print(f"Running {title} method comparison "
+          f"(methods={list(models_dict.keys())}, GCC={gcc_method}, estimator={estimator})...")
+    for snr in snr_range:
+        eval_seed = seed if fixed_eval_set else None
+        X_noisy, X_clean, meta = simulator.generate_urban_batch(
+            int(num_trials), snr_db=float(snr), seed=eval_seed
+        )
+        raw_np = X_noisy.numpy()
+        clean_np = X_clean.numpy()
+
+        base_inputs = {
+            "Geometry": _localization_errors_from_batch(
+                clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
+                sub_sample=sub_sample, use_los_only=use_los_only,
+                estimator=estimator, oracle_geometry=True
+            ),
+            "Raw": _localization_errors_from_batch(
+                raw_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
+                sub_sample=sub_sample, use_los_only=use_los_only,
+                estimator=estimator
+            ),
+            "Clean": _localization_errors_from_batch(
+                clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
+                sub_sample=sub_sample, use_los_only=use_los_only,
+                estimator=estimator
+            ),
+        }
+        model_outputs = _run_named_models(
+            models_dict, X_noisy, simulator, device, batch_size=batch_size
+        )
+        for label, y_np in model_outputs.items():
+            base_inputs[label] = _localization_errors_from_batch(
+                y_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
+                sub_sample=sub_sample, use_los_only=use_los_only,
+                estimator=estimator
+            )
+
+        diagnostic_inputs = {"Raw": raw_np, "Clean": clean_np}
+        diagnostic_inputs.update(model_outputs)
+        for label, y_np in diagnostic_inputs.items():
+            diag = _urban_waveform_diagnostics(
+                y_np, clean_np, meta, simulator.fs, simulator.c, gcc_func,
+                sub_sample=sub_sample, use_los_only=use_los_only
+            )
+            dst_diag = results["method_diagnostics"].setdefault(label, {})
+            for key, value in diag.items():
+                dst_diag.setdefault(key, []).append(value)
+
+        line = [f"SNR={snr:g}dB"]
+        for label in method_order:
+            stats = _summarize_errors(base_inputs[label], int(num_trials))
+            dst = results["methods"][label]
+            for key in dst.keys():
+                dst[key].append(stats[key if key != "rmse" else "rmse"])
+            line.append(f"{label}={stats['rmse']:.2f}m")
+        print("  " + " | ".join(line))
+
+    return results, snr_range
 
 
 class MonteCarloExperiment:
@@ -935,6 +1172,159 @@ def plot_monte_carlo(mc_data, show_ci=False):
         ax.grid(True, alpha=0.5)
 
     fig.suptitle(f'Figure 3: Comparison of {title_prefix} Performance at Different CRs', fontsize=12)
+    return fig
+
+
+def _collect_group_values(methods, prefix, metric_key):
+    labels = [label for label in methods if label.startswith(prefix)]
+    if not labels:
+        return None, []
+    values = [np.asarray(methods[label].get(metric_key, []), dtype=float) for label in labels]
+    values = [v for v in values if v.size > 0]
+    if not values:
+        return None, labels
+    return np.vstack(values), labels
+
+
+def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
+    results, snr_range = method_data
+    methods = results["methods"]
+    config = results.get("config", {})
+    if plot_kind == "supplement":
+        order = config.get("supplement_method_order", results.get("method_order", list(methods.keys())))
+    else:
+        order = config.get("main_method_order", results.get("method_order", list(methods.keys())))
+    metric = results.get("metric", "localization_m")
+    y_label = "Localization RMSE [m]" if metric == "localization_m" else "TDOA RMSE [samples]"
+
+    styles = {
+        "Raw": dict(color="#1f77b4", marker="s", linestyle="-", linewidth=1.5,
+                    label="Original data"),
+        "Clean": dict(color="black", marker=None, linestyle="--", linewidth=1.2,
+                      label="Clean oracle"),
+        "Geometry": dict(color="0.45", marker=None, linestyle=":", linewidth=1.2,
+                         label="Geometry oracle"),
+        "DFT-Fisher": dict(color="#54278f", marker="X", linestyle="-.", linewidth=1.6,
+                           label="DFT Fisher"),
+        "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
+                               label="DFT train-band"),
+        "DFT-train-power": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.5,
+                                label="DFT train-power"),
+        "DFT": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
+                    label="DFT uniform"),
+        "DFT-uniform": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
+                            label="DFT-uniform"),
+        "DFT-bandlimited": dict(color="#8c6bb1", marker="v", linestyle=":", linewidth=1.3,
+                                label="DFT known-band"),
+        "DFT-random": dict(color="#bcbddc", marker="^", linestyle="--", linewidth=1.3,
+                           label="DFT-random mean"),
+        "Hadamard": dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.4,
+                         label="Hadamard Salari"),
+        "Hadamard-random": dict(color="#fdae6b", marker="D", linestyle="--", linewidth=1.3,
+                                label="Hadamard-random mean"),
+        "Hadamard-sequency": dict(color="#e6550d", marker="d", linestyle=":", linewidth=1.3,
+                                  label="Hadamard-sequency"),
+        "Hadamard-block-2": dict(color="#a63603", marker="p", linestyle=(0, (3, 1, 1, 1)),
+                                 linewidth=1.3, label="Hadamard block-2"),
+        "PCA": dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.4,
+                    label="PCA"),
+    }
+
+    baseline_cr = config.get("baseline_cr", 16)
+    if plot_kind == "supplement":
+        fig, ax = plt.subplots(1, 1, figsize=(8.8, 5.0))
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
+    plotted_for_zoom = []
+    for label in order:
+        if isinstance(label, str) and label.endswith("*"):
+            prefix = label[:-1]
+            stack, group_labels = _collect_group_values(methods, prefix, metric_key)
+            if stack is None:
+                continue
+            mean_y = np.nanmean(stack, axis=0)
+            lo_y = np.nanmin(stack, axis=0)
+            hi_y = np.nanmax(stack, axis=0)
+            base_label = prefix[:-1] if prefix.endswith("-") else prefix
+            style = dict(styles.get(base_label, dict(marker="*", linestyle="--",
+                                                     linewidth=1.4, label=base_label)))
+            marker = style.pop("marker", None)
+            color = style.get("color", None)
+            ax.plot(snr_range, mean_y, marker=marker, markersize=5 if marker else 0, **style)
+            plotted_for_zoom.append((mean_y, marker, dict(style)))
+            if stack.shape[0] > 1 and color is not None:
+                ax.fill_between(snr_range, lo_y, hi_y, color=color, alpha=0.16, linewidth=0)
+            continue
+        if label not in methods:
+            continue
+        y = np.asarray(methods[label].get(metric_key, []), dtype=float)
+        if y.size == 0:
+            continue
+        style = dict(styles.get(label, dict(marker="*", linestyle="-", linewidth=1.6, label=label)))
+        if label.startswith("DFT") and label not in styles:
+            style = dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
+                         label=label)
+        elif (label.startswith("Hadamard-offset") or label.startswith("Hadamard-block")) and label not in styles:
+            style = dict(color="#a63603", marker="p", linestyle=(0, (3, 1, 1, 1)),
+                         linewidth=1.3, label=label)
+        elif label.startswith("Hadamard") and label not in styles:
+            style = dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.4,
+                         label=label)
+        elif label.startswith("PCA") and label not in styles:
+            style = dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.4,
+                         label=label)
+        if label.startswith("DAE"):
+            style = dict(color="#d62728", marker="*", linestyle="-", linewidth=1.7,
+                         label=label)
+        marker = style.pop("marker", None)
+        ax.plot(snr_range, y, marker=marker, markersize=5 if marker else 0, **style)
+        plotted_for_zoom.append((y, marker, dict(style)))
+
+    ax.set_xlabel("SNR [dB]", fontsize=12)
+    ax.set_ylabel(y_label, fontsize=12)
+    if plot_kind == "supplement":
+        title = f"Figure 6 Supplement: Baseline Sensitivity (CR={baseline_cr})"
+    else:
+        title = f"Figure 6: Localization Performance with Traditional Baselines (CR={baseline_cr})"
+    ax.set_title(title, fontsize=12)
+    ax.grid(True, alpha=0.45)
+    if plot_kind == "main" and config.get("fig6_show_zoom_inset", True):
+        snr_arr = np.asarray(snr_range, dtype=float)
+        zoom_min = float(config.get("fig6_zoom_snr_min", 8.0))
+        mask = snr_arr >= zoom_min
+        if np.count_nonzero(mask) >= 2 and plotted_for_zoom:
+            y_zoom = []
+            for y, _, _ in plotted_for_zoom:
+                vals = np.asarray(y, dtype=float)[mask]
+                vals = vals[np.isfinite(vals)]
+                if vals.size:
+                    y_zoom.append(vals)
+            if y_zoom:
+                y_all = np.concatenate(y_zoom)
+                y_min, y_max = float(np.min(y_all)), float(np.max(y_all))
+                pad = max((y_max - y_min) * 0.18, 0.5)
+                inset_ax = ax.inset_axes([0.52, 0.47, 0.43, 0.38])
+                for y, marker, style in plotted_for_zoom:
+                    inset_style = dict(style)
+                    inset_style.pop("label", None)
+                    inset_style["linewidth"] = min(float(inset_style.get("linewidth", 1.2)), 1.2)
+                    inset_ax.plot(
+                        snr_arr[mask], np.asarray(y, dtype=float)[mask],
+                        marker=marker, markersize=3.0 if marker else 0,
+                        **inset_style
+                    )
+                inset_ax.set_title(f"SNR >= {zoom_min:g} dB", fontsize=8)
+                inset_ax.set_xlim(float(np.min(snr_arr[mask])), float(np.max(snr_arr[mask])))
+                inset_ax.set_ylim(max(0.0, y_min - pad), y_max + pad)
+                inset_ax.tick_params(axis="both", labelsize=7)
+                inset_ax.grid(True, alpha=0.35)
+                try:
+                    ax.indicate_inset_zoom(inset_ax, edgecolor="0.35", alpha=0.55)
+                except Exception:
+                    pass
+    ax.legend(fontsize=9, ncol=3, framealpha=0.95, loc="upper center",
+              bbox_to_anchor=(0.5, -0.16), borderaxespad=0.0)
+    fig.subplots_adjust(bottom=0.27, left=0.11, right=0.98, top=0.90)
     return fig
 
 

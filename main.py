@@ -15,17 +15,77 @@ from train import train_with_cv
 import pickle
 from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
                       plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
-                      clean_peak_consistency)
+                      clean_peak_consistency, run_urban_method_comparison,
+                      plot_method_comparison)
 from model import DAE
 from signal_gen import SignalSimulator
+from baselines import build_traditional_baselines
 
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-EXPERIMENT_MODE = os.environ.get("DAE_EXPERIMENT_MODE", "paper_repro").lower()
 PAPER_REPRO_MODES = ("paper_repro", "paper_repro_fast_final", "paper_repro_eval_only")
 BASELINE_RESULT_ID = "20260702_000925"
 BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "运行结果", BASELINE_RESULT_ID)
+
+# ===================== 用户常用配置区 =====================
+# 默认直接修改本区变量，然后在 PyCharm 点击运行 main.py。
+# 环境变量覆盖默认关闭，避免外部 shell/PyCharm 配置不一致导致误运行。
+ALLOW_ENV_OVERRIDES = False
+
+# 可选: "paper_repro_eval_only"、"paper_repro"、"paper_repro_fast_final"、"r20_1"
+USER_EXPERIMENT_MODE = "paper_repro_eval_only"
+USER_MODEL_SOURCE_DIR = BASELINE_RESULT_DIR
+
+# 正式实验默认值。若要快速 smoke，可直接改这些普通变量。
+USER_N_SAMPLES = None
+USER_BATCH_SIZE = None
+USER_K_FOLDS = None
+USER_MAX_EPOCHS = None
+USER_MONTE_CARLO_TRIALS = None
+USER_FIG2_DIAGNOSTIC_TRIALS = None
+USER_N_FIXED_CHANNELS = None
+USER_FAST_FINAL_EPOCHS = None
+
+# Fig6 传统 baseline 配置。
+USER_RUN_TRADITIONAL_BASELINES = True
+USER_BASELINE_CR = 16
+USER_BASELINE_DFT_MODE = "fisher_power"  # "fisher_power"、"train_band"、"train_power"、"uniform"、"center"、"random"
+USER_BASELINE_HADAMARD_MODE = "salari"   # "salari"、"random"、"sequency"
+USER_BASELINE_PCA_TRAIN_SOURCE = "noisy" # "noisy"、"clean"、"noisy_fixed"、"clean_fixed"
+USER_BASELINE_PCA_FIXED_SNR_DB = 0.0
+USER_BASELINE_PCA_SAMPLES = None         # None 表示使用 N_SAMPLES
+USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = True
+USER_BASELINE_RANDOM_VARIANT_SEEDS = 5
+USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权重重复复制到新结果目录
+USER_FIG6_SHOW_ZOOM_INSET = True
+USER_FIG6_ZOOM_SNR_MIN = 8.0
+USER_EXPORT_FIG6_SVG_IN_TABLES = False   # False: 避免根目录与 tables/ 重复保存 Fig6 SVG
+USER_NO_SHOW = False                     # True: 只保存图片，不弹出 matplotlib 窗口
+
+
+def _cfg(env_name, user_value, default_value, cast=lambda x: x):
+    if ALLOW_ENV_OVERRIDES and env_name in os.environ:
+        return cast(os.environ[env_name])
+    value = default_value if user_value is None else user_value
+    return cast(value)
+
+
+def _cfg_bool(env_name, user_value, default_value):
+    if ALLOW_ENV_OVERRIDES and env_name in os.environ:
+        return os.environ[env_name] == "1"
+    return bool(default_value if user_value is None else user_value)
+
+
+EXPERIMENT_MODE = _cfg(
+    "DAE_EXPERIMENT_MODE", USER_EXPERIMENT_MODE, "paper_repro_eval_only",
+    lambda x: str(x).lower()
+)
+EXPERIMENT_MODE_SOURCE = (
+    "env:DAE_EXPERIMENT_MODE"
+    if ALLOW_ENV_OVERRIDES and "DAE_EXPERIMENT_MODE" in os.environ
+    else "main.py:USER_EXPERIMENT_MODE"
+)
 CR_LIST = [4, 8, 16]
 FAST_FINAL_EPOCHS_BY_CR = {4: 197, 8: 197, 16: 197}
 BATCH_SIZE = 128
@@ -34,7 +94,7 @@ SEED = 42
 PATIENCE = 10            # 早停耐心值
 WEIGHT_DECAY = 1e-4      # L2 正则化系数
 
-# R20.1 创新轨道配置：保留，必要时用 $env:DAE_EXPERIMENT_MODE='r20_1' 切回。
+# R20.1 创新轨道配置：保留，必要时把 USER_EXPERIMENT_MODE 改为 "r20_1" 切回。
 R20_1_LOSS_CONFIG = {
     4:  {'epsilon_mse': 0.15, 'mse_weight_max': 0.18, 'phase_mix': 0.25, 'lambda_peak': 0.15},
     8:  {'epsilon_mse': 0.08, 'mse_weight_max': 0.10, 'phase_mix': 0.12, 'lambda_peak': 0.20},
@@ -60,7 +120,7 @@ if EXPERIMENT_MODE in PAPER_REPRO_MODES:
     RESAMPLE_TRAIN_EACH_EPOCH = True
     RESAMPLE_INTERVAL = 5
     RUN_TRAINING = True
-    MODEL_SOURCE_DIR = os.environ.get("DAE_MODEL_DIR", BASELINE_RESULT_DIR)
+    MODEL_SOURCE_DIR = _cfg("DAE_MODEL_DIR", USER_MODEL_SOURCE_DIR, BASELINE_RESULT_DIR, str)
     if EXPERIMENT_MODE == "paper_repro_fast_final":
         MAX_EPOCHS = 197
         K_FOLDS = 0
@@ -153,20 +213,67 @@ else:
 SNR_THRESHOLD = 0.0          # sigmoid 中心点 SNR (dB)
 LAMBDA_TEMPERATURE = 5.0     # sigmoid 温度参数
 FIG2_DIAGNOSTIC_TRIALS = 128  # extra samples saved in plot_data.pkl for Fig2 diagnostics
+RUN_TRADITIONAL_BASELINES = (
+    _cfg_bool(
+        "DAE_RUN_TRADITIONAL_BASELINES",
+        USER_RUN_TRADITIONAL_BASELINES,
+        EXPERIMENT_MODE in PAPER_REPRO_MODES
+    )
+)
+BASELINE_CR = _cfg("DAE_BASELINE_CR", USER_BASELINE_CR, 16, int)
+BASELINE_DFT_MODE = _cfg("DAE_BASELINE_DFT_MODE", USER_BASELINE_DFT_MODE, "uniform", str)
+BASELINE_HADAMARD_MODE = _cfg(
+    "DAE_BASELINE_HADAMARD_MODE", USER_BASELINE_HADAMARD_MODE, "salari", str
+)
+BASELINE_PCA_TRAIN_SOURCE = _cfg(
+    "DAE_BASELINE_PCA_TRAIN_SOURCE", USER_BASELINE_PCA_TRAIN_SOURCE, "noisy", str
+)
+BASELINE_PCA_FIXED_SNR_DB = _cfg(
+    "DAE_BASELINE_PCA_FIXED_SNR_DB", USER_BASELINE_PCA_FIXED_SNR_DB, 0.0, float
+)
+BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = _cfg_bool(
+    "DAE_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS",
+    USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
+    False
+)
+BASELINE_RANDOM_VARIANT_SEEDS = _cfg(
+    "DAE_BASELINE_RANDOM_VARIANT_SEEDS", USER_BASELINE_RANDOM_VARIANT_SEEDS, 5, int
+)
+EVAL_ONLY_COPY_MODELS = _cfg_bool(
+    "DAE_EVAL_ONLY_COPY_MODELS", USER_EVAL_ONLY_COPY_MODELS, False
+)
+FIG6_SHOW_ZOOM_INSET = _cfg_bool(
+    "DAE_FIG6_SHOW_ZOOM_INSET", USER_FIG6_SHOW_ZOOM_INSET, True
+)
+FIG6_ZOOM_SNR_MIN = _cfg("DAE_FIG6_ZOOM_SNR_MIN", USER_FIG6_ZOOM_SNR_MIN, 8.0, float)
+EXPORT_FIG6_SVG_IN_TABLES = _cfg_bool(
+    "DAE_EXPORT_FIG6_SVG_IN_TABLES", USER_EXPORT_FIG6_SVG_IN_TABLES, False
+)
 
-# Lightweight smoke-test overrides. Defaults above define the formal experiment.
-N_SAMPLES = int(os.environ.get("DAE_N_SAMPLES", N_SAMPLES))
-BATCH_SIZE = int(os.environ.get("DAE_BATCH_SIZE", BATCH_SIZE))
-K_FOLDS = int(os.environ.get("DAE_K_FOLDS", K_FOLDS))
-MAX_EPOCHS = int(os.environ.get("DAE_MAX_EPOCHS", MAX_EPOCHS))
-MONTE_CARLO_TRIALS = int(os.environ.get("DAE_MONTE_CARLO_TRIALS", MONTE_CARLO_TRIALS))
-FIG2_DIAGNOSTIC_TRIALS = int(os.environ.get("DAE_FIG2_DIAGNOSTIC_TRIALS", FIG2_DIAGNOSTIC_TRIALS))
-N_FIXED_CHANNELS = int(os.environ.get("DAE_N_FIXED_CHANNELS", N_FIXED_CHANNELS))
-if "DAE_FAST_FINAL_EPOCHS" in os.environ:
-    _fast_ep = int(os.environ["DAE_FAST_FINAL_EPOCHS"])
+# Lightweight smoke-test overrides. None means keep the formal mode default.
+N_SAMPLES = _cfg("DAE_N_SAMPLES", USER_N_SAMPLES, N_SAMPLES, int)
+BATCH_SIZE = _cfg("DAE_BATCH_SIZE", USER_BATCH_SIZE, BATCH_SIZE, int)
+K_FOLDS = _cfg("DAE_K_FOLDS", USER_K_FOLDS, K_FOLDS, int)
+MAX_EPOCHS = _cfg("DAE_MAX_EPOCHS", USER_MAX_EPOCHS, MAX_EPOCHS, int)
+MONTE_CARLO_TRIALS = _cfg(
+    "DAE_MONTE_CARLO_TRIALS", USER_MONTE_CARLO_TRIALS, MONTE_CARLO_TRIALS, int
+)
+FIG2_DIAGNOSTIC_TRIALS = _cfg(
+    "DAE_FIG2_DIAGNOSTIC_TRIALS", USER_FIG2_DIAGNOSTIC_TRIALS,
+    FIG2_DIAGNOSTIC_TRIALS, int
+)
+N_FIXED_CHANNELS = _cfg("DAE_N_FIXED_CHANNELS", USER_N_FIXED_CHANNELS, N_FIXED_CHANNELS, int)
+BASELINE_PCA_SAMPLES = _cfg(
+    "DAE_BASELINE_PCA_SAMPLES", USER_BASELINE_PCA_SAMPLES, N_SAMPLES, int
+)
+if USER_FAST_FINAL_EPOCHS is not None or (
+    ALLOW_ENV_OVERRIDES and "DAE_FAST_FINAL_EPOCHS" in os.environ
+):
+    _fast_ep = _cfg("DAE_FAST_FINAL_EPOCHS", USER_FAST_FINAL_EPOCHS, MAX_EPOCHS, int)
     FAST_FINAL_EPOCHS_BY_CR = {cr: _fast_ep for cr in CR_LIST}
     if TRAINING_PROTOCOL == "fixed_epoch_final_only":
         MAX_EPOCHS = _fast_ep
+NO_SHOW = _cfg_bool("DAE_NO_SHOW", USER_NO_SHOW, False)
 
 # 多 seed 评估 —— 用不同 seed 训练模型，验证结果泛化性
 # 设为 [SEED] 则只跑单 seed（快速）；设为 [42, 123, 456] 则跑 3 个 seed
@@ -211,7 +318,9 @@ log_file = open(log_path, 'w', encoding='utf-8')
 sys.stdout = Tee(sys.__stdout__, log_file)
 sys.stderr = Tee(sys.__stderr__, log_file)
 print(f"[Log] {log_path}")
-print(f"[Config] EXPERIMENT_MODE={EXPERIMENT_MODE} | LOSS_MODE={LOSS_MODE}")
+print(f"[Config] EXPERIMENT_MODE={EXPERIMENT_MODE} "
+      f"(source={EXPERIMENT_MODE_SOURCE}) | LOSS_MODE={LOSS_MODE}")
+print(f"[Config] allow_env_overrides={ALLOW_ENV_OVERRIDES} | no_show={NO_SHOW}")
 print(f"[Config] Samples={N_SAMPLES} | K={K_FOLDS} | Epochs={MAX_EPOCHS} | "
       f"TrainSNR={TRAIN_SNR_RANGE} | EvalSNR={list(EVAL_SNR_RANGE)}")
 print(f"[Config] Channel={CHANNEL_MODE} | fixed_channels={N_FIXED_CHANNELS} | "
@@ -226,6 +335,14 @@ print(f"[Config] early_stopping={EARLY_STOPPING} | restore_best={RESTORE_BEST} |
 print(f"[Config] train_resample={RESAMPLE_TRAIN_EACH_EPOCH} | "
       f"resample_interval={RESAMPLE_INTERVAL}")
 print(f"[Config] run_training={RUN_TRAINING} | model_source_dir={MODEL_SOURCE_DIR}")
+print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
+      f"baseline_cr={BASELINE_CR} | pca_samples={BASELINE_PCA_SAMPLES} | "
+      f"dft_mode={BASELINE_DFT_MODE} | hadamard_mode={BASELINE_HADAMARD_MODE} | "
+      f"pca_source={BASELINE_PCA_TRAIN_SOURCE} | "
+      f"diagnostic_variants={BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS} | "
+      f"random_variant_seeds={BASELINE_RANDOM_VARIANT_SEEDS} | "
+      f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
+      f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
 if SCENARIO_MODE == "urban8":
     print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
           f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
@@ -247,6 +364,17 @@ def save_figure(fig, filename_stem):
     filepath = os.path.join(RESULT_DIR, f"{filename_stem}.svg")
     fig.savefig(filepath, format='svg', bbox_inches='tight')
     print(f"[Saved] {filepath}")
+
+
+def unique_order(items):
+    seen = set()
+    ordered = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
 
 # ===================== 主流程 =====================
 
@@ -360,10 +488,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         models_dict[cr] = model
         cv_results_dict[cr] = cv_results
 
-        # 每个CR训练/加载完立即保存模型，保持结果文件结构兼容。
+        # 每个CR训练完立即保存模型；eval_only 默认只引用源模型，避免重复复制权重。
         model_path = os.path.join(RESULT_DIR, f"model_cr{cr}.pt")
-        torch.save(model.state_dict(), model_path)
-        print(f"[Saved] {model_path}")
+        if RUN_TRAINING or EVAL_ONLY_COPY_MODELS:
+            torch.save(model.state_dict(), model_path)
+            print(f"[Saved] {model_path}")
+        else:
+            print(f"[EvalOnly] Skip copying CR={cr} model to result dir "
+                  f"(set USER_EVAL_ONLY_COPY_MODELS=True to copy).")
 
     # 3. Monte Carlo 评估
     print("\n" + "=" * 40)
@@ -493,12 +625,62 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
         )
 
+        fig6_results = None
+        traditional_baseline_meta = None
+        if RUN_TRADITIONAL_BASELINES:
+            if EVALUATION_MODE != "urban_localization":
+                print("[Fig6] Skipped: traditional baseline comparison requires urban localization.")
+            elif BASELINE_CR not in models_dict:
+                print(f"[Fig6] Skipped: DAE model for CR={BASELINE_CR} is unavailable.")
+            else:
+                print("\n" + "=" * 40)
+                print(f"[Fig6] Building traditional baselines at CR={BASELINE_CR}...")
+                traditional_models, traditional_baseline_meta = build_traditional_baselines(
+                    sim, cr=BASELINE_CR, n_pca_samples=BASELINE_PCA_SAMPLES,
+                    seed=current_seed + 6000, device=DEVICE,
+                    dft_mode=BASELINE_DFT_MODE,
+                    hadamard_mode=BASELINE_HADAMARD_MODE,
+                    pca_train_source=BASELINE_PCA_TRAIN_SOURCE,
+                    pca_fixed_snr_db=BASELINE_PCA_FIXED_SNR_DB,
+                    include_diagnostic_variants=BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
+                    random_variant_seeds=BASELINE_RANDOM_VARIANT_SEEDS,
+                )
+                print(f"[Fig6] Baseline feature budget: {traditional_baseline_meta}")
+                fig6_models = dict(traditional_models)
+                fig6_models[f"DAE-CR{BASELINE_CR}"] = models_dict[BASELINE_CR]
+                fig6_results = run_urban_method_comparison(
+                    fig6_models, sim, DEVICE, seed=current_seed,
+                    snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
+                    sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
+                    batch_size=BATCH_SIZE, fixed_eval_set=FIXED_EVAL_SET,
+                    estimator=LOCALIZATION_ESTIMATOR,
+                    title=f"Fig6_CR{BASELINE_CR}_Traditional_Baselines",
+                )
+                fig6_results[0]["config"]["baseline_cr"] = BASELINE_CR
+                fig6_results[0]["config"]["traditional_baseline_meta"] = traditional_baseline_meta
+                fig6_results[0]["config"]["fig6_show_zoom_inset"] = FIG6_SHOW_ZOOM_INSET
+                fig6_results[0]["config"]["fig6_zoom_snr_min"] = FIG6_ZOOM_SNR_MIN
+                dft_main = traditional_baseline_meta.get("dft_main_label", "DFT")
+                had_main = traditional_baseline_meta.get("hadamard_main_label", "Hadamard")
+                fig6_results[0]["config"]["main_method_order"] = unique_order([
+                    "Raw", f"DAE-CR{BASELINE_CR}", dft_main, had_main, "PCA"
+                ])
+                fig6_results[0]["config"]["supplement_method_order"] = unique_order([
+                    "Raw", f"DAE-CR{BASELINE_CR}", dft_main, "DFT-Fisher",
+                    "DFT-train-band", "DFT-train-power", "DFT-bandlimited",
+                    "DFT-uniform", "DFT-random*", had_main,
+                    "Hadamard-sequency", "Hadamard-block-2",
+                    "Hadamard-random*", "PCA"
+                ])
+
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
             'cv_results_dict': cv_results_dict,
             'snr_data': snr_data_all,
             'snr_cr': CR_LIST,
             'mc_results': mc_results,
+            'fig6_results': fig6_results,
+            'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
                 'n_samples': N_SAMPLES,
                 'training_sample_unit': 'single_uav_waveform',
@@ -532,6 +714,19 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'monte_carlo_trials': MONTE_CARLO_TRIALS,
                 'fig2_snr_list': FIG2_SNR_LIST,
                 'fig2_diagnostic_trials': FIG2_DIAGNOSTIC_TRIALS,
+                'run_traditional_baselines': RUN_TRADITIONAL_BASELINES,
+                'baseline_cr': BASELINE_CR,
+                'baseline_pca_samples': BASELINE_PCA_SAMPLES,
+                'baseline_dft_mode': BASELINE_DFT_MODE,
+                'baseline_hadamard_mode': BASELINE_HADAMARD_MODE,
+                'baseline_pca_train_source': BASELINE_PCA_TRAIN_SOURCE,
+                'baseline_pca_fixed_snr_db': BASELINE_PCA_FIXED_SNR_DB,
+                'baseline_include_diagnostic_variants': BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
+                'baseline_random_variant_seeds': BASELINE_RANDOM_VARIANT_SEEDS,
+                'eval_only_copy_models': EVAL_ONLY_COPY_MODELS,
+                'fig6_show_zoom_inset': FIG6_SHOW_ZOOM_INSET,
+                'fig6_zoom_snr_min': FIG6_ZOOM_SNR_MIN,
+                'export_fig6_svg_in_tables': EXPORT_FIG6_SVG_IN_TABLES,
                 'channel_mode': CHANNEL_MODE,
                 'n_fixed_channels': N_FIXED_CHANNELS,
                 'nlos_prob': NLOS_PROB,
@@ -566,6 +761,18 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         fig_mc = plot_monte_carlo(mc_results)
         save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
 
+        if fig6_results is not None:
+            fig_methods = plot_method_comparison(fig6_results, plot_kind="main")
+            save_figure(fig_methods, f"Fig6_Traditional_Baselines_CR{BASELINE_CR}")
+            fig_methods_supp = plot_method_comparison(fig6_results, plot_kind="supplement")
+            save_figure(fig_methods_supp, f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}")
+
+        try:
+            from export_results import export as export_result_tables
+            export_result_tables(RESULT_DIR, export_fig6_figures=EXPORT_FIG6_SVG_IN_TABLES)
+        except Exception as exc:
+            print(f"[Warn] Automatic table export failed: {exc}")
+
 # ===================== 多 seed 汇总 =====================
 if len(SEED_LIST) > 1:
     print(f"\n{'='*60}")
@@ -593,7 +800,7 @@ print(f"时间戳: {TIMESTAMP}")
 print(f"{'='*60}")
 
 # 阻塞等待用户关闭所有图片窗口后退出
-if plt.get_fignums() and os.environ.get("DAE_NO_SHOW", "0") != "1":
+if plt.get_fignums() and not NO_SHOW:
     print("\n所有图片已显示。关闭图片窗口后程序自动退出。")
     plt.show()
 else:

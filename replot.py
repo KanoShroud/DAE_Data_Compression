@@ -1,5 +1,5 @@
 # replot.py
-# 从 plot_data.pkl 读取绘图数据，重新生成三张 SVG 图。
+# 从 plot_data.pkl 读取绘图数据，重新生成 SVG 图。
 #
 # PyCharm 直接运行：修改下方 RESULT_DIR 为实际路径，点击运行即可。
 # 命令行运行：python replot.py "运行结果/20260529_165138"
@@ -11,7 +11,8 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
-from evaluate import plot_snr_comparison, plot_snr_comparison_multi, plot_monte_carlo
+from evaluate import (plot_snr_comparison, plot_snr_comparison_multi,
+                      plot_monte_carlo, plot_method_comparison)
 
 # ========== 在此修改结果目录路径 ==========
 RESULT_DIR = "运行结果/20260601_145854"
@@ -88,6 +89,13 @@ def replot(result_dir):
             print(f"  Diagnostics version: {config['diagnostics_version']}")
         if 'fig2_diagnostic_trials' in config:
             print(f"  Fig2 diagnostic trials: {config['fig2_diagnostic_trials']}")
+        if 'run_traditional_baselines' in config:
+            print(f"  Traditional baselines: {config['run_traditional_baselines']} | "
+                  f"baseline CR: {config.get('baseline_cr', 'N/A')} | "
+                  f"PCA samples: {config.get('baseline_pca_samples', 'N/A')} | "
+                  f"DFT: {config.get('baseline_dft_mode', 'N/A')} | "
+                  f"Hadamard: {config.get('baseline_hadamard_mode', 'N/A')} | "
+                  f"PCA source: {config.get('baseline_pca_train_source', 'N/A')}")
         if 'loss_config' in config:
             print(f"  Loss config: {config['loss_config']}")
         print(f"{'='*60}\n")
@@ -129,6 +137,18 @@ def replot(result_dir):
     # --- Figure 3: Monte Carlo ---
     fig_mc = plot_monte_carlo(mc_results)
     save_figure(fig_mc, os.path.join(result_dir, "Fig3_MonteCarlo_TDOA_RMSE.svg"))
+
+    fig6_results = data.get('fig6_results')
+    if fig6_results is not None:
+        baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig_methods = plot_method_comparison(fig6_results, plot_kind="main")
+        save_figure(fig_methods, os.path.join(
+            result_dir, f"Fig6_Traditional_Baselines_CR{baseline_cr}.svg"
+        ))
+        fig_methods_supp = plot_method_comparison(fig6_results, plot_kind="supplement")
+        save_figure(fig_methods_supp, os.path.join(
+            result_dir, f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}.svg"
+        ))
 
     if plt.get_fignums():
         print("\n所有图片已显示。关闭图片窗口后程序自动退出。")

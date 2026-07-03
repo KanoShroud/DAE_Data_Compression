@@ -7,6 +7,7 @@ Default target is the frozen v3.1 paper reproduction baseline:
 """
 
 import csv
+import argparse
 import os
 import pickle
 import sys
@@ -15,6 +16,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+
+from evaluate import plot_method_comparison
 
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -175,6 +178,123 @@ def export_paper_figures(mc_results, out_dir):
     print(f"[Saved] {path}")
 
 
+def _collect_group_values(methods, prefix, metric_key):
+    labels = [label for label in methods if label.startswith(prefix)]
+    values = []
+    valid_labels = []
+    for label in labels:
+        vals = np.asarray(methods[label].get(metric_key, []), dtype=float)
+        if vals.size:
+            values.append(vals)
+            valid_labels.append(label)
+    if not values:
+        return None, valid_labels
+    return np.vstack(values), valid_labels
+
+
+def export_fig6_group_summary(fig6_results, out_dir):
+    if not fig6_results:
+        return
+    results, snr_range = fig6_results
+    methods = results.get("methods", {})
+    config = results.get("config", {})
+    prefixes = []
+    for label in config.get("supplement_method_order", results.get("method_order", [])):
+        if isinstance(label, str) and label.endswith("*"):
+            prefixes.append(label[:-1])
+    rows = []
+    for prefix in prefixes:
+        stack, labels = _collect_group_values(methods, prefix, "rmse")
+        if stack is None:
+            continue
+        group_name = prefix[:-1] if prefix.endswith("-") else prefix
+        for i, snr in enumerate(snr_range):
+            vals = stack[:, i]
+            rows.append({
+                "SNR_dB": float(snr),
+                "group": group_name,
+                "n_members": len(labels),
+                "rmse_mean": float(np.nanmean(vals)),
+                "rmse_std": float(np.nanstd(vals)),
+                "rmse_min": float(np.nanmin(vals)),
+                "rmse_max": float(np.nanmax(vals)),
+                "members": ";".join(labels),
+            })
+    if rows:
+        fields = ["SNR_dB", "group", "n_members", "rmse_mean", "rmse_std",
+                  "rmse_min", "rmse_max", "members"]
+        write_csv(os.path.join(out_dir, "fig6_random_group_summary.csv"), rows, fields)
+        write_markdown_table(os.path.join(out_dir, "fig6_random_group_summary.md"), rows, fields)
+
+
+def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
+    if not fig6_results:
+        print("[Skip] No fig6_results found in plot_data.pkl")
+        return
+    results, snr_range = fig6_results
+    methods = results.get("methods", {})
+    order = results.get("method_order", list(methods.keys()))
+    rows = []
+    for i, snr in enumerate(snr_range):
+        row = {"SNR_dB": float(snr)}
+        for label in order:
+            if label in methods:
+                row[f"{label}_mean_rmse_m"] = methods[label]["rmse"][i]
+                row[f"{label}_median_rmse_m"] = methods[label]["median"][i]
+                row[f"{label}_trimmed_rmse_m"] = methods[label]["trimmed_rmse"][i]
+        rows.append(row)
+    fields = ["SNR_dB"]
+    for label in order:
+        fields.extend([f"{label}_mean_rmse_m",
+                       f"{label}_median_rmse_m",
+                       f"{label}_trimmed_rmse_m"])
+    write_csv(os.path.join(out_dir, "fig6_traditional_baselines.csv"), rows, fields)
+    write_markdown_table(os.path.join(out_dir, "fig6_traditional_baselines.md"), rows, fields)
+
+    diagnostics = results.get("method_diagnostics", {})
+    diag_rows = []
+    diag_keys = []
+    for label in order:
+        method_diag = diagnostics.get(label, {})
+        for key in method_diag.keys():
+            if key not in diag_keys:
+                diag_keys.append(key)
+    for i, snr in enumerate(snr_range):
+        for label in order:
+            method_diag = diagnostics.get(label, {})
+            if not method_diag:
+                continue
+            row = {"SNR_dB": float(snr), "method": label}
+            for key in diag_keys:
+                vals = method_diag.get(key, [])
+                row[key] = vals[i] if i < len(vals) else ""
+            diag_rows.append(row)
+    if diag_rows:
+        diag_fields = ["SNR_dB", "method"] + diag_keys
+        write_csv(os.path.join(out_dir, "fig6_method_diagnostics.csv"),
+                  diag_rows, diag_fields)
+        write_markdown_table(os.path.join(out_dir, "fig6_method_diagnostics.md"),
+                             diag_rows, diag_fields)
+
+    export_fig6_group_summary(fig6_results, out_dir)
+
+    if export_figures:
+        fig = plot_method_comparison(fig6_results, plot_kind="main")
+        baseline_cr = results.get("config", {}).get("baseline_cr", 16)
+        path = os.path.join(out_dir, f"Fig6_Traditional_Baselines_CR{baseline_cr}.svg")
+        fig.savefig(path, format="svg", bbox_inches="tight")
+        plt.close(fig)
+        print(f"[Saved] {path}")
+
+        fig = plot_method_comparison(fig6_results, plot_kind="supplement")
+        path = os.path.join(out_dir, f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}.svg")
+        fig.savefig(path, format="svg", bbox_inches="tight")
+        plt.close(fig)
+        print(f"[Saved] {path}")
+    else:
+        print("[Skip] Fig6 SVG export to tables/ disabled; root result folder already contains Fig6 SVG.")
+
+
 def export_summary_md(data, result_dir, out_dir):
     config = data.get("config", {})
     results, _ = data["mc_results"]
@@ -199,6 +319,16 @@ def export_summary_md(data, result_dir, out_dir):
         f.write(f"- Normalization: `{config.get('normalization_mode')}`\n")
         f.write(f"- Resampling: `{config.get('resample_train_each_epoch')}`, "
                 f"interval `{config.get('resample_interval')}`\n\n")
+        if data.get("fig6_results") is not None:
+            meta = data.get("traditional_baseline_meta", {})
+            f.write("- Fig6 traditional baselines: available; "
+                    f"CR `{meta.get('baseline_cr', config.get('baseline_cr'))}`, "
+                    f"DFT `{meta.get('dft_mode', config.get('baseline_dft_mode'))}`, "
+                    f"DFT selection `{meta.get('dft_train_selection_kind', 'N/A')}`, "
+                    f"Hadamard `{meta.get('hadamard_mode', config.get('baseline_hadamard_mode'))}`, "
+                    f"Hadamard rule `{meta.get('hadamard_row_rule', 'N/A')}`, "
+                    f"PCA source `{meta.get('pca_training_source', config.get('baseline_pca_train_source'))}`, "
+                    f"PCA samples `{meta.get('pca_training_samples', config.get('baseline_pca_samples'))}`\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")
@@ -208,10 +338,12 @@ def export_summary_md(data, result_dir, out_dir):
         f.write("- Geometry oracle checks the WLS geometry/sign lower bound.\n")
         f.write("- Clean oracle checks the clean waveform GCC + WLS upper bound under finite bandwidth.\n")
         f.write("- Mean RMSE is the main metric; median and trimmed RMSE diagnose outlier sensitivity.\n")
+        f.write("- DFT-Fisher selects DFT bins by average spectral power weighted by squared frequency, "
+                "a practical RMS-bandwidth/Fisher-information proxy for TDOA.\n")
     print(f"[Saved] {path}")
 
 
-def export(result_dir):
+def export(result_dir, export_fig6_figures=True):
     pkl_path = os.path.join(result_dir, "plot_data.pkl")
     if not os.path.exists(pkl_path):
         raise FileNotFoundError(pkl_path)
@@ -223,9 +355,20 @@ def export(result_dir):
     export_rmse_tables(data["mc_results"], out_dir)
     export_fig2_diagnostics(data["snr_data"], out_dir)
     export_paper_figures(data["mc_results"], out_dir)
+    export_fig6_baselines(data.get("fig6_results"), out_dir,
+                          export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)
     print("[Done] Export complete.")
 
 
 if __name__ == "__main__":
-    export(sys.argv[1] if len(sys.argv) >= 2 else DEFAULT_RESULT_DIR)
+    parser = argparse.ArgumentParser(description="Export paper tables/figures from plot_data.pkl")
+    parser.add_argument("result_dir", nargs="?", default=None,
+                        help="Result directory containing plot_data.pkl")
+    parser.add_argument("--result-dir", dest="result_dir_flag", default=None,
+                        help="Result directory containing plot_data.pkl")
+    parser.add_argument("--no-fig6-svg", action="store_true",
+                        help="Do not write duplicate Fig6 SVG files into tables/")
+    args = parser.parse_args()
+    export(args.result_dir_flag or args.result_dir or DEFAULT_RESULT_DIR,
+           export_fig6_figures=not args.no_fig6_svg)
