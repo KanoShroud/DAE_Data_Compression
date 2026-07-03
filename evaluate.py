@@ -136,12 +136,24 @@ def _bootstrap_rmse_ci(se_values, rng, n_boot=200):
     return [float(np.percentile(rmse, 2.5)), float(np.percentile(rmse, 97.5))]
 
 
+def _lag_search_mask(lags, tdoa_lag_limit_samples=None):
+    if tdoa_lag_limit_samples is None:
+        return np.ones_like(lags, dtype=bool)
+    return np.abs(np.asarray(lags, dtype=float)) <= float(tdoa_lag_limit_samples)
+
+
 def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True,
-                              return_quality=False):
+                              return_quality=False, tdoa_lag_limit_samples=None):
     corr = np.abs(gcc_func(sig_i, sig_ref))
-    idx = int(np.argmax(corr))
+    search_mask = _lag_search_mask(lags, tdoa_lag_limit_samples)
+    search_idx = np.where(search_mask)[0]
+    if search_idx.size == 0:
+        search_idx = np.arange(len(corr))
+        search_mask = np.ones_like(corr, dtype=bool)
+    idx = int(search_idx[np.argmax(corr[search_idx])])
     lag = float(lags[idx])
-    if sub_sample and 0 < idx < len(corr) - 1:
+    if (sub_sample and 0 < idx < len(corr) - 1
+            and search_mask[idx - 1] and search_mask[idx + 1]):
         y0, y1, y2 = corr[idx - 1], corr[idx], corr[idx + 1]
         denom = y0 - 2.0 * y1 + y2
         if abs(denom) > 1e-12:
@@ -151,7 +163,7 @@ def _estimate_delay_from_corr(sig_i, sig_ref, lags, gcc_func, sub_sample=True,
         return lag
 
     peak = float(corr[idx])
-    mask = np.ones_like(corr, dtype=bool)
+    mask = search_mask.copy()
     lo = max(0, idx - 2)
     hi = min(len(corr), idx + 3)
     mask[lo:hi] = False
@@ -277,7 +289,8 @@ def _summarize_errors(errors, requested_count):
 
 def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
                                     sub_sample=True, use_los_only=True,
-                                    estimator="all_pair_wls", oracle_geometry=False):
+                                    estimator="all_pair_wls", oracle_geometry=False,
+                                    tdoa_lag_limit_samples=None):
     errors = []
     failures = 0
     for bi in range(batch_np.shape[0]):
@@ -299,7 +312,8 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
                     sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
                     tau, weight, _, _ = _estimate_delay_from_corr(
                         sig_i, sig_j, lags, gcc_func, sub_sample=sub_sample,
-                        return_quality=True
+                        return_quality=True,
+                        tdoa_lag_limit_samples=tdoa_lag_limit_samples
                     )
                 pair_measurements.append((ui, uj, tau, weight))
 
@@ -312,7 +326,8 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
                     continue
                 sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                 tdoa[ui] = _estimate_delay_from_corr(sig_i, ref_sig, lags, gcc_func,
-                                                      sub_sample=sub_sample)
+                                                      sub_sample=sub_sample,
+                                                      tdoa_lag_limit_samples=tdoa_lag_limit_samples)
             est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
         else:
             est, _ = _localize_from_tdoa_pairs(meta['uavs'][bi], pair_measurements,
@@ -327,7 +342,8 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
 def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
                                                direct_estimator, sub_sample=True,
                                                use_los_only=True,
-                                               estimator="all_pair_wls"):
+                                               estimator="all_pair_wls",
+                                               tdoa_lag_limit_samples=None):
     errors = []
     for bi in range(batch_np.shape[0]):
         los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
@@ -344,7 +360,8 @@ def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
                     continue
                 sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                 tdoa[ui] = direct_estimator.estimate_pair(
-                    sig_i, ref_sig, sub_sample=sub_sample, return_quality=False
+                    sig_i, ref_sig, sub_sample=sub_sample, return_quality=False,
+                    lag_limit_samples=tdoa_lag_limit_samples
                 )
             est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
         else:
@@ -355,7 +372,8 @@ def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
                     sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                     sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
                     tau, weight, _, _ = direct_estimator.estimate_pair(
-                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True
+                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True,
+                        lag_limit_samples=tdoa_lag_limit_samples
                     )
                     pair_measurements.append((ui, uj, tau, weight))
             est, _ = _localize_from_tdoa_pairs(
@@ -383,7 +401,8 @@ def _corr_half_width(corr_norm, peak_idx):
 
 
 def _urban_waveform_diagnostics(batch_np, clean_np, meta, fs, c, gcc_func,
-                                sub_sample=True, use_los_only=True):
+                                sub_sample=True, use_los_only=True,
+                                tdoa_lag_limit_samples=None):
     """
     Diagnostics for waveform-output Fig.6 methods under the same urban batch.
 
@@ -427,6 +446,7 @@ def _urban_waveform_diagnostics(batch_np, clean_np, meta, fs, c, gcc_func,
             ))
 
     lags = signal.correlation_lags(batch_np.shape[-1], batch_np.shape[-1], mode='same')
+    lag_mask = _lag_search_mask(lags, tdoa_lag_limit_samples)
     abs_tdoa_err = []
     tdoa_weights = []
     sidelobe_ratio = []
@@ -443,13 +463,18 @@ def _urban_waveform_diagnostics(batch_np, clean_np, meta, fs, c, gcc_func,
                 sig_j = y[bi, uj]
                 tau, weight, _, side = _estimate_delay_from_corr(
                     sig_i, sig_j, lags, gcc_func, sub_sample=sub_sample,
-                    return_quality=True
+                    return_quality=True,
+                    tdoa_lag_limit_samples=tdoa_lag_limit_samples
                 )
                 true_tau = ((meta['distances'][bi, ui] - meta['distances'][bi, uj])
                             / (c / fs))
-                corr_norm = _norm_abs_corr(gcc_func(sig_i, sig_j))
-                peak_idx = int(np.argmax(corr_norm))
+                corr_abs = np.abs(gcc_func(sig_i, sig_j))
+                gated_peak = np.max(corr_abs[lag_mask]) if np.any(lag_mask) else np.max(corr_abs)
+                corr_norm = corr_abs / (gated_peak + 1e-9)
+                search_idx = np.where(lag_mask)[0] if np.any(lag_mask) else np.arange(len(lags))
+                peak_idx = int(search_idx[np.argmax(corr_norm[search_idx])])
                 peaks, _ = signal.find_peaks(corr_norm, height=0.5)
+                peaks = peaks[lag_mask[peaks]]
                 err = float(abs(tau - true_tau))
                 abs_tdoa_err.append(err)
                 tdoa_weights.append(float(weight))
@@ -484,6 +509,9 @@ def _urban_waveform_diagnostics(batch_np, clean_np, meta, fs, c, gcc_func,
         "gcc_mean_peak_width_samples": _mean(peak_width),
         "gcc_mean_false_peaks_gt_05": _mean(false_peaks),
         "gcc_mean_num_peaks_gt_05": _mean(peak_count),
+        "gcc_lag_limit_samples": (
+            float(tdoa_lag_limit_samples) if tdoa_lag_limit_samples is not None else float('nan')
+        ),
     }
 
 
@@ -654,13 +682,17 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
                                 use_los_only=True, batch_size=64,
                                 fixed_eval_set=True, estimator="all_pair_wls",
                                 gcc_method="standard", title="Fig6",
-                                direct_estimators=None):
+                                direct_estimators=None,
+                                tdoa_lag_limit_samples=None):
     """
     Generic urban localization comparison by method name.
 
-    This is used for Chen-2025-style Fig.6 baselines. Every method must output a
-    reconstructed waveform with shape (B, 2, signal_len), so all methods share
-    the same GCC and WLS localization chain.
+    This is used for Chen-2025-style Fig.6 baselines and task-aware comparison
+    tracks. Waveform methods output shape (B, 2, signal_len) and share the same
+    GCC + WLS localization chain. Direct estimators are allowed only when the
+    source method estimates TDOA from compressed coefficients by design; they
+    return pairwise delays and then use the same all-pair WLS localization
+    solver as the waveform methods.
     """
     snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 21, 2))
     gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
@@ -688,13 +720,18 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             "fixed_eval_set": bool(fixed_eval_set),
             "estimator": estimator,
             "num_trials": int(num_trials),
+            "tdoa_lag_limit_samples": (
+                float(tdoa_lag_limit_samples)
+                if tdoa_lag_limit_samples is not None else None
+            ),
         },
     }
 
     print(f"Running {title} method comparison "
           f"(waveform_methods={list(models_dict.keys())}, "
           f"direct_methods={list(direct_estimators.keys())}, "
-          f"GCC={gcc_method}, estimator={estimator})...")
+          f"GCC={gcc_method}, estimator={estimator}, "
+          f"lag_limit={tdoa_lag_limit_samples})...")
     for snr in snr_range:
         eval_seed = seed if fixed_eval_set else None
         X_noisy, X_clean, meta = simulator.generate_urban_batch(
@@ -707,17 +744,20 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             "Geometry": _localization_errors_from_batch(
                 clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
-                estimator=estimator, oracle_geometry=True
+                estimator=estimator, oracle_geometry=True,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             ),
             "Raw": _localization_errors_from_batch(
                 raw_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
-                estimator=estimator
+                estimator=estimator,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             ),
             "Clean": _localization_errors_from_batch(
                 clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
-                estimator=estimator
+                estimator=estimator,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             ),
         }
         model_outputs = _run_named_models(
@@ -727,13 +767,15 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             base_inputs[label] = _localization_errors_from_batch(
                 y_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
-                estimator=estimator
+                estimator=estimator,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             )
         for label, direct_estimator in direct_estimators.items():
             base_inputs[label] = _localization_errors_from_direct_estimator(
                 raw_np, meta, simulator.fs, simulator.c, simulator.area_size,
                 direct_estimator, sub_sample=sub_sample, use_los_only=use_los_only,
-                estimator=estimator
+                estimator=estimator,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             )
 
         diagnostic_inputs = {"Raw": raw_np, "Clean": clean_np}
@@ -741,7 +783,8 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
         for label, y_np in diagnostic_inputs.items():
             diag = _urban_waveform_diagnostics(
                 y_np, clean_np, meta, simulator.fs, simulator.c, gcc_func,
-                sub_sample=sub_sample, use_los_only=use_los_only
+                sub_sample=sub_sample, use_los_only=use_los_only,
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples
             )
             dst_diag = results["method_diagnostics"].setdefault(label, {})
             for key, value in diag.items():
@@ -750,7 +793,8 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             if hasattr(direct_estimator, "diagnostics"):
                 diag = direct_estimator.diagnostics(
                     raw_np, meta, simulator.fs, simulator.c,
-                    use_los_only=use_los_only, sub_sample=sub_sample
+                    use_los_only=use_los_only, sub_sample=sub_sample,
+                    lag_limit_samples=tdoa_lag_limit_samples
                 )
                 dst_diag = results["method_diagnostics"].setdefault(label, {})
                 for key, value in diag.items():
@@ -1270,11 +1314,15 @@ def _collect_group_values(methods, prefix, metric_key):
     return np.vstack(values), labels
 
 
-def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
+def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
+                           snr_min=None, snr_max=None, method_order=None,
+                           title_suffix=None):
     results, snr_range = method_data
     methods = results["methods"]
     config = results.get("config", {})
-    if plot_kind == "taskaware":
+    if method_order is not None:
+        order = method_order
+    elif plot_kind == "taskaware":
         order = config.get("taskaware_method_order", results.get("method_order", list(methods.keys())))
     elif plot_kind == "supplement":
         order = config.get("supplement_method_order", results.get("method_order", list(methods.keys())))
@@ -1282,6 +1330,15 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
         order = config.get("main_method_order", results.get("method_order", list(methods.keys())))
     metric = results.get("metric", "localization_m")
     y_label = "Localization RMSE [m]" if metric == "localization_m" else "TDOA RMSE [samples]"
+    snr_all = np.asarray(snr_range, dtype=float)
+    range_mask = np.ones_like(snr_all, dtype=bool)
+    if snr_min is not None:
+        range_mask &= snr_all >= float(snr_min)
+    if snr_max is not None:
+        range_mask &= snr_all <= float(snr_max)
+    if np.count_nonzero(range_mask) == 0:
+        range_mask = np.ones_like(snr_all, dtype=bool)
+    snr_plot = snr_all[range_mask]
 
     styles = {
         "Raw": dict(color="#1f77b4", marker="s", linestyle="-", linewidth=1.5,
@@ -1290,22 +1347,22 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
                       label="Clean oracle"),
         "Geometry": dict(color="0.45", marker=None, linestyle=":", linewidth=1.2,
                          label="Geometry oracle"),
-        "DFT-Fisher": dict(color="#54278f", marker="X", linestyle="-.", linewidth=1.6,
-                           label="DFT Fisher"),
-        "DFT-SCS-lite": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.5,
-                             label="DFT SCS-lite"),
+        "DFT-Fisher": dict(color="#8c2d04", marker="X", linestyle=":", linewidth=1.5,
+                           label="DFT Fisher recon"),
+        "DFT-SCS-lite": dict(color="#bcbddc", marker="v", linestyle="--", linewidth=1.5,
+                             label="DFT recon"),
         "DFT-SCS-lite-Direct": dict(color="#756bb1", marker=">", linestyle="-", linewidth=1.6,
                                     label="DFT SCS-lite direct"),
-        "DFT-Fisher-Direct": dict(color="#54278f", marker="X", linestyle="-", linewidth=1.7,
+        "DFT-Fisher-Direct": dict(color="#762a83", marker="X", linestyle="-", linewidth=1.7,
                                   label="DFT Fisher direct"),
-        "DFT-train-power-Direct": dict(color="#9e9ac8", marker=">", linestyle="--", linewidth=1.4,
+        "DFT-train-power-Direct": dict(color="#01665e", marker="P", linestyle="-", linewidth=1.8,
                                        label="DFT train-power direct"),
         "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
                                label="DFT train-band"),
-        "DFT-train-power": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.5,
+        "DFT-train-power": dict(color="#80cdc1", marker="D", linestyle="--", linewidth=1.4,
                                 label="DFT train-power"),
-        "DFT": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
-                    label="DFT uniform"),
+        "DFT": dict(color="#4b0082", marker="^", linestyle="-", linewidth=1.9,
+                    label="DFT direct"),
         "DFT-uniform": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
                             label="DFT-uniform"),
         "DFT-bandlimited": dict(color="#8c6bb1", marker="v", linestyle=":", linewidth=1.3,
@@ -1346,10 +1403,12 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
                                                      linewidth=1.4, label=base_label)))
             marker = style.pop("marker", None)
             color = style.get("color", None)
-            ax.plot(snr_range, mean_y, marker=marker, markersize=5 if marker else 0, **style)
+            ax.plot(snr_plot, mean_y[range_mask], marker=marker,
+                    markersize=5 if marker else 0, **style)
             plotted_for_zoom.append((mean_y, marker, dict(style)))
             if stack.shape[0] > 1 and color is not None:
-                ax.fill_between(snr_range, lo_y, hi_y, color=color, alpha=0.16, linewidth=0)
+                ax.fill_between(snr_plot, lo_y[range_mask], hi_y[range_mask],
+                                color=color, alpha=0.16, linewidth=0)
             continue
         if label not in methods:
             continue
@@ -1373,7 +1432,8 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
             style = dict(color="#d62728", marker="*", linestyle="-", linewidth=1.7,
                          label=label)
         marker = style.pop("marker", None)
-        ax.plot(snr_range, y, marker=marker, markersize=5 if marker else 0, **style)
+        ax.plot(snr_plot, y[range_mask], marker=marker,
+                markersize=5 if marker else 0, **style)
         plotted_for_zoom.append((y, marker, dict(style)))
 
     ax.set_xlabel("SNR [dB]", fontsize=12)
@@ -1393,10 +1453,20 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main"):
             "main_title",
             f"Figure 6: Localization Performance with Traditional Baselines (CR={baseline_cr})"
         )
+    if title_suffix is None:
+        if snr_min is not None and snr_max is not None:
+            title_suffix = f"{float(snr_min):g} to {float(snr_max):g} dB"
+        elif snr_min is not None:
+            title_suffix = f"SNR >= {float(snr_min):g} dB"
+        elif snr_max is not None:
+            title_suffix = f"SNR <= {float(snr_max):g} dB"
+    if title_suffix:
+        title = f"{title} ({title_suffix})"
     ax.set_title(title, fontsize=12)
     ax.grid(True, alpha=0.45)
-    if plot_kind == "main" and config.get("fig6_show_zoom_inset", True):
-        snr_arr = np.asarray(snr_range, dtype=float)
+    if (plot_kind == "main" and config.get("fig6_show_zoom_inset", True)
+            and snr_min is None and snr_max is None):
+        snr_arr = snr_all
         zoom_min = float(config.get("fig6_zoom_snr_min", 8.0))
         mask = snr_arr >= zoom_min
         if np.count_nonzero(mask) >= 2 and plotted_for_zoom:

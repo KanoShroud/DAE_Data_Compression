@@ -150,6 +150,28 @@ def replot(result_dir):
         save_figure(fig_methods_supp, os.path.join(
             result_dir, f"{fig6_config.get('supplement_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}')}.svg"
         ))
+        if fig6_config.get('export_method_zoom_figures', True):
+            zoom_order = fig6_config.get('supplement_zoom_method_order')
+            fig_methods_low = plot_method_comparison(
+                fig6_results, plot_kind="supplement",
+                snr_max=fig6_config.get('method_zoom_low_snr_max', 0.0),
+                method_order=zoom_order,
+                title_suffix="Low-SNR Zoom",
+            )
+            save_figure(fig_methods_low, os.path.join(
+                result_dir,
+                f"{fig6_config.get('supplement_low_zoom_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_LowSNR_Zoom')}.svg"
+            ))
+            fig_methods_high = plot_method_comparison(
+                fig6_results, plot_kind="supplement",
+                snr_min=fig6_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+                title_suffix="High-SNR Zoom",
+            )
+            save_figure(fig_methods_high, os.path.join(
+                result_dir,
+                f"{fig6_config.get('supplement_high_zoom_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_HighSNR_Zoom')}.svg"
+            ))
 
     fig7_results = data.get('fig7_results')
     if fig7_results is not None:
@@ -159,6 +181,28 @@ def replot(result_dir):
         save_figure(fig_task, os.path.join(
             result_dir, f"{fig7_config.get('taskaware_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}')}.svg"
         ))
+        if fig7_config.get('export_method_zoom_figures', True):
+            zoom_order = fig7_config.get('taskaware_zoom_method_order')
+            fig_task_low = plot_method_comparison(
+                fig7_results, plot_kind="taskaware",
+                snr_max=fig7_config.get('method_zoom_low_snr_max', 0.0),
+                method_order=zoom_order,
+                title_suffix="Low-SNR Zoom",
+            )
+            save_figure(fig_task_low, os.path.join(
+                result_dir,
+                f"{fig7_config.get('taskaware_low_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_LowSNR_Zoom')}.svg"
+            ))
+            fig_task_high = plot_method_comparison(
+                fig7_results, plot_kind="taskaware",
+                snr_min=fig7_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+                title_suffix="High-SNR Zoom",
+            )
+            save_figure(fig_task_high, os.path.join(
+                result_dir,
+                f"{fig7_config.get('taskaware_high_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_HighSNR_Zoom')}.svg"
+            ))
 
     if plt.get_fignums():
         print("\n所有图片已显示。关闭图片窗口后程序自动退出。")

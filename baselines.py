@@ -475,12 +475,19 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             else str(dft_mode)
         ),
         "dft_literature_basis": (
-            "Chen Fig.6-style traditional DFT baseline approximated as fixed "
-            "partial-Fourier transform coding under the same real-scalar budget."
+            "Chen Fig.6-style traditional DFT baseline is treated as fixed "
+            "partial-Fourier transform coding under the same real-scalar budget. "
+            "The main Fig6 curve estimates TDOA from selected-bin cross-spectra "
+            "rather than zero-filled individual waveform reconstruction unless a "
+            "source paper explicitly requires waveform reconstruction."
         ),
         "dft_oracle_level": (
             "no train-set target oracle for DFT-SCS-lite; train_power/train_band and "
             "fisher variants are diagnostic or task-aware ablations"
+        ),
+        "dft_waveform_reconstruction_role": (
+            "supplement/diagnostic only; zero-filled IDFT of individual waveforms is "
+            "not used as the strict Chen Fig6 DFT main curve"
         ),
         "dft_fisher_role": (
             "task-aware ablation; not the strict Chen-style DFT baseline"

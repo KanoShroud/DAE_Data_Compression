@@ -288,11 +288,46 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
         baseline_cr = config.get("baseline_cr", 16)
         if figure_kinds is None:
             figure_kinds = [
-                ("main", config.get("main_figure_filename", f"Fig6_Traditional_Baselines_CR{baseline_cr}")),
-                ("supplement", config.get("supplement_figure_filename", f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}")),
+                {"plot_kind": "main",
+                 "filename": config.get("main_figure_filename", f"Fig6_Traditional_Baselines_CR{baseline_cr}")},
+                {"plot_kind": "supplement",
+                 "filename": config.get("supplement_figure_filename",
+                                        f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}")},
             ]
-        for plot_kind, filename_stem in figure_kinds:
-            fig = plot_method_comparison(method_results, plot_kind=plot_kind)
+            if config.get("export_method_zoom_figures", True):
+                zoom_order = config.get("supplement_zoom_method_order")
+                figure_kinds.extend([
+                    {"plot_kind": "supplement",
+                     "filename": config.get(
+                         "supplement_low_zoom_figure_filename",
+                         f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_LowSNR_Zoom"),
+                     "snr_max": config.get("method_zoom_low_snr_max", 0.0),
+                     "method_order": zoom_order,
+                     "title_suffix": "Low-SNR Zoom"},
+                    {"plot_kind": "supplement",
+                     "filename": config.get(
+                         "supplement_high_zoom_figure_filename",
+                         f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_HighSNR_Zoom"),
+                     "snr_min": config.get("method_zoom_high_snr_min", 8.0),
+                     "method_order": zoom_order,
+                     "title_suffix": "High-SNR Zoom"},
+                ])
+        for spec in figure_kinds:
+            if isinstance(spec, dict):
+                plot_kind = spec.get("plot_kind", "main")
+                filename_stem = spec.get("filename", plot_kind)
+                snr_min = spec.get("snr_min")
+                snr_max = spec.get("snr_max")
+                method_order = spec.get("method_order")
+                title_suffix = spec.get("title_suffix")
+            else:
+                plot_kind, filename_stem = spec
+                snr_min = snr_max = method_order = title_suffix = None
+            fig = plot_method_comparison(
+                method_results, plot_kind=plot_kind,
+                snr_min=snr_min, snr_max=snr_max,
+                method_order=method_order, title_suffix=title_suffix,
+            )
             path = os.path.join(out_dir, f"{filename_stem}.svg")
             fig.savefig(path, format="svg", bbox_inches="tight")
             plt.close(fig)
@@ -315,12 +350,33 @@ def export_fig7_baselines(fig7_results, out_dir, export_figures=True):
     results, _ = fig7_results
     config = results.get("config", {})
     baseline_cr = config.get("baseline_cr", 16)
+    figure_kinds = [
+        {"plot_kind": "taskaware",
+         "filename": config.get("taskaware_figure_filename",
+                                f"Fig7_TaskAware_Baselines_CR{baseline_cr}")},
+    ]
+    if config.get("export_method_zoom_figures", True):
+        zoom_order = config.get("taskaware_zoom_method_order")
+        figure_kinds.extend([
+            {"plot_kind": "taskaware",
+             "filename": config.get(
+                 "taskaware_low_zoom_figure_filename",
+                 f"Fig7_TaskAware_Baselines_CR{baseline_cr}_LowSNR_Zoom"),
+             "snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "method_order": zoom_order,
+             "title_suffix": "Low-SNR Zoom"},
+            {"plot_kind": "taskaware",
+             "filename": config.get(
+                 "taskaware_high_zoom_figure_filename",
+                 f"Fig7_TaskAware_Baselines_CR{baseline_cr}_HighSNR_Zoom"),
+             "snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order,
+             "title_suffix": "High-SNR Zoom"},
+        ])
     export_method_baselines(
         fig7_results, out_dir, table_prefix="fig7",
         export_figures=export_figures,
-        figure_kinds=[
-            ("taskaware", config.get("taskaware_figure_filename", f"Fig7_TaskAware_Baselines_CR{baseline_cr}")),
-        ],
+        figure_kinds=figure_kinds,
     )
 
 
@@ -370,9 +426,12 @@ def export_summary_md(data, result_dir, out_dir):
         f.write("- Geometry oracle checks the WLS geometry/sign lower bound.\n")
         f.write("- Clean oracle checks the clean waveform GCC + WLS upper bound under finite bandwidth.\n")
         f.write("- Mean RMSE is the main metric; median and trimmed RMSE diagnose outlier sensitivity.\n")
-        f.write("- DFT-SCS-lite is the Chen-style reconstruction baseline approximation. "
-                "DFT-Fisher and DFT direct variants, when present, are task-aware diagnostics "
-                "rather than strict Chen Fig.6 reproduction methods.\n")
+        f.write("- In the strict Chen-style Fig6 track, DFT denotes frequency-domain "
+                "cross-spectrum TDOA from selected partial-Fourier coefficients. "
+                "This uses the cross-correlation theorem and does not zero-fill "
+                "individual waveforms before GCC. DFT waveform-reconstruction variants "
+                "and DFT-Fisher variants, when present, are supplement/task-aware "
+                "diagnostics rather than the main Chen Fig6 DFT curve.\n")
     print(f"[Saved] {path}")
 
 

@@ -6,10 +6,15 @@ class DirectDFTTDOAEstimator:
     """
     Estimate pairwise TDOA directly from selected DFT coefficients.
 
-    This is a task-level baseline: it respects the same complex-bin budget as the
-    reconstruction DFT baseline, but it does not claim to reconstruct a waveform.
-    The estimated pairwise delays still go through the same all-pair WLS
-    localization solver used by Raw/DAE/DFT/Hadamard/PCA.
+    This is a task-level baseline: it respects the same complex-bin budget as a
+    partial-Fourier compression method, but it does not reconstruct each sensor
+    waveform by zero-filling missing bins. It forms the selected-bin
+    cross-spectrum X_i(f) conj(X_j(f)) and searches delay with the Fourier
+    shift steering vector. Equivalently, it estimates the peak of a partial
+    inverse cross-spectrum, which follows the cross-correlation theorem
+    R_ij(tau) = IFFT{X_i(f) conj(X_j(f))}. The estimated pairwise delays still
+    go through the same all-pair WLS localization solver used by Raw/DAE,
+    Hadamard, PCA, and waveform-reconstruction DFT ablations.
     """
 
     def __init__(self, selected_bins, signal_len=1024, label="DFT-Direct",
@@ -32,7 +37,8 @@ class DirectDFTTDOAEstimator:
             2j * np.pi * np.outer(self.lags, self.freqs)
         ).astype(np.complex64)
 
-    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True):
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
         spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
@@ -40,9 +46,15 @@ class DirectDFTTDOAEstimator:
             cross = cross / (np.abs(cross) + 1e-12)
 
         score = np.abs(self._steering @ cross)
-        idx = int(np.argmax(score))
+        search_mask = self._lag_mask(lag_limit_samples)
+        search_idx = np.where(search_mask)[0]
+        if search_idx.size == 0:
+            search_idx = np.arange(score.size)
+            search_mask = np.ones_like(score, dtype=bool)
+        idx = int(search_idx[np.argmax(score[search_idx])])
         lag = float(self.lags[idx])
-        if sub_sample and 0 < idx < score.size - 1:
+        if (sub_sample and 0 < idx < score.size - 1
+                and search_mask[idx - 1] and search_mask[idx + 1]):
             y0, y1, y2 = score[idx - 1], score[idx], score[idx + 1]
             denom = y0 - 2.0 * y1 + y2
             if abs(denom) > 1e-12:
@@ -53,7 +65,7 @@ class DirectDFTTDOAEstimator:
             return lag
 
         peak = float(score[idx])
-        mask = np.ones_like(score, dtype=bool)
+        mask = search_mask.copy()
         lo = max(0, idx - 2)
         hi = min(score.size, idx + 3)
         mask[lo:hi] = False
@@ -62,8 +74,48 @@ class DirectDFTTDOAEstimator:
         weight = float(np.clip(1.0 / (sidelobe_ratio + 1e-3), 0.05, 20.0))
         return lag, weight, peak, sidelobe_ratio
 
+    def _lag_mask(self, lag_limit_samples=None):
+        if lag_limit_samples is None:
+            return np.ones_like(self.lags, dtype=bool)
+        limit = float(lag_limit_samples)
+        return np.abs(self.lags) <= limit
+
+    def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
+        if self.selected_bins.size <= 1:
+            spacing = np.asarray([], dtype=int)
+        else:
+            spacing = np.diff(np.sort(self.selected_bins))
+        response = np.abs(
+            self._steering @ np.ones(self.selected_bins.size, dtype=np.complex64)
+        )
+        response = response / (np.max(response) + 1e-12)
+        peaks, props = signal.find_peaks(response, height=float(threshold))
+        peak_lags = self.lags[peaks].astype(int)
+        peak_vals = props.get("peak_heights", np.asarray([], dtype=float))
+        nonzero = np.abs(self.lags) > 2
+        physical = self._lag_mask(lag_limit_samples)
+        outside_physical = nonzero & ~physical
+        inside_physical = nonzero & physical
+        return {
+            "selected_bin_count": int(self.selected_bins.size),
+            "selected_bin_min": int(np.min(self.selected_bins)),
+            "selected_bin_max": int(np.max(self.selected_bins)),
+            "selected_spacing_unique": [int(v) for v in np.unique(spacing).tolist()],
+            "selected_spacing_min": int(np.min(spacing)) if spacing.size else None,
+            "selected_spacing_max": int(np.max(spacing)) if spacing.size else None,
+            "alias_threshold": float(threshold),
+            "alias_peak_lags": [int(v) for v in peak_lags.tolist()],
+            "alias_peak_values": [float(v) for v in peak_vals.tolist()],
+            "max_sidelobe_inside_physical_lag": (
+                float(np.max(response[inside_physical])) if np.any(inside_physical) else None
+            ),
+            "max_sidelobe_outside_physical_lag": (
+                float(np.max(response[outside_physical])) if np.any(outside_physical) else None
+            ),
+        }
+
     def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
-                    sub_sample=True):
+                    sub_sample=True, lag_limit_samples=None):
         abs_err = []
         weights = []
         sidelobes = []
@@ -76,7 +128,8 @@ class DirectDFTTDOAEstimator:
                     sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                     sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
                     tau, weight, _, side = self.estimate_pair(
-                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True
+                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True,
+                        lag_limit_samples=lag_limit_samples
                     )
                     true_tau = (
                         meta["distances"][bi, ui] - meta["distances"][bi, uj]
@@ -100,4 +153,7 @@ class DirectDFTTDOAEstimator:
             "direct_within_1_sample_rate": float(np.mean(arr <= 1.0)),
             "direct_within_2_sample_rate": float(np.mean(arr <= 2.0)),
             "direct_mean_sidelobe_ratio": float(np.mean(sidelobes)),
+            "direct_lag_limit_samples": (
+                float(lag_limit_samples) if lag_limit_samples is not None else float("nan")
+            ),
         }

@@ -52,6 +52,7 @@ USER_FAST_FINAL_EPOCHS = None
 USER_RUN_TRADITIONAL_BASELINES = True
 USER_BASELINE_CR = 16
 USER_BASELINE_DFT_MODE = "scs_lite"  # "scs_lite"、"fisher_power"、"train_band"、"train_power"、"center"、"random"
+USER_BASELINE_DFT_DIRECT_SOURCE = "DFT-train-power"  # Fig6 主线 DFT direct 的 selected-bin 来源
 USER_BASELINE_HADAMARD_MODE = "salari"   # "salari"、"random"、"sequency"
 USER_BASELINE_PCA_TRAIN_SOURCE = "noisy" # "noisy"、"clean"、"noisy_fixed"、"clean_fixed"
 USER_BASELINE_PCA_FIXED_SNR_DB = 0.0
@@ -63,6 +64,12 @@ USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权�
 USER_FIG6_SHOW_ZOOM_INSET = True
 USER_FIG6_ZOOM_SNR_MIN = 8.0
 USER_EXPORT_FIG6_SVG_IN_TABLES = False   # False: 避免根目录与 tables/ 重复保存 Fig6 SVG
+USER_USE_PHYSICAL_TDOA_LAG_GATE = True
+USER_TDOA_LAG_LIMIT_SAMPLES = None        # None 表示按 urban8 区域尺寸自动计算
+USER_TDOA_LAG_MARGIN_SAMPLES = 4
+USER_EXPORT_METHOD_ZOOM_FIGURES = True
+USER_METHOD_ZOOM_LOW_SNR_MAX = 0.0
+USER_METHOD_ZOOM_HIGH_SNR_MIN = 8.0
 USER_NO_SHOW = False                     # True: 只保存图片，不弹出 matplotlib 窗口
 
 
@@ -77,6 +84,16 @@ def _cfg_bool(env_name, user_value, default_value):
     if ALLOW_ENV_OVERRIDES and env_name in os.environ:
         return os.environ[env_name] == "1"
     return bool(default_value if user_value is None else user_value)
+
+
+def _cfg_optional_int(env_name, user_value, default_value=None):
+    if ALLOW_ENV_OVERRIDES and env_name in os.environ:
+        raw = str(os.environ[env_name]).strip().lower()
+        if raw in ("", "none", "null", "auto"):
+            return None
+        return int(raw)
+    value = default_value if user_value is None else user_value
+    return None if value is None else int(value)
 
 
 EXPERIMENT_MODE = _cfg(
@@ -224,6 +241,10 @@ RUN_TRADITIONAL_BASELINES = (
 )
 BASELINE_CR = _cfg("DAE_BASELINE_CR", USER_BASELINE_CR, 16, int)
 BASELINE_DFT_MODE = _cfg("DAE_BASELINE_DFT_MODE", USER_BASELINE_DFT_MODE, "uniform", str)
+BASELINE_DFT_DIRECT_SOURCE = _cfg(
+    "DAE_BASELINE_DFT_DIRECT_SOURCE", USER_BASELINE_DFT_DIRECT_SOURCE,
+    "DFT-train-power", str
+)
 BASELINE_HADAMARD_MODE = _cfg(
     "DAE_BASELINE_HADAMARD_MODE", USER_BASELINE_HADAMARD_MODE, "salari", str
 )
@@ -253,6 +274,24 @@ FIG6_SHOW_ZOOM_INSET = _cfg_bool(
 FIG6_ZOOM_SNR_MIN = _cfg("DAE_FIG6_ZOOM_SNR_MIN", USER_FIG6_ZOOM_SNR_MIN, 8.0, float)
 EXPORT_FIG6_SVG_IN_TABLES = _cfg_bool(
     "DAE_EXPORT_FIG6_SVG_IN_TABLES", USER_EXPORT_FIG6_SVG_IN_TABLES, False
+)
+USE_PHYSICAL_TDOA_LAG_GATE = _cfg_bool(
+    "DAE_USE_PHYSICAL_TDOA_LAG_GATE", USER_USE_PHYSICAL_TDOA_LAG_GATE, True
+)
+TDOA_LAG_LIMIT_SAMPLES = _cfg_optional_int(
+    "DAE_TDOA_LAG_LIMIT_SAMPLES", USER_TDOA_LAG_LIMIT_SAMPLES, None
+)
+TDOA_LAG_MARGIN_SAMPLES = _cfg(
+    "DAE_TDOA_LAG_MARGIN_SAMPLES", USER_TDOA_LAG_MARGIN_SAMPLES, 4, int
+)
+EXPORT_METHOD_ZOOM_FIGURES = _cfg_bool(
+    "DAE_EXPORT_METHOD_ZOOM_FIGURES", USER_EXPORT_METHOD_ZOOM_FIGURES, True
+)
+METHOD_ZOOM_LOW_SNR_MAX = _cfg(
+    "DAE_METHOD_ZOOM_LOW_SNR_MAX", USER_METHOD_ZOOM_LOW_SNR_MAX, 0.0, float
+)
+METHOD_ZOOM_HIGH_SNR_MIN = _cfg(
+    "DAE_METHOD_ZOOM_HIGH_SNR_MIN", USER_METHOD_ZOOM_HIGH_SNR_MIN, 8.0, float
 )
 
 # Lightweight smoke-test overrides. None means keep the formal mode default.
@@ -349,6 +388,11 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"task_aware_baselines={RUN_TASK_AWARE_BASELINES} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
       f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
+print(f"[Config] dft_direct_source={BASELINE_DFT_DIRECT_SOURCE} | "
+      f"physical_lag_gate={USE_PHYSICAL_TDOA_LAG_GATE} | "
+      f"lag_limit_override={TDOA_LAG_LIMIT_SAMPLES} | lag_margin={TDOA_LAG_MARGIN_SAMPLES} | "
+      f"method_zoom_figures={EXPORT_METHOD_ZOOM_FIGURES} | "
+      f"low_zoom<= {METHOD_ZOOM_LOW_SNR_MAX:g} dB | high_zoom>= {METHOD_ZOOM_HIGH_SNR_MIN:g} dB")
 if SCENARIO_MODE == "urban8":
     print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
           f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
@@ -381,6 +425,29 @@ def unique_order(items):
         seen.add(item)
         ordered.append(item)
     return ordered
+
+
+def compute_physical_tdoa_lag_limit(simulator):
+    if not USE_PHYSICAL_TDOA_LAG_GATE:
+        return None
+    if TDOA_LAG_LIMIT_SAMPLES is not None:
+        return int(TDOA_LAG_LIMIT_SAMPLES)
+    if not hasattr(simulator, "area_size") or simulator.area_size is None:
+        return None
+    area = np.asarray(simulator.area_size, dtype=float)
+    if area.size == 0:
+        return None
+    area_diag = float(np.linalg.norm(area))
+    sample_distance = float(simulator.c / simulator.fs)
+    return int(np.ceil(area_diag / sample_distance) + int(TDOA_LAG_MARGIN_SAMPLES))
+
+
+def method_zoom_orders(baseline_cr, had_main):
+    core = [
+        "Raw", f"DAE-CR{baseline_cr}", "DFT", "DFT-SCS-lite",
+        "DFT-train-power-Direct", "DFT-Fisher-Direct", had_main, "PCA"
+    ]
+    return unique_order(core)
 
 # ===================== 主流程 =====================
 
@@ -427,6 +494,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                           urban_base_delay=URBAN_BASE_DELAY,
                           urban_min_los=URBAN_MIN_LOS,
                           urban_train_los_only=URBAN_TRAIN_LOS_ONLY)
+    method_tdoa_lag_limit = compute_physical_tdoa_lag_limit(sim)
+    if USE_PHYSICAL_TDOA_LAG_GATE:
+        print(f"[TDOA Gate] method comparison lag_limit={method_tdoa_lag_limit} samples "
+              f"(sample_distance={sim.c / sim.fs:.3f} m)")
     clean_diag = None
     if EXPERIMENT_MODE in PAPER_REPRO_MODES:
         clean_diag = clean_peak_consistency(sim, n_trials=256, snr_db=20)
@@ -657,9 +728,26 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 fig6_models = dict(traditional_models)
                 fig6_models[f"DAE-CR{BASELINE_CR}"] = models_dict[BASELINE_CR]
                 direct_estimators = {}
+                dft_main = traditional_baseline_meta.get("dft_main_label", "DFT-SCS-lite")
+                requested_dft_direct_source = str(BASELINE_DFT_DIRECT_SOURCE)
+                if requested_dft_direct_source.lower() in ("auto", "default"):
+                    requested_dft_direct_source = "DFT-train-power"
+                dft_direct_source_label = requested_dft_direct_source
+                if dft_direct_source_label not in traditional_models:
+                    fallback_order = ["DFT-train-power", dft_main, "DFT-SCS-lite", "DFT-bandlimited"]
+                    dft_direct_source_label = next(
+                        (name for name in fallback_order if name in traditional_models),
+                        dft_main
+                    )
+                dft_direct_source = traditional_models.get(dft_direct_source_label)
+                if dft_direct_source is not None and hasattr(dft_direct_source, "selected_bins"):
+                    direct_estimators["DFT"] = DirectDFTTDOAEstimator(
+                        dft_direct_source.selected_bins.detach().cpu().numpy(),
+                        signal_len=sim.signal_len,
+                        label="DFT",
+                    )
                 if RUN_TASK_AWARE_BASELINES:
                     for src_label, dst_label in [
-                        ("DFT-SCS-lite", "DFT-SCS-lite-Direct"),
                         ("DFT-Fisher", "DFT-Fisher-Direct"),
                         ("DFT-train-power", "DFT-train-power-Direct"),
                     ]:
@@ -679,29 +767,53 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     estimator=LOCALIZATION_ESTIMATOR,
                     title=f"Baseline_Method_Comparison_CR{BASELINE_CR}",
                     direct_estimators=direct_estimators,
+                    tdoa_lag_limit_samples=method_tdoa_lag_limit,
                 )
-                dft_main = traditional_baseline_meta.get("dft_main_label", "DFT")
                 had_main = traditional_baseline_meta.get("hadamard_main_label", "Hadamard")
+                dft_alias_diagnostics = {
+                    label: est.alias_diagnostics(lag_limit_samples=method_tdoa_lag_limit)
+                    for label, est in direct_estimators.items()
+                    if hasattr(est, "alias_diagnostics")
+                }
+                for label, diag in dft_alias_diagnostics.items():
+                    outside = diag.get("max_sidelobe_outside_physical_lag")
+                    if outside is not None and outside > 0.8:
+                        print(f"[Warn] {label} has strong DFT alias sidelobe outside "
+                              f"physical lag gate: {outside:.3f}")
                 common_config = {
                     "baseline_cr": BASELINE_CR,
                     "traditional_baseline_meta": traditional_baseline_meta,
                     "fig6_show_zoom_inset": FIG6_SHOW_ZOOM_INSET,
                     "fig6_zoom_snr_min": FIG6_ZOOM_SNR_MIN,
+                    "chen_fig6_dft_method": "frequency_domain_cross_spectrum_tdoa",
+                    "chen_fig6_dft_direct_source": dft_direct_source_label,
+                    "requested_dft_direct_source": requested_dft_direct_source,
+                    "dft_waveform_reconstruction_role": "supplement_ablation_only",
+                    "use_physical_tdoa_lag_gate": USE_PHYSICAL_TDOA_LAG_GATE,
+                    "tdoa_lag_limit_samples": method_tdoa_lag_limit,
+                    "tdoa_lag_margin_samples": TDOA_LAG_MARGIN_SAMPLES,
+                    "direct_dft_alias_diagnostics": dft_alias_diagnostics,
+                    "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
+                    "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
+                    "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
                 }
                 baseline_all_results[0]["config"].update(common_config)
                 baseline_all_results[0]["config"]["task_aware_direct_methods"] = list(direct_estimators.keys())
 
                 fig6_main_order = unique_order([
-                    "Raw", f"DAE-CR{BASELINE_CR}", dft_main, had_main, "PCA"
+                    "Raw", f"DAE-CR{BASELINE_CR}", "DFT", had_main, "PCA"
                 ])
                 fig6_supp_order = unique_order([
-                    "Raw", f"DAE-CR{BASELINE_CR}", dft_main, "DFT-Fisher",
+                    "Raw", f"DAE-CR{BASELINE_CR}", "DFT", dft_main, "DFT-Fisher",
                     "DFT-train-band", "DFT-train-power", "DFT-bandlimited",
                     "DFT-SCS-lite", "DFT-random*", had_main,
                     "Hadamard-sequency", "Hadamard-block-2",
                     "Hadamard-random*", "PCA"
                 ])
-                fig6_keep = unique_order(["Raw", "Clean", "Geometry"] + list(fig6_models.keys()))
+                zoom_order = method_zoom_orders(BASELINE_CR, had_main)
+                fig6_keep = unique_order(
+                    ["Raw", "Clean", "Geometry"] + list(fig6_models.keys()) + ["DFT"]
+                )
                 fig6_results = filter_method_comparison_data(
                     baseline_all_results, fig6_keep,
                     {
@@ -712,14 +824,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         "supplement_title": f"Figure 6 Supplement: Baseline Sensitivity (CR={BASELINE_CR})",
                         "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
                         "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
+                        "supplement_zoom_method_order": zoom_order,
+                        "supplement_low_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_LowSNR_Zoom",
+                        "supplement_high_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_HighSNR_Zoom",
                         "table_prefix": "fig6",
                     },
                 )
 
                 if RUN_TASK_AWARE_BASELINES and direct_estimators:
                     fig7_order = unique_order([
-                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT-SCS-lite",
-                        "DFT-Fisher", "DFT-SCS-lite-Direct",
+                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                        "DFT-SCS-lite", "DFT-Fisher",
                         "DFT-Fisher-Direct", "DFT-train-power-Direct",
                         had_main, "PCA"
                     ])
@@ -731,6 +846,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "taskaware_method_order": fig7_order,
                             "taskaware_title": f"Figure 7: Task-Aware Baseline Track (CR={BASELINE_CR})",
                             "taskaware_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}",
+                            "taskaware_zoom_method_order": zoom_order,
+                            "taskaware_low_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_LowSNR_Zoom",
+                            "taskaware_high_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_HighSNR_Zoom",
                             "table_prefix": "fig7",
                         },
                     )
@@ -782,12 +900,19 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'baseline_cr': BASELINE_CR,
                 'baseline_pca_samples': BASELINE_PCA_SAMPLES,
                 'baseline_dft_mode': BASELINE_DFT_MODE,
+                'baseline_dft_direct_source': BASELINE_DFT_DIRECT_SOURCE,
                 'baseline_hadamard_mode': BASELINE_HADAMARD_MODE,
                 'baseline_pca_train_source': BASELINE_PCA_TRAIN_SOURCE,
                 'baseline_pca_fixed_snr_db': BASELINE_PCA_FIXED_SNR_DB,
                 'baseline_include_diagnostic_variants': BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
                 'baseline_random_variant_seeds': BASELINE_RANDOM_VARIANT_SEEDS,
                 'run_task_aware_baselines': RUN_TASK_AWARE_BASELINES,
+                'use_physical_tdoa_lag_gate': USE_PHYSICAL_TDOA_LAG_GATE,
+                'tdoa_lag_limit_samples': method_tdoa_lag_limit,
+                'tdoa_lag_margin_samples': TDOA_LAG_MARGIN_SAMPLES,
+                'export_method_zoom_figures': EXPORT_METHOD_ZOOM_FIGURES,
+                'method_zoom_low_snr_max': METHOD_ZOOM_LOW_SNR_MAX,
+                'method_zoom_high_snr_min': METHOD_ZOOM_HIGH_SNR_MIN,
                 'eval_only_copy_models': EVAL_ONLY_COPY_MODELS,
                 'fig6_show_zoom_inset': FIG6_SHOW_ZOOM_INSET,
                 'fig6_zoom_snr_min': FIG6_ZOOM_SNR_MIN,
@@ -837,6 +962,35 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 "supplement_figure_filename", f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}"
             )
             save_figure(fig_methods_supp, fig6_supp_name)
+            if EXPORT_METHOD_ZOOM_FIGURES:
+                fig6_config = fig6_results[0].get("config", {})
+                zoom_order = fig6_config.get("supplement_zoom_method_order")
+                fig_methods_low = plot_method_comparison(
+                    fig6_results, plot_kind="supplement",
+                    snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    method_order=zoom_order,
+                    title_suffix="Low-SNR Zoom",
+                )
+                save_figure(
+                    fig_methods_low,
+                    fig6_config.get(
+                        "supplement_low_zoom_figure_filename",
+                        f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}_LowSNR_Zoom",
+                    ),
+                )
+                fig_methods_high = plot_method_comparison(
+                    fig6_results, plot_kind="supplement",
+                    snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
+                    method_order=zoom_order,
+                    title_suffix="High-SNR Zoom",
+                )
+                save_figure(
+                    fig_methods_high,
+                    fig6_config.get(
+                        "supplement_high_zoom_figure_filename",
+                        f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}_HighSNR_Zoom",
+                    ),
+                )
 
         if fig7_results is not None:
             fig_task = plot_method_comparison(fig7_results, plot_kind="taskaware")
@@ -844,6 +998,35 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 "taskaware_figure_filename", f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}"
             )
             save_figure(fig_task, fig7_name)
+            if EXPORT_METHOD_ZOOM_FIGURES:
+                fig7_config = fig7_results[0].get("config", {})
+                zoom_order = fig7_config.get("taskaware_zoom_method_order")
+                fig_task_low = plot_method_comparison(
+                    fig7_results, plot_kind="taskaware",
+                    snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    method_order=zoom_order,
+                    title_suffix="Low-SNR Zoom",
+                )
+                save_figure(
+                    fig_task_low,
+                    fig7_config.get(
+                        "taskaware_low_zoom_figure_filename",
+                        f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_LowSNR_Zoom",
+                    ),
+                )
+                fig_task_high = plot_method_comparison(
+                    fig7_results, plot_kind="taskaware",
+                    snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
+                    method_order=zoom_order,
+                    title_suffix="High-SNR Zoom",
+                )
+                save_figure(
+                    fig_task_high,
+                    fig7_config.get(
+                        "taskaware_high_zoom_figure_filename",
+                        f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_HighSNR_Zoom",
+                    ),
+                )
 
         try:
             from export_results import export as export_result_tables
