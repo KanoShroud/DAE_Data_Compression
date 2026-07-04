@@ -58,7 +58,8 @@ USER_BASELINE_PCA_TRAIN_SOURCE = "noisy" # "noisy"、"clean"、"noisy_fixed"、"
 USER_BASELINE_PCA_FIXED_SNR_DB = 0.0
 USER_BASELINE_PCA_SAMPLES = None         # None 表示使用 N_SAMPLES
 USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = True
-USER_BASELINE_RANDOM_VARIANT_SEEDS = 5
+USER_BASELINE_INCLUDE_LEGACY_VARIANTS = False
+USER_BASELINE_RANDOM_VARIANT_SEEDS = 0
 USER_RUN_TASK_AWARE_BASELINES = True
 USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权重重复复制到新结果目录
 USER_FIG6_SHOW_ZOOM_INSET = True
@@ -259,8 +260,13 @@ BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = _cfg_bool(
     USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
     False
 )
+BASELINE_INCLUDE_LEGACY_VARIANTS = _cfg_bool(
+    "DAE_BASELINE_INCLUDE_LEGACY_VARIANTS",
+    USER_BASELINE_INCLUDE_LEGACY_VARIANTS,
+    False
+)
 BASELINE_RANDOM_VARIANT_SEEDS = _cfg(
-    "DAE_BASELINE_RANDOM_VARIANT_SEEDS", USER_BASELINE_RANDOM_VARIANT_SEEDS, 5, int
+    "DAE_BASELINE_RANDOM_VARIANT_SEEDS", USER_BASELINE_RANDOM_VARIANT_SEEDS, 0, int
 )
 RUN_TASK_AWARE_BASELINES = _cfg_bool(
     "DAE_RUN_TASK_AWARE_BASELINES", USER_RUN_TASK_AWARE_BASELINES, True
@@ -384,6 +390,7 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"dft_mode={BASELINE_DFT_MODE} | hadamard_mode={BASELINE_HADAMARD_MODE} | "
       f"pca_source={BASELINE_PCA_TRAIN_SOURCE} | "
       f"diagnostic_variants={BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS} | "
+      f"legacy_variants={BASELINE_INCLUDE_LEGACY_VARIANTS} | "
       f"random_variant_seeds={BASELINE_RANDOM_VARIANT_SEEDS} | "
       f"task_aware_baselines={RUN_TASK_AWARE_BASELINES} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
@@ -445,7 +452,7 @@ def compute_physical_tdoa_lag_limit(simulator):
 def method_zoom_orders(baseline_cr, had_main):
     core = [
         "Raw", f"DAE-CR{baseline_cr}", "DFT", "DFT-SCS-lite",
-        "DFT-train-power-Direct", "DFT-Fisher-Direct", had_main, "PCA"
+        "DFT-Fisher-Direct", had_main, "PCA"
     ]
     return unique_order(core)
 
@@ -723,6 +730,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     pca_fixed_snr_db=BASELINE_PCA_FIXED_SNR_DB,
                     include_diagnostic_variants=BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
                     random_variant_seeds=BASELINE_RANDOM_VARIANT_SEEDS,
+                    include_legacy_variants=BASELINE_INCLUDE_LEGACY_VARIANTS,
+                    dft_lag_limit_samples=method_tdoa_lag_limit,
                 )
                 print(f"[Fig6] Baseline feature budget: {traditional_baseline_meta}")
                 fig6_models = dict(traditional_models)
@@ -751,6 +760,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         ("DFT-Fisher", "DFT-Fisher-Direct"),
                         ("DFT-train-power", "DFT-train-power-Direct"),
                     ]:
+                        if src_label == dft_direct_source_label:
+                            continue
                         model = traditional_models.get(src_label)
                         if model is not None and hasattr(model, "selected_bins"):
                             direct_estimators[dst_label] = DirectDFTTDOAEstimator(
@@ -793,6 +804,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "tdoa_lag_limit_samples": method_tdoa_lag_limit,
                     "tdoa_lag_margin_samples": TDOA_LAG_MARGIN_SAMPLES,
                     "direct_dft_alias_diagnostics": dft_alias_diagnostics,
+                    "baseline_include_legacy_variants": BASELINE_INCLUDE_LEGACY_VARIANTS,
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
                     "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
@@ -804,15 +816,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "Raw", f"DAE-CR{BASELINE_CR}", "DFT", had_main, "PCA"
                 ])
                 fig6_supp_order = unique_order([
-                    "Raw", f"DAE-CR{BASELINE_CR}", "DFT", dft_main, "DFT-Fisher",
-                    "DFT-train-band", "DFT-train-power", "DFT-bandlimited",
-                    "DFT-SCS-lite", "DFT-random*", had_main,
-                    "Hadamard-sequency", "Hadamard-block-2",
-                    "Hadamard-random*", "PCA"
+                    "Raw", f"DAE-CR{BASELINE_CR}", "DFT", "DFT-SCS-lite",
+                    "DFT-train-power", "DFT-bandlimited",
+                    had_main, "Hadamard-block-2", "PCA"
                 ])
-                zoom_order = method_zoom_orders(BASELINE_CR, had_main)
                 fig6_keep = unique_order(
-                    ["Raw", "Clean", "Geometry"] + list(fig6_models.keys()) + ["DFT"]
+                    ["Raw", "Clean", "Geometry"] + fig6_supp_order
                 )
                 fig6_results = filter_method_comparison_data(
                     baseline_all_results, fig6_keep,
@@ -824,7 +833,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         "supplement_title": f"Figure 6 Supplement: Baseline Sensitivity (CR={BASELINE_CR})",
                         "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
                         "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
-                        "supplement_zoom_method_order": zoom_order,
+                        "supplement_zoom_method_order": fig6_supp_order,
                         "supplement_low_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_LowSNR_Zoom",
                         "supplement_high_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_HighSNR_Zoom",
                         "table_prefix": "fig6",
@@ -834,11 +843,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 if RUN_TASK_AWARE_BASELINES and direct_estimators:
                     fig7_order = unique_order([
                         "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
-                        "DFT-SCS-lite", "DFT-Fisher",
-                        "DFT-Fisher-Direct", "DFT-train-power-Direct",
+                        "DFT-SCS-lite", "DFT-Fisher-Direct",
                         had_main, "PCA"
                     ])
-                    fig7_keep = unique_order(fig6_keep + list(direct_estimators.keys()))
+                    fig7_keep = unique_order(["Raw", "Clean", "Geometry"] + fig7_order)
                     fig7_results = filter_method_comparison_data(
                         baseline_all_results, fig7_keep,
                         {
@@ -846,7 +854,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "taskaware_method_order": fig7_order,
                             "taskaware_title": f"Figure 7: Task-Aware Baseline Track (CR={BASELINE_CR})",
                             "taskaware_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}",
-                            "taskaware_zoom_method_order": zoom_order,
+                            "taskaware_zoom_method_order": fig7_order,
                             "taskaware_low_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_LowSNR_Zoom",
                             "taskaware_high_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_HighSNR_Zoom",
                             "table_prefix": "fig7",
@@ -905,6 +913,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'baseline_pca_train_source': BASELINE_PCA_TRAIN_SOURCE,
                 'baseline_pca_fixed_snr_db': BASELINE_PCA_FIXED_SNR_DB,
                 'baseline_include_diagnostic_variants': BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS,
+                'baseline_include_legacy_variants': BASELINE_INCLUDE_LEGACY_VARIANTS,
                 'baseline_random_variant_seeds': BASELINE_RANDOM_VARIANT_SEEDS,
                 'run_task_aware_baselines': RUN_TASK_AWARE_BASELINES,
                 'use_physical_tdoa_lag_gate': USE_PHYSICAL_TDOA_LAG_GATE,

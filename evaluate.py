@@ -1354,7 +1354,7 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
         "DFT-SCS-lite-Direct": dict(color="#756bb1", marker=">", linestyle="-", linewidth=1.6,
                                     label="DFT SCS-lite direct"),
         "DFT-Fisher-Direct": dict(color="#762a83", marker="X", linestyle="-", linewidth=1.7,
-                                  label="DFT Fisher direct"),
+                                  label="Balanced Fisher direct"),
         "DFT-train-power-Direct": dict(color="#01665e", marker="P", linestyle="-", linewidth=1.8,
                                        label="DFT train-power direct"),
         "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
@@ -1431,6 +1431,11 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
         if label.startswith("DAE"):
             style = dict(color="#d62728", marker="*", linestyle="-", linewidth=1.7,
                          label=label)
+        if label == "DFT":
+            source = config.get("chen_fig6_dft_direct_source")
+            if source:
+                short_source = str(source).replace("DFT-", "")
+                style["label"] = f"DFT direct ({short_source} bins)"
         marker = style.pop("marker", None)
         ax.plot(snr_plot, y[range_mask], marker=marker,
                 markersize=5 if marker else 0, **style)

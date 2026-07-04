@@ -88,6 +88,109 @@ def _fisher_power_bins(waveforms, count, chunk_size=512, min_power_frac=0.05):
     return torch.topk(score, k=count, largest=True).indices.sort().values.long()
 
 
+def _balanced_fisher_bins(waveforms, count, chunk_size=512, min_power_frac=0.05,
+                          lag_limit_samples=None, candidate_factor=8,
+                          sidelobe_weight=0.65, rms_sidelobe_weight=0.25,
+                          guard_samples=2):
+    """
+    Select task-aware DFT bins with Fisher power and physical-lag sidelobe control.
+
+    A pure ``power * f^2`` score over-selects edge-frequency bins. That improves
+    nominal delay Fisher information but creates a comb-like partial Fourier
+    steering response, so direct TDOA peaks become ambiguous inside the physical
+    lag search window. This greedy selector keeps the Fisher-information motive
+    while penalizing the selected-bin response sidelobes over valid TDOA lags.
+    """
+    count = int(count)
+    avg_power = _average_shifted_fft_power(waveforms, chunk_size=chunk_size)
+    n = int(avg_power.numel())
+    if count < 1 or count > n:
+        raise ValueError("Invalid balanced DFT Fisher selection size")
+
+    center = n // 2
+    freq_bin = torch.arange(n, dtype=avg_power.dtype) - float(center)
+    freq_weight = (freq_bin.abs() / max(float(center), 1.0)) ** 2
+    fisher_score = avg_power * freq_weight
+
+    power_floor = torch.max(avg_power) * float(min_power_frac)
+    valid = avg_power >= power_floor
+    if int(torch.sum(valid).item()) < count:
+        valid = torch.ones_like(valid, dtype=torch.bool)
+
+    masked_score = torch.where(
+        valid, fisher_score, torch.full_like(fisher_score, -torch.inf)
+    )
+    finite_count = int(torch.isfinite(masked_score).sum().item())
+    if finite_count < count:
+        masked_score = fisher_score
+        finite_count = n
+
+    candidate_count = min(n, max(count, int(count) * int(candidate_factor)))
+    candidate_count = min(candidate_count, finite_count)
+    candidate_bins = torch.topk(
+        masked_score, k=candidate_count, largest=True
+    ).indices.sort().values
+
+    # If the power floor produced too narrow a candidate pool, complete it with
+    # high-power bins so the greedy step always has enough feasible choices.
+    if candidate_bins.numel() < count:
+        fallback = torch.topk(avg_power, k=count, largest=True).indices
+        candidate_bins = torch.unique(
+            torch.cat((candidate_bins, fallback)), sorted=True
+        )
+
+    candidate_np = candidate_bins.detach().cpu().numpy().astype(int)
+    scores = fisher_score[candidate_bins].detach().cpu().numpy().astype(np.float64)
+    score_scale = max(float(np.max(scores)), 1e-12)
+
+    freqs = np.fft.fftshift(np.fft.fftfreq(n))[candidate_np]
+    lags = np.arange(-n // 2, n // 2, dtype=float)
+    if lag_limit_samples is None:
+        lag_limit_samples = min(64, max(4, n // 16))
+    physical_mask = np.abs(lags) <= float(lag_limit_samples)
+    physical_lags = lags[physical_mask]
+    if physical_lags.size == 0:
+        physical_lags = lags
+    side_mask = np.abs(physical_lags) > float(guard_samples)
+    if not np.any(side_mask):
+        side_mask = np.ones_like(physical_lags, dtype=bool)
+
+    steering = np.exp(
+        2j * np.pi * np.outer(physical_lags, freqs)
+    ).astype(np.complex64)
+
+    selected_local = []
+    remaining = np.ones(candidate_np.size, dtype=bool)
+    response = np.zeros(physical_lags.size, dtype=np.complex64)
+    score_sum = 0.0
+    for step in range(count):
+        remaining_idx = np.where(remaining)[0]
+        if remaining_idx.size == 0:
+            break
+        trial_response = response[:, None] + steering[:, remaining_idx]
+        amp = np.abs(trial_response) / float(step + 1)
+        max_side = np.max(amp[side_mask], axis=0)
+        rms_side = np.sqrt(np.mean(amp[side_mask] ** 2, axis=0))
+        mean_score = (score_sum + scores[remaining_idx]) / float(step + 1)
+        objective = (
+            mean_score / score_scale
+            - float(sidelobe_weight) * max_side
+            - float(rms_sidelobe_weight) * rms_side
+        )
+        best_local = int(remaining_idx[int(np.argmax(objective))])
+        selected_local.append(best_local)
+        remaining[best_local] = False
+        response += steering[:, best_local]
+        score_sum += float(scores[best_local])
+
+    if len(selected_local) < count:
+        fallback = np.where(remaining)[0][:count - len(selected_local)]
+        selected_local.extend([int(v) for v in fallback.tolist()])
+
+    selected = torch.as_tensor(candidate_np[selected_local[:count]], dtype=torch.long)
+    return selected.sort().values.contiguous()
+
+
 def _average_shifted_fft_power(waveforms, chunk_size=512):
     waveforms = waveforms.float().cpu()
     signal_len = int(waveforms.shape[-1])
@@ -102,6 +205,16 @@ def _average_shifted_fft_power(waveforms, chunk_size=512):
     if total_count == 0:
         raise ValueError("DFT train-set power selection needs at least one waveform")
     return total_power / float(total_count)
+
+
+def select_balanced_fisher_dft_bins(waveforms, signal_len=1024, cr=16,
+                                    lag_limit_samples=None, chunk_size=512):
+    """Public helper for task-aware direct DFT updates without fitting PCA."""
+    n_complex_bins = max(1, latent_real_dim(int(signal_len), int(cr)) // 2)
+    return _balanced_fisher_bins(
+        waveforms, n_complex_bins, chunk_size=chunk_size,
+        lag_limit_samples=lag_limit_samples
+    )
 
 
 def _contiguous_power_bins(waveforms, count, chunk_size=512):
@@ -353,7 +466,9 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
                                 hadamard_mode="salari", pca_train_source="noisy",
                                 pca_fixed_snr_db=0.0,
                                 include_diagnostic_variants=False,
-                                random_variant_seeds=5):
+                                random_variant_seeds=5,
+                                include_legacy_variants=False,
+                                dft_lag_limit_samples=None):
     """
     Build Fig.6 traditional baselines under the same real-scalar budget as DAE.
 
@@ -374,8 +489,9 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
         "partial_fourier_uniform", "chen_dft"
     ) else dft_mode
     if dft_mode_l in ("fisher", "fisher_power", "tdoa_fisher", "rms_band", "rms_power", "high_fi"):
-        dft_selected_bins = _fisher_power_bins(
-            pca_waveforms, latent_real_dim(signal_len, cr) // 2
+        dft_selected_bins = select_balanced_fisher_dft_bins(
+            pca_waveforms, signal_len=signal_len, cr=cr,
+            lag_limit_samples=dft_lag_limit_samples
         )
     elif dft_mode_l in ("train_power", "power", "data_power"):
         dft_selected_bins = _top_power_bins(pca_waveforms, latent_real_dim(signal_len, cr) // 2)
@@ -397,8 +513,9 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
                 signal_len=signal_len, cr=cr, mode="uniform", seed=seed + 27
             ).to(device)
         if dft_label != "DFT-Fisher":
-            selected = _fisher_power_bins(
-                pca_waveforms, latent_real_dim(signal_len, cr) // 2
+            selected = select_balanced_fisher_dft_bins(
+                pca_waveforms, signal_len=signal_len, cr=cr,
+                lag_limit_samples=dft_lag_limit_samples
             )
             baselines["DFT-Fisher"] = DFTCompressionBaseline(
                 signal_len=signal_len, cr=cr, mode="center", seed=seed + 28,
@@ -422,19 +539,19 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             baselines["DFT-bandlimited"] = DFTCompressionBaseline(
                 signal_len=signal_len, cr=cr, mode="center", seed=seed + 31
             ).to(device)
-        if dft_label != "DFT-random":
+        if include_legacy_variants and dft_label != "DFT-random":
             for ridx in range(int(random_variant_seeds)):
                 baselines[f"DFT-random-{ridx + 1}"] = DFTCompressionBaseline(
                     signal_len=signal_len, cr=cr, mode="random",
                     seed=seed + 37 + 101 * ridx
                 ).to(device)
-        if had_label != "Hadamard-random":
+        if include_legacy_variants and had_label != "Hadamard-random":
             for ridx in range(int(random_variant_seeds)):
                 baselines[f"Hadamard-random-{ridx + 1}"] = HadamardProjectionBaseline(
                     signal_len=signal_len, cr=cr, row_mode="random",
                     seed=seed + 41 + 101 * ridx
                 ).to(device)
-        if had_label != "Hadamard-sequency":
+        if include_legacy_variants and had_label != "Hadamard-sequency":
             baselines["Hadamard-sequency"] = HadamardProjectionBaseline(
                 signal_len=signal_len, cr=cr, row_mode="sequency", seed=seed + 43
             ).to(device)
@@ -461,7 +578,7 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
         "dft_complex_bins": baselines[dft_label].n_complex_bins,
         "dft_main_label": dft_label,
         "dft_train_selection_kind": (
-            "fisher_power_freq_squared" if dft_mode_l in (
+            "balanced_fisher_lag_sidelobe" if dft_mode_l in (
                 "fisher", "fisher_power", "tdoa_fisher", "rms_band", "rms_power", "high_fi"
             )
             else "top_k_power" if dft_mode_l in ("train_power", "power", "data_power")
@@ -490,7 +607,11 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             "not used as the strict Chen Fig6 DFT main curve"
         ),
         "dft_fisher_role": (
-            "task-aware ablation; not the strict Chen-style DFT baseline"
+            "task-aware ablation; balanced Fisher/FIM bin selection with physical-lag "
+            "sidelobe control, not the strict Chen-style DFT baseline"
+        ),
+        "dft_fisher_lag_limit_samples": (
+            float(dft_lag_limit_samples) if dft_lag_limit_samples is not None else None
         ),
         "dft_fisher_selected_bins": (
             [int(v) for v in dft_selected_bins.tolist()]
@@ -527,6 +648,7 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
         "pca_fixed_snr_db": float(pca_fixed_snr_db),
         "hadamard_reconstruction": "H_M^T H_M projection",
         "include_diagnostic_variants": bool(include_diagnostic_variants),
+        "include_legacy_variants": bool(include_legacy_variants),
         "random_variant_seeds": int(random_variant_seeds),
         "baseline_method_order": list(baselines.keys()),
     }

@@ -416,7 +416,9 @@ def export_summary_md(data, result_dir, out_dir):
                     f"PCA samples `{meta.get('pca_training_samples', config.get('baseline_pca_samples'))}`\n\n")
         if data.get("fig7_results") is not None:
             f.write("- Fig7 task-aware baselines: available; direct DFT methods share the same "
-                    "evaluation set, LOS mask, communication budget, and WLS localization chain.\n\n")
+                    "evaluation set, LOS mask, communication budget, and WLS localization chain. "
+                    "DFT-Fisher-Direct uses balanced Fisher/FIM bin selection with physical-lag "
+                    "sidelobe control.\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")

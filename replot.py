@@ -28,6 +28,48 @@ def save_figure(fig, filepath):
     print(f"[Saved] {filepath}")
 
 
+def unique_order(items):
+    seen = set()
+    ordered = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
+
+
+def apply_current_method_view_config(method_results, view):
+    """Apply the current paper-ready Fig6/Fig7 method lists to older pkl files."""
+    if method_results is None:
+        return None
+    results, snr_range = method_results
+    config = results.setdefault('config', {})
+    baseline_cr = config.get('baseline_cr', 16)
+    meta = config.get('traditional_baseline_meta', {})
+    had_main = meta.get('hadamard_main_label', 'Hadamard')
+    dae_label = f'DAE-CR{baseline_cr}'
+
+    if view == 'fig6':
+        main_order = unique_order(['Raw', dae_label, 'DFT', had_main, 'PCA'])
+        supp_order = unique_order([
+            'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
+            'DFT-train-power', 'DFT-bandlimited',
+            had_main, 'Hadamard-block-2', 'PCA'
+        ])
+        config['main_method_order'] = main_order
+        config['supplement_method_order'] = supp_order
+        config['supplement_zoom_method_order'] = supp_order
+    elif view == 'fig7':
+        task_order = unique_order([
+            'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
+            'DFT-Fisher-Direct', had_main, 'PCA'
+        ])
+        config['taskaware_method_order'] = task_order
+        config['taskaware_zoom_method_order'] = task_order
+    return results, snr_range
+
+
 def replot(result_dir):
     pkl_path = os.path.join(result_dir, "plot_data.pkl")
     if not os.path.exists(pkl_path):
@@ -138,7 +180,7 @@ def replot(result_dir):
     fig_mc = plot_monte_carlo(mc_results)
     save_figure(fig_mc, os.path.join(result_dir, "Fig3_MonteCarlo_TDOA_RMSE.svg"))
 
-    fig6_results = data.get('fig6_results')
+    fig6_results = apply_current_method_view_config(data.get('fig6_results'), 'fig6')
     if fig6_results is not None:
         baseline_cr = data.get('config', {}).get('baseline_cr', 16)
         fig6_config = fig6_results[0].get('config', {})
@@ -173,7 +215,7 @@ def replot(result_dir):
                 f"{fig6_config.get('supplement_high_zoom_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_HighSNR_Zoom')}.svg"
             ))
 
-    fig7_results = data.get('fig7_results')
+    fig7_results = apply_current_method_view_config(data.get('fig7_results'), 'fig7')
     if fig7_results is not None:
         baseline_cr = data.get('config', {}).get('baseline_cr', 16)
         fig7_config = fig7_results[0].get('config', {})
@@ -204,9 +246,11 @@ def replot(result_dir):
                 f"{fig7_config.get('taskaware_high_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_HighSNR_Zoom')}.svg"
             ))
 
-    if plt.get_fignums():
+    if plt.get_fignums() and os.environ.get("DAE_REPLOT_NO_SHOW") != "1":
         print("\n所有图片已显示。关闭图片窗口后程序自动退出。")
         plt.show()
+    else:
+        plt.close('all')
 
     print("重绘完成。")
 
