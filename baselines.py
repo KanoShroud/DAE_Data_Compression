@@ -191,6 +191,99 @@ def _balanced_fisher_bins(waveforms, count, chunk_size=512, min_power_frac=0.05,
     return selected.sort().values.contiguous()
 
 
+def _window_lag_sidelobes(selected_bins, signal_len, lag_limit_samples=None,
+                          guard_samples=2):
+    n = int(signal_len)
+    selected = np.asarray(selected_bins, dtype=int)
+    if selected.size == 0:
+        return 1.0, 1.0
+    lags = np.arange(-n // 2, n // 2, dtype=float)
+    if lag_limit_samples is None:
+        lag_limit_samples = min(64, max(4, n // 16))
+    physical_mask = np.abs(lags) <= float(lag_limit_samples)
+    physical_lags = lags[physical_mask]
+    if physical_lags.size == 0:
+        physical_lags = lags
+    side_mask = np.abs(physical_lags) > float(guard_samples)
+    if not np.any(side_mask):
+        side_mask = np.ones_like(physical_lags, dtype=bool)
+    freqs = np.fft.fftshift(np.fft.fftfreq(n))[selected]
+    response = np.abs(
+        np.exp(2j * np.pi * np.outer(physical_lags, freqs))
+        @ np.ones(selected.size, dtype=np.complex64)
+    ) / float(selected.size)
+    return float(np.max(response[side_mask])), float(np.sqrt(np.mean(response[side_mask] ** 2)))
+
+
+def _cao2020_crb_fc_bins(waveforms, count, chunk_size=512, min_power_frac=0.02,
+                         lag_limit_samples=None, sidelobe_weight=0.85,
+                         rms_sidelobe_weight=0.30, guard_samples=2):
+    """
+    Cao-2020-style partial Fourier coefficient selection.
+
+    Cao et al. show that higher Fourier coefficients carry more delay
+    sensitivity, but the current task also needs a stable partial-Fourier
+    steering response inside the physically valid TDOA window. This selector
+    therefore scans contiguous one-sided high-frequency FC blocks and scores
+    them by CRB/Fisher delay information, retained signal power, high-frequency
+    preference, and physical-lag sidelobe suppression. It avoids the previous
+    two-edge ``highest |f|`` selection, which created comb-like ambiguity.
+    """
+    count = int(count)
+    avg_power = _average_shifted_fft_power(waveforms, chunk_size=chunk_size)
+    n = int(avg_power.numel())
+    if count < 1 or count > n:
+        raise ValueError("Invalid Cao2020 DFT selection size")
+
+    power_np = avg_power.detach().cpu().numpy().astype(np.float64)
+    freqs = np.fft.fftshift(np.fft.fftfreq(n))
+    freq_abs = np.abs(freqs) / (np.max(np.abs(freqs)) + 1e-12)
+    power_floor = float(np.max(power_np)) * float(min_power_frac)
+
+    center = n // 2
+    # One-sided contiguous FC blocks. Do not join the two Nyquist-edge blocks:
+    # that was the source of the previous comb ambiguity.
+    ranges = [(0, center), (center + 1, n)]
+    fim_scale = max(float(np.max(power_np * freq_abs ** 2)) * float(count), 1e-12)
+    power_scale = max(float(np.max(power_np)) * float(count), 1e-12)
+
+    best_obj = -np.inf
+    best_bins = None
+    for lo, hi in ranges:
+        if hi - lo < count:
+            continue
+        for start in range(lo, hi - count + 1):
+            bins = np.arange(start, start + count, dtype=int)
+            valid_frac = float(np.mean(power_np[bins] >= power_floor))
+            if valid_frac < 0.25:
+                continue
+            fim_info = float(np.sum(power_np[bins] * freq_abs[bins] ** 2))
+            band_power = float(np.sum(power_np[bins]))
+            highness = float(np.mean(freq_abs[bins]))
+            max_side, rms_side = _window_lag_sidelobes(
+                bins, n, lag_limit_samples=lag_limit_samples,
+                guard_samples=guard_samples
+            )
+            objective = (
+                np.log1p(fim_info / fim_scale)
+                + 0.20 * np.log1p(band_power / power_scale)
+                + 0.20 * highness
+                + 0.10 * valid_frac
+                - float(sidelobe_weight) * max_side
+                - float(rms_sidelobe_weight) * rms_side
+            )
+            if objective > best_obj:
+                best_obj = float(objective)
+                best_bins = bins
+
+    if best_bins is None:
+        # Robust fallback: keep a contiguous high-power band rather than
+        # returning to the unstable two-edge highest-|f| selection.
+        best_bins = _contiguous_power_bins(waveforms, count, chunk_size=chunk_size)
+        return best_bins.long().contiguous()
+    return torch.as_tensor(best_bins, dtype=torch.long).contiguous()
+
+
 def _average_shifted_fft_power(waveforms, chunk_size=512):
     waveforms = waveforms.float().cpu()
     signal_len = int(waveforms.shape[-1])
@@ -212,6 +305,120 @@ def select_balanced_fisher_dft_bins(waveforms, signal_len=1024, cr=16,
     """Public helper for task-aware direct DFT updates without fitting PCA."""
     n_complex_bins = max(1, latent_real_dim(int(signal_len), int(cr)) // 2)
     return _balanced_fisher_bins(
+        waveforms, n_complex_bins, chunk_size=chunk_size,
+        lag_limit_samples=lag_limit_samples
+    )
+
+
+def select_cao2020_crb_dft_bins(waveforms, signal_len=1024, cr=16,
+                                lag_limit_samples=None, chunk_size=512):
+    """Public helper for Cao-2020-style CRB/high-FC direct-TDOA baselines."""
+    n_complex_bins = max(1, latent_real_dim(int(signal_len), int(cr)) // 2)
+    return _cao2020_crb_fc_bins(
+        waveforms, n_complex_bins, chunk_size=chunk_size,
+        lag_limit_samples=lag_limit_samples
+    )
+
+
+def _zhai_crlb_bins(waveforms, count, chunk_size=512, min_power_frac=0.02,
+                    lag_limit_samples=None, candidate_factor=10,
+                    sidelobe_weight=0.45, rms_sidelobe_weight=0.15,
+                    guard_samples=2):
+    """
+    Greedy Zhai-style CRLB/FIM frequency decimation.
+
+    The delay CRLB of a bandlimited signal is governed by the weighted spectral
+    second central moment. This selector greedily maximizes that CRLB
+    denominator while penalizing ambiguous partial-Fourier sidelobes inside the
+    physically valid TDOA window. It is an implementable proxy for Zhai's
+    CRLB-driven frequency extraction, not a claim of reproducing every thesis
+    optimizer detail.
+    """
+    count = int(count)
+    avg_power = _average_shifted_fft_power(waveforms, chunk_size=chunk_size)
+    n = int(avg_power.numel())
+    if count < 1 or count > n:
+        raise ValueError("Invalid Zhai CRLB DFT selection size")
+
+    center = n // 2
+    freq = (torch.arange(n, dtype=avg_power.dtype) - float(center)) / max(float(center), 1.0)
+    power_floor = torch.max(avg_power) * float(min_power_frac)
+    valid = avg_power >= power_floor
+    if int(torch.sum(valid).item()) < count:
+        valid = torch.ones_like(valid, dtype=torch.bool)
+    fim_seed_score = avg_power * (freq ** 2)
+    masked_score = torch.where(valid, fim_seed_score, torch.full_like(fim_seed_score, -torch.inf))
+    finite_count = int(torch.isfinite(masked_score).sum().item())
+    if finite_count < count:
+        masked_score = fim_seed_score
+        finite_count = n
+
+    candidate_count = min(n, max(count, count * int(candidate_factor)))
+    candidate_count = min(candidate_count, finite_count)
+    candidate_bins = torch.topk(masked_score, k=candidate_count, largest=True).indices.sort().values
+    candidate_np = candidate_bins.detach().cpu().numpy().astype(int)
+    cand_power = avg_power[candidate_bins].detach().cpu().numpy().astype(np.float64)
+    cand_freq = freq[candidate_bins].detach().cpu().numpy().astype(np.float64)
+
+    lags = np.arange(-n // 2, n // 2, dtype=float)
+    if lag_limit_samples is None:
+        lag_limit_samples = min(64, max(4, n // 16))
+    physical_mask = np.abs(lags) <= float(lag_limit_samples)
+    physical_lags = lags[physical_mask]
+    if physical_lags.size == 0:
+        physical_lags = lags
+    side_mask = np.abs(physical_lags) > float(guard_samples)
+    if not np.any(side_mask):
+        side_mask = np.ones_like(physical_lags, dtype=bool)
+    steering = np.exp(
+        2j * np.pi * np.outer(physical_lags, np.fft.fftshift(np.fft.fftfreq(n))[candidate_np])
+    ).astype(np.complex64)
+
+    selected_local = []
+    remaining = np.ones(candidate_np.size, dtype=bool)
+    response = np.zeros(physical_lags.size, dtype=np.complex64)
+    w_sum = 0.0
+    wf_sum = 0.0
+    wf2_sum = 0.0
+    max_info_scale = max(float(np.max(cand_power * cand_freq ** 2)), 1e-12)
+    for step in range(count):
+        remaining_idx = np.where(remaining)[0]
+        if remaining_idx.size == 0:
+            break
+        w_new = w_sum + cand_power[remaining_idx]
+        wf_new = wf_sum + cand_power[remaining_idx] * cand_freq[remaining_idx]
+        wf2_new = wf2_sum + cand_power[remaining_idx] * cand_freq[remaining_idx] ** 2
+        crlb_info = wf2_new - (wf_new ** 2) / (w_new + 1e-12)
+        crlb_info = np.maximum(crlb_info, 0.0)
+        trial_response = response[:, None] + steering[:, remaining_idx]
+        amp = np.abs(trial_response) / float(step + 1)
+        max_side = np.max(amp[side_mask], axis=0)
+        rms_side = np.sqrt(np.mean(amp[side_mask] ** 2, axis=0))
+        objective = (
+            np.log1p(crlb_info / max_info_scale)
+            - float(sidelobe_weight) * max_side
+            - float(rms_sidelobe_weight) * rms_side
+        )
+        best_local = int(remaining_idx[int(np.argmax(objective))])
+        selected_local.append(best_local)
+        remaining[best_local] = False
+        response += steering[:, best_local]
+        w_sum += float(cand_power[best_local])
+        wf_sum += float(cand_power[best_local] * cand_freq[best_local])
+        wf2_sum += float(cand_power[best_local] * cand_freq[best_local] ** 2)
+
+    if len(selected_local) < count:
+        fallback = np.where(remaining)[0][:count - len(selected_local)]
+        selected_local.extend([int(v) for v in fallback.tolist()])
+    selected = torch.as_tensor(candidate_np[selected_local[:count]], dtype=torch.long)
+    return selected.sort().values.contiguous()
+
+
+def select_zhai_crlb_dft_bins(waveforms, signal_len=1024, cr=16,
+                              lag_limit_samples=None, chunk_size=512):
+    """Public helper for Zhai-style CRLB/FIM direct-TDOA baselines."""
+    n_complex_bins = max(1, latent_real_dim(int(signal_len), int(cr)) // 2)
+    return _zhai_crlb_bins(
         waveforms, n_complex_bins, chunk_size=chunk_size,
         lag_limit_samples=lag_limit_samples
     )
@@ -468,7 +675,8 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
                                 include_diagnostic_variants=False,
                                 random_variant_seeds=5,
                                 include_legacy_variants=False,
-                                dft_lag_limit_samples=None):
+                                dft_lag_limit_samples=None,
+                                include_strong_variants=False):
     """
     Build Fig.6 traditional baselines under the same real-scalar budget as DAE.
 
@@ -563,6 +771,25 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
                 row_offset=offset, seed=seed + 47
             ).to(device)
 
+    if include_strong_variants and "DFT-Zhai-CRLB" not in baselines:
+        selected = select_cao2020_crb_dft_bins(
+            pca_waveforms, signal_len=signal_len, cr=cr,
+            lag_limit_samples=dft_lag_limit_samples
+        )
+        baselines["DFT-Cao2020-CRB"] = DFTCompressionBaseline(
+            signal_len=signal_len, cr=cr, mode="center", seed=seed + 59,
+            selected_bins=selected
+        ).to(device)
+
+        selected = select_zhai_crlb_dft_bins(
+            pca_waveforms, signal_len=signal_len, cr=cr,
+            lag_limit_samples=dft_lag_limit_samples
+        )
+        baselines["DFT-Zhai-CRLB"] = DFTCompressionBaseline(
+            signal_len=signal_len, cr=cr, mode="center", seed=seed + 61,
+            selected_bins=selected
+        ).to(device)
+
     baselines["PCA"] = fit_pca_baseline(
         pca_waveforms, cr=cr, seed=int(seed), device=device
     )
@@ -633,6 +860,17 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             else None
         ),
         "dft_selected_bins_by_method": dft_selected_bins_by_method,
+        "dft_zhai_crlb_role": (
+            "strong task-aware baseline candidate; greedy CRLB/FIM spectral "
+            "variance selection with physical-lag sidelobe control"
+        ),
+        "dft_cao2020_crb_role": (
+            "strong task-aware baseline candidate; Cao-2020-style one-sided "
+            "partial-Fourier CRB/high-frequency selection with training-power "
+            "screening and physical-lag sidelobe control"
+        ),
+        "dft_cao2020_crb_selected_bins": dft_selected_bins_by_method.get("DFT-Cao2020-CRB"),
+        "dft_zhai_crlb_selected_bins": dft_selected_bins_by_method.get("DFT-Zhai-CRLB"),
         "hadamard_mode": str(hadamard_mode),
         "hadamard_rows_per_channel": baselines[had_label].rows_per_channel,
         "hadamard_main_label": had_label,
@@ -649,6 +887,7 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
         "hadamard_reconstruction": "H_M^T H_M projection",
         "include_diagnostic_variants": bool(include_diagnostic_variants),
         "include_legacy_variants": bool(include_legacy_variants),
+        "include_strong_variants": bool(include_strong_variants),
         "random_variant_seeds": int(random_variant_seeds),
         "baseline_method_order": list(baselines.keys()),
     }

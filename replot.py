@@ -12,7 +12,8 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 from evaluate import (plot_snr_comparison, plot_snr_comparison_multi,
-                      plot_monte_carlo, plot_method_comparison)
+                      plot_monte_carlo, plot_method_comparison,
+                      plot_method_zoom_pair)
 
 # ========== 在此修改结果目录路径 ==========
 RESULT_DIR = "运行结果/20260601_145854"
@@ -60,6 +61,9 @@ def apply_current_method_view_config(method_results, view):
         config['main_method_order'] = main_order
         config['supplement_method_order'] = supp_order
         config['supplement_zoom_method_order'] = supp_order
+        config['supplement_zoom_figure_filename'] = (
+            f'Fig6_Supp_Chen_Baseline_Ablation_CR{baseline_cr}_SNR_Zooms'
+        )
     elif view == 'fig7':
         task_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
@@ -67,6 +71,21 @@ def apply_current_method_view_config(method_results, view):
         ])
         config['taskaware_method_order'] = task_order
         config['taskaware_zoom_method_order'] = task_order
+        config['taskaware_zoom_figure_filename'] = (
+            f'Fig7_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
+        )
+    elif view == 'fig8':
+        strong_order = unique_order([
+            'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
+            'Cao2017-DFT-AML', 'Cao2020-HighFC',
+            'Zhai-CRLB-Decimation', 'Zhai-Phase-Superposition',
+            had_main, 'PCA'
+        ])
+        config['strong_method_order'] = strong_order
+        config['strong_zoom_method_order'] = strong_order
+        config['strong_zoom_figure_filename'] = (
+            f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
+        )
     return results, snr_range
 
 
@@ -194,25 +213,15 @@ def replot(result_dir):
         ))
         if fig6_config.get('export_method_zoom_figures', True):
             zoom_order = fig6_config.get('supplement_zoom_method_order')
-            fig_methods_low = plot_method_comparison(
+            fig_methods_zoom = plot_method_zoom_pair(
                 fig6_results, plot_kind="supplement",
-                snr_max=fig6_config.get('method_zoom_low_snr_max', 0.0),
+                low_snr_max=fig6_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig6_config.get('method_zoom_high_snr_min', 8.0),
                 method_order=zoom_order,
-                title_suffix="Low-SNR Zoom",
             )
-            save_figure(fig_methods_low, os.path.join(
+            save_figure(fig_methods_zoom, os.path.join(
                 result_dir,
-                f"{fig6_config.get('supplement_low_zoom_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_LowSNR_Zoom')}.svg"
-            ))
-            fig_methods_high = plot_method_comparison(
-                fig6_results, plot_kind="supplement",
-                snr_min=fig6_config.get('method_zoom_high_snr_min', 8.0),
-                method_order=zoom_order,
-                title_suffix="High-SNR Zoom",
-            )
-            save_figure(fig_methods_high, os.path.join(
-                result_dir,
-                f"{fig6_config.get('supplement_high_zoom_figure_filename', f'Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_HighSNR_Zoom')}.svg"
+                f"{fig6_config.get('supplement_zoom_figure_filename', f'Fig6_Supp_Chen_Baseline_Ablation_CR{baseline_cr}_SNR_Zooms')}.svg"
             ))
 
     fig7_results = apply_current_method_view_config(data.get('fig7_results'), 'fig7')
@@ -225,25 +234,36 @@ def replot(result_dir):
         ))
         if fig7_config.get('export_method_zoom_figures', True):
             zoom_order = fig7_config.get('taskaware_zoom_method_order')
-            fig_task_low = plot_method_comparison(
+            fig_task_zoom = plot_method_zoom_pair(
                 fig7_results, plot_kind="taskaware",
-                snr_max=fig7_config.get('method_zoom_low_snr_max', 0.0),
+                low_snr_max=fig7_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig7_config.get('method_zoom_high_snr_min', 8.0),
                 method_order=zoom_order,
-                title_suffix="Low-SNR Zoom",
             )
-            save_figure(fig_task_low, os.path.join(
+            save_figure(fig_task_zoom, os.path.join(
                 result_dir,
-                f"{fig7_config.get('taskaware_low_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_LowSNR_Zoom')}.svg"
+                f"{fig7_config.get('taskaware_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms')}.svg"
             ))
-            fig_task_high = plot_method_comparison(
-                fig7_results, plot_kind="taskaware",
-                snr_min=fig7_config.get('method_zoom_high_snr_min', 8.0),
+
+    fig8_results = apply_current_method_view_config(data.get('fig8_results'), 'fig8')
+    if fig8_results is not None:
+        baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig8_config = fig8_results[0].get('config', {})
+        fig_strong = plot_method_comparison(fig8_results, plot_kind="strong")
+        save_figure(fig_strong, os.path.join(
+            result_dir, f"{fig8_config.get('strong_figure_filename', f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}')}.svg"
+        ))
+        if fig8_config.get('export_method_zoom_figures', True):
+            zoom_order = fig8_config.get('strong_zoom_method_order')
+            fig_strong_zoom = plot_method_zoom_pair(
+                fig8_results, plot_kind="strong",
+                low_snr_max=fig8_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig8_config.get('method_zoom_high_snr_min', 8.0),
                 method_order=zoom_order,
-                title_suffix="High-SNR Zoom",
             )
-            save_figure(fig_task_high, os.path.join(
+            save_figure(fig_strong_zoom, os.path.join(
                 result_dir,
-                f"{fig7_config.get('taskaware_high_zoom_figure_filename', f'Fig7_TaskAware_Baselines_CR{baseline_cr}_HighSNR_Zoom')}.svg"
+                f"{fig8_config.get('strong_zoom_figure_filename', f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms')}.svg"
             ))
 
     if plt.get_fignums() and os.environ.get("DAE_REPLOT_NO_SHOW") != "1":

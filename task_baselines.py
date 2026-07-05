@@ -2,6 +2,92 @@ import numpy as np
 from scipy import signal
 
 
+def _lag_mask(lags, lag_limit_samples=None):
+    if lag_limit_samples is None:
+        return np.ones_like(lags, dtype=bool)
+    return np.abs(lags) <= float(lag_limit_samples)
+
+
+def _peak_from_score(lags, score, search_mask, sub_sample=True):
+    search_idx = np.where(search_mask)[0]
+    if search_idx.size == 0:
+        search_idx = np.arange(score.size)
+        search_mask = np.ones_like(score, dtype=bool)
+    idx = int(search_idx[np.argmax(score[search_idx])])
+    lag = float(lags[idx])
+    if (sub_sample and 0 < idx < score.size - 1
+            and search_mask[idx - 1] and search_mask[idx + 1]):
+        y0, y1, y2 = float(score[idx - 1]), float(score[idx]), float(score[idx + 1])
+        denom = y0 - 2.0 * y1 + y2
+        if abs(denom) > 1e-12:
+            delta = 0.5 * (y0 - y2) / denom
+            lag += float(np.clip(delta, -0.5, 0.5))
+    return idx, lag, search_mask
+
+
+def _quality_from_score(score, peak_idx, search_mask):
+    # Shift for quality statistics only; the peak decision still uses the
+    # original objective. This keeps real-valued ML scores numerically stable.
+    score_q = np.asarray(score, dtype=float).copy()
+    if np.any(search_mask):
+        score_q -= float(np.min(score_q[search_mask]))
+    peak = float(score_q[peak_idx])
+    mask = search_mask.copy()
+    lo = max(0, int(peak_idx) - 2)
+    hi = min(score_q.size, int(peak_idx) + 3)
+    mask[lo:hi] = False
+    sidelobe = float(np.max(score_q[mask])) if np.any(mask) else 0.0
+    sidelobe_ratio = sidelobe / (peak + 1e-12)
+    weight = float(np.clip(1.0 / (sidelobe_ratio + 1e-3), 0.05, 20.0))
+    return weight, peak, sidelobe_ratio
+
+
+def _diagnostics_from_estimator(estimator, batch_np, meta, fs, c,
+                                use_los_only=True, sub_sample=True,
+                                lag_limit_samples=None):
+    abs_err = []
+    weights = []
+    sidelobes = []
+    for bi in range(batch_np.shape[0]):
+        los_idx = np.where(meta["los"][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
+        los_idx = [int(v) for v in los_idx]
+        for a in range(len(los_idx)):
+            for b in range(a + 1, len(los_idx)):
+                ui, uj = los_idx[a], los_idx[b]
+                sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
+                sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
+                tau, weight, _, side = estimator.estimate_pair(
+                    sig_i, sig_j, sub_sample=sub_sample, return_quality=True,
+                    lag_limit_samples=lag_limit_samples
+                )
+                true_tau = (
+                    meta["distances"][bi, ui] - meta["distances"][bi, uj]
+                ) / (c / fs)
+                abs_err.append(float(abs(tau - true_tau)))
+                weights.append(float(weight))
+                sidelobes.append(float(side))
+
+    arr = np.asarray(abs_err, dtype=float)
+    warr = np.asarray(weights, dtype=float)
+    if arr.size == 0:
+        return {}
+    weighted = (
+        float(np.sum(warr * arr) / (np.sum(warr) + 1e-12))
+        if np.sum(warr) > 0 else float("nan")
+    )
+    return {
+        "direct_mean_abs_tdoa_error_samples": float(np.mean(arr)),
+        "direct_weighted_abs_tdoa_error_samples": weighted,
+        "direct_median_abs_tdoa_error_samples": float(np.median(arr)),
+        "direct_within_1_sample_rate": float(np.mean(arr <= 1.0)),
+        "direct_within_2_sample_rate": float(np.mean(arr <= 2.0)),
+        "direct_mean_sidelobe_ratio": float(np.mean(sidelobes)),
+        "direct_lag_limit_samples": (
+            float(lag_limit_samples) if lag_limit_samples is not None else float("nan")
+        ),
+    }
+
+
 class DirectDFTTDOAEstimator:
     """
     Estimate pairwise TDOA directly from selected DFT coefficients.
@@ -47,38 +133,18 @@ class DirectDFTTDOAEstimator:
 
         score = np.abs(self._steering @ cross)
         search_mask = self._lag_mask(lag_limit_samples)
-        search_idx = np.where(search_mask)[0]
-        if search_idx.size == 0:
-            search_idx = np.arange(score.size)
-            search_mask = np.ones_like(score, dtype=bool)
-        idx = int(search_idx[np.argmax(score[search_idx])])
-        lag = float(self.lags[idx])
-        if (sub_sample and 0 < idx < score.size - 1
-                and search_mask[idx - 1] and search_mask[idx + 1]):
-            y0, y1, y2 = score[idx - 1], score[idx], score[idx + 1]
-            denom = y0 - 2.0 * y1 + y2
-            if abs(denom) > 1e-12:
-                delta = 0.5 * (y0 - y2) / denom
-                lag += float(np.clip(delta, -0.5, 0.5))
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, score, search_mask, sub_sample=sub_sample
+        )
 
         if not return_quality:
             return lag
 
-        peak = float(score[idx])
-        mask = search_mask.copy()
-        lo = max(0, idx - 2)
-        hi = min(score.size, idx + 3)
-        mask[lo:hi] = False
-        sidelobe = float(np.max(score[mask])) if np.any(mask) else 0.0
-        sidelobe_ratio = sidelobe / (peak + 1e-12)
-        weight = float(np.clip(1.0 / (sidelobe_ratio + 1e-3), 0.05, 20.0))
+        weight, peak, sidelobe_ratio = _quality_from_score(score, idx, search_mask)
         return lag, weight, peak, sidelobe_ratio
 
     def _lag_mask(self, lag_limit_samples=None):
-        if lag_limit_samples is None:
-            return np.ones_like(self.lags, dtype=bool)
-        limit = float(lag_limit_samples)
-        return np.abs(self.lags) <= limit
+        return _lag_mask(self.lags, lag_limit_samples)
 
     def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
         if self.selected_bins.size <= 1:
@@ -116,44 +182,107 @@ class DirectDFTTDOAEstimator:
 
     def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
                     sub_sample=True, lag_limit_samples=None):
-        abs_err = []
-        weights = []
-        sidelobes = []
-        for bi in range(batch_np.shape[0]):
-            los_idx = np.where(meta["los"][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
-            los_idx = [int(v) for v in los_idx]
-            for a in range(len(los_idx)):
-                for b in range(a + 1, len(los_idx)):
-                    ui, uj = los_idx[a], los_idx[b]
-                    sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
-                    sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
-                    tau, weight, _, side = self.estimate_pair(
-                        sig_i, sig_j, sub_sample=sub_sample, return_quality=True,
-                        lag_limit_samples=lag_limit_samples
-                    )
-                    true_tau = (
-                        meta["distances"][bi, ui] - meta["distances"][bi, uj]
-                    ) / (c / fs)
-                    abs_err.append(float(abs(tau - true_tau)))
-                    weights.append(float(weight))
-                    sidelobes.append(float(side))
-
-        arr = np.asarray(abs_err, dtype=float)
-        warr = np.asarray(weights, dtype=float)
-        if arr.size == 0:
-            return {}
-        weighted = (
-            float(np.sum(warr * arr) / (np.sum(warr) + 1e-12))
-            if np.sum(warr) > 0 else float("nan")
+        return _diagnostics_from_estimator(
+            self, batch_np, meta, fs, c, use_los_only=use_los_only,
+            sub_sample=sub_sample, lag_limit_samples=lag_limit_samples
         )
-        return {
-            "direct_mean_abs_tdoa_error_samples": float(np.mean(arr)),
-            "direct_weighted_abs_tdoa_error_samples": weighted,
-            "direct_median_abs_tdoa_error_samples": float(np.median(arr)),
-            "direct_within_1_sample_rate": float(np.mean(arr <= 1.0)),
-            "direct_within_2_sample_rate": float(np.mean(arr <= 2.0)),
-            "direct_mean_sidelobe_ratio": float(np.mean(sidelobes)),
-            "direct_lag_limit_samples": (
-                float(lag_limit_samples) if lag_limit_samples is not None else float("nan")
-            ),
-        }
+
+
+class Cao2017DFTAMLEstimator(DirectDFTTDOAEstimator):
+    """
+    Cao-style compressed-frequency TDOA estimator.
+
+    The estimator keeps the same selected DFT-bin budget as DirectDFTTDOA but
+    scores each candidate lag with a phase-alignment likelihood objective:
+    sum_k w_k cos(angle(X_i[k] conj(X_j[k])) + 2*pi*f_k*tau). This is closer to
+    the ML/AML estimators used in compressed DFT TDOA literature than simply
+    taking the magnitude of the partial inverse cross-spectrum.
+    """
+
+    def __init__(self, selected_bins, signal_len=1024, label="Cao2017-DFT-AML",
+                 weight_mode="aml"):
+        super().__init__(selected_bins, signal_len=signal_len, label=label, phat=False)
+        self.weight_mode = str(weight_mode).lower()
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
+        spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
+        cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
+        phase = cross / (np.abs(cross) + 1e-12)
+        if self.weight_mode in ("phat", "unit", "unweighted"):
+            weights = np.ones_like(np.abs(cross), dtype=float)
+        else:
+            weights = np.abs(cross).astype(float)
+            weights = weights / (np.median(weights) + 1e-12)
+            weights = np.clip(weights, 0.05, 20.0)
+        score = np.real(self._steering @ (weights * phase))
+        search_mask = self._lag_mask(lag_limit_samples)
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, score, search_mask, sub_sample=sub_sample
+        )
+        if not return_quality:
+            return lag
+        weight, peak, sidelobe_ratio = _quality_from_score(score, idx, search_mask)
+        return lag, weight, peak, sidelobe_ratio
+
+
+class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
+    """
+    Zhai-style phase-superposition TDOA estimator on selected DFT bins.
+
+    The previous implementation grouped bins by the observed pair phase before
+    testing candidate delays. That loses the frequency-dependent phase slope and
+    can fail even on a known integer shift. This version follows the physically
+    meaningful phase-superposition criterion: for each candidate delay, compensate
+    the selected cross-spectrum phases by that delay and coherently superpose the
+    compensated unit phasors. The peak is therefore produced by the delay whose
+    phase ramp best aligns the selected frequency bins.
+
+    In the current strong-baseline track the selected bins are supplied by the
+    Zhai CRLB/FIM decimation selector, so this curve represents "CRLB frequency
+    selection + phase-only superposition" under the same all-pair WLS localizer.
+    """
+
+    def __init__(self, selected_bins, signal_len=1024,
+                 label="Zhai-Phase-Superposition"):
+        super().__init__(
+            selected_bins=selected_bins,
+            signal_len=signal_len,
+            label=label,
+            phat=True,
+        )
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
+        spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
+        cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
+        phase = cross / (np.abs(cross) + 1e-12)
+        score = np.abs(self._steering @ phase)
+        search_mask = self._lag_mask(lag_limit_samples)
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, score, search_mask, sub_sample=sub_sample
+        )
+        if not return_quality:
+            return lag
+        weight, peak, sidelobe_ratio = _quality_from_score(score, idx, search_mask)
+        return lag, weight, peak, sidelobe_ratio
+
+    def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
+        diag = super().alias_diagnostics(
+            lag_limit_samples=lag_limit_samples,
+            threshold=threshold,
+        )
+        diag["phase_superposition"] = "candidate_delay_compensated_unit_phasors"
+        diag["selection_source"] = "zhai_crlb_decimation_bins"
+        return diag
+
+    def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
+                    sub_sample=True, lag_limit_samples=None):
+        diag = _diagnostics_from_estimator(
+            self, batch_np, meta, fs, c, use_los_only=use_los_only,
+            sub_sample=sub_sample, lag_limit_samples=lag_limit_samples
+        )
+        diag["direct_phase_bin_count"] = int(self.selected_bins.size)
+        return diag

@@ -1316,12 +1316,15 @@ def _collect_group_values(methods, prefix, metric_key):
 
 def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
                            snr_min=None, snr_max=None, method_order=None,
-                           title_suffix=None):
+                           title_suffix=None, ax=None, legend=True,
+                           show_zoom_inset=True):
     results, snr_range = method_data
     methods = results["methods"]
     config = results.get("config", {})
     if method_order is not None:
         order = method_order
+    elif plot_kind == "strong":
+        order = config.get("strong_method_order", results.get("method_order", list(methods.keys())))
     elif plot_kind == "taskaware":
         order = config.get("taskaware_method_order", results.get("method_order", list(methods.keys())))
     elif plot_kind == "supplement":
@@ -1357,6 +1360,16 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
                                   label="Balanced Fisher direct"),
         "DFT-train-power-Direct": dict(color="#01665e", marker="P", linestyle="-", linewidth=1.8,
                                        label="DFT train-power direct"),
+        "Cao2017-DFT-AML": dict(color="#005ab5", marker="h", linestyle="-", linewidth=1.7,
+                                label="Cao2017 DFT-AML"),
+        "Cao2020-HighFC": dict(color="#56b4e9", marker=">", linestyle=(0, (5, 1)), linewidth=1.6,
+                               label="Cao2020 CRB high-FC"),
+        "Zhai-CRLB-Decimation": dict(color="#cc79a7", marker="8", linestyle="-", linewidth=1.7,
+                                     label="Zhai CRLB decimation"),
+        "Zhai-Phase-Superposition": dict(color="#d55e00", marker="P", linestyle="-.", linewidth=1.7,
+                                         label="Zhai phase superposition"),
+        "DFT-Zhai-CRLB": dict(color="#cc79a7", marker="8", linestyle=":", linewidth=1.4,
+                              label="DFT Zhai-CRLB recon"),
         "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
                                label="DFT train-band"),
         "DFT-train-power": dict(color="#80cdc1", marker="D", linestyle="--", linewidth=1.4,
@@ -1382,12 +1395,18 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
     }
 
     baseline_cr = config.get("baseline_cr", 16)
-    if plot_kind == "supplement":
-        fig, ax = plt.subplots(1, 1, figsize=(8.8, 5.0))
-    elif plot_kind == "taskaware":
-        fig, ax = plt.subplots(1, 1, figsize=(8.2, 5.0))
+    created_fig = ax is None
+    if created_fig:
+        if plot_kind == "supplement":
+            fig, ax = plt.subplots(1, 1, figsize=(8.8, 5.0))
+        elif plot_kind == "strong":
+            fig, ax = plt.subplots(1, 1, figsize=(9.2, 5.2))
+        elif plot_kind == "taskaware":
+            fig, ax = plt.subplots(1, 1, figsize=(8.2, 5.0))
+        else:
+            fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
     else:
-        fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
+        fig = ax.figure
     plotted_for_zoom = []
     for label in order:
         if isinstance(label, str) and label.endswith("*"):
@@ -1443,7 +1462,12 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
 
     ax.set_xlabel("SNR [dB]", fontsize=12)
     ax.set_ylabel(y_label, fontsize=12)
-    if plot_kind == "taskaware":
+    if plot_kind == "strong":
+        title = config.get(
+            "strong_title",
+            f"Figure 8: Strong Task-Aware Baselines (CR={baseline_cr})"
+        )
+    elif plot_kind == "taskaware":
         title = config.get(
             "taskaware_title",
             f"Figure 7: Task-Aware Baselines (CR={baseline_cr})"
@@ -1469,7 +1493,8 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
         title = f"{title} ({title_suffix})"
     ax.set_title(title, fontsize=12)
     ax.grid(True, alpha=0.45)
-    if (plot_kind == "main" and config.get("fig6_show_zoom_inset", True)
+    if (show_zoom_inset and plot_kind == "main"
+            and config.get("fig6_show_zoom_inset", True)
             and snr_min is None and snr_max is None):
         snr_arr = snr_all
         zoom_min = float(config.get("fig6_zoom_snr_min", 8.0))
@@ -1504,9 +1529,69 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
                     ax.indicate_inset_zoom(inset_ax, edgecolor="0.35", alpha=0.55)
                 except Exception:
                     pass
-    ax.legend(fontsize=9, ncol=3, framealpha=0.95, loc="upper center",
-              bbox_to_anchor=(0.5, -0.16), borderaxespad=0.0)
-    fig.subplots_adjust(bottom=0.27, left=0.11, right=0.98, top=0.90)
+    if legend:
+        legend_cols = 4 if plot_kind == "strong" else 3
+        ax.legend(fontsize=9, ncol=legend_cols, framealpha=0.95, loc="upper center",
+                  bbox_to_anchor=(0.5, -0.16), borderaxespad=0.0)
+    if created_fig:
+        fig.subplots_adjust(bottom=0.27, left=0.11, right=0.98, top=0.90)
+    return fig
+
+
+def plot_method_zoom_pair(method_data, metric_key="rmse", plot_kind="supplement",
+                          low_snr_max=0.0, high_snr_min=8.0,
+                          method_order=None):
+    """Plot low-SNR and high-SNR zooms in one compact two-panel figure."""
+    results, _ = method_data
+    config = results.get("config", {})
+    baseline_cr = config.get("baseline_cr", 16)
+    title_map = {
+        "supplement": config.get(
+            "supplement_title",
+            f"Figure 6 Supplement: Baseline Sensitivity (CR={baseline_cr})",
+        ),
+        "taskaware": config.get(
+            "taskaware_title",
+            f"Figure 7: Task-Aware Baselines (CR={baseline_cr})",
+        ),
+        "strong": config.get(
+            "strong_title",
+            f"Figure 8: Strong Task-Aware Baselines (CR={baseline_cr})",
+        ),
+        "main": config.get(
+            "main_title",
+            f"Figure 6: Localization Performance with Traditional Baselines (CR={baseline_cr})",
+        ),
+    }
+    fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.6), sharey=False)
+    plot_method_comparison(
+        method_data, metric_key=metric_key, plot_kind=plot_kind,
+        snr_max=low_snr_max, method_order=method_order,
+        title_suffix=f"SNR <= {float(low_snr_max):g} dB",
+        ax=axes[0], legend=False, show_zoom_inset=False,
+    )
+    plot_method_comparison(
+        method_data, metric_key=metric_key, plot_kind=plot_kind,
+        snr_min=high_snr_min, method_order=method_order,
+        title_suffix=f"SNR >= {float(high_snr_min):g} dB",
+        ax=axes[1], legend=False, show_zoom_inset=False,
+    )
+    axes[0].set_title(f"Low SNR (<= {float(low_snr_max):g} dB)", fontsize=11)
+    axes[1].set_title(f"High SNR (>= {float(high_snr_min):g} dB)", fontsize=11)
+    handles, labels = [], []
+    for ax in axes:
+        h, lab = ax.get_legend_handles_labels()
+        for handle, label in zip(h, lab):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
+    ncol = 4 if plot_kind == "strong" else 3
+    fig.legend(handles, labels, fontsize=8.5, ncol=ncol, framealpha=0.95,
+               loc="lower center", bbox_to_anchor=(0.5, 0.01))
+    fig.suptitle(f"{title_map.get(plot_kind, 'Method comparison')} - SNR Zooms",
+                 fontsize=12)
+    fig.subplots_adjust(bottom=0.25, left=0.08, right=0.985,
+                        top=0.86, wspace=0.22)
     return fig
 
 

@@ -16,12 +16,16 @@ import pickle
 from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
                       plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
                       clean_peak_consistency, run_urban_method_comparison,
-                      plot_method_comparison, filter_method_comparison_data)
+                      plot_method_comparison, plot_method_zoom_pair,
+                      filter_method_comparison_data)
 from model import DAE
 from signal_gen import SignalSimulator
 from baselines import build_traditional_baselines
-from task_baselines import DirectDFTTDOAEstimator
-
+from task_baselines import (
+    Cao2017DFTAMLEstimator,
+    DirectDFTTDOAEstimator,
+    ZhaiPhaseSuperpositionEstimator,
+)
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 PAPER_REPRO_MODES = ("paper_repro", "paper_repro_fast_final", "paper_repro_eval_only")
@@ -61,6 +65,8 @@ USER_BASELINE_INCLUDE_DIAGNOSTIC_VARIANTS = True
 USER_BASELINE_INCLUDE_LEGACY_VARIANTS = False
 USER_BASELINE_RANDOM_VARIANT_SEEDS = 0
 USER_RUN_TASK_AWARE_BASELINES = True
+USER_RUN_STRONG_BASELINES = True        # 独立 Fig8：Cao/Zhai 等强 TDOA-aware baseline
+USER_STRONG_INCLUDE_PHASE_SUPERPOSITION = True   # Fig8: Zhai CRLB bins + phase superposition
 USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权重重复复制到新结果目录
 USER_FIG6_SHOW_ZOOM_INSET = True
 USER_FIG6_ZOOM_SNR_MIN = 8.0
@@ -271,6 +277,14 @@ BASELINE_RANDOM_VARIANT_SEEDS = _cfg(
 RUN_TASK_AWARE_BASELINES = _cfg_bool(
     "DAE_RUN_TASK_AWARE_BASELINES", USER_RUN_TASK_AWARE_BASELINES, True
 )
+RUN_STRONG_BASELINES = _cfg_bool(
+    "DAE_RUN_STRONG_BASELINES", USER_RUN_STRONG_BASELINES, True
+)
+STRONG_INCLUDE_PHASE_SUPERPOSITION = _cfg_bool(
+    "DAE_STRONG_INCLUDE_PHASE_SUPERPOSITION",
+    USER_STRONG_INCLUDE_PHASE_SUPERPOSITION,
+    False
+)
 EVAL_ONLY_COPY_MODELS = _cfg_bool(
     "DAE_EVAL_ONLY_COPY_MODELS", USER_EVAL_ONLY_COPY_MODELS, False
 )
@@ -393,6 +407,8 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"legacy_variants={BASELINE_INCLUDE_LEGACY_VARIANTS} | "
       f"random_variant_seeds={BASELINE_RANDOM_VARIANT_SEEDS} | "
       f"task_aware_baselines={RUN_TASK_AWARE_BASELINES} | "
+      f"strong_baselines={RUN_STRONG_BASELINES} | "
+      f"phase_superposition={STRONG_INCLUDE_PHASE_SUPERPOSITION} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
       f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
 print(f"[Config] dft_direct_source={BASELINE_DFT_DIRECT_SOURCE} | "
@@ -432,6 +448,12 @@ def unique_order(items):
         seen.add(item)
         ordered.append(item)
     return ordered
+
+
+def high_frequency_dft_bins(signal_len, cr):
+    n_bins = max(1, (2 * int(signal_len) // int(cr)) // 2)
+    freqs = np.fft.fftshift(np.fft.fftfreq(int(signal_len)))
+    return np.argsort(-np.abs(freqs))[:n_bins].astype(int)
 
 
 def compute_physical_tdoa_lag_limit(simulator):
@@ -711,6 +733,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         fig6_results = None
         fig7_results = None
+        fig8_results = None
         baseline_all_results = None
         traditional_baseline_meta = None
         if RUN_TRADITIONAL_BASELINES:
@@ -732,6 +755,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     random_variant_seeds=BASELINE_RANDOM_VARIANT_SEEDS,
                     include_legacy_variants=BASELINE_INCLUDE_LEGACY_VARIANTS,
                     dft_lag_limit_samples=method_tdoa_lag_limit,
+                    include_strong_variants=RUN_STRONG_BASELINES,
                 )
                 print(f"[Fig6] Baseline feature budget: {traditional_baseline_meta}")
                 fig6_models = dict(traditional_models)
@@ -769,6 +793,45 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                                 signal_len=sim.signal_len,
                                 label=dst_label,
                             )
+                if RUN_STRONG_BASELINES:
+                    if dft_direct_source is not None and hasattr(dft_direct_source, "selected_bins"):
+                        direct_estimators["Cao2017-DFT-AML"] = Cao2017DFTAMLEstimator(
+                            dft_direct_source.selected_bins.detach().cpu().numpy(),
+                            signal_len=sim.signal_len,
+                            label="Cao2017-DFT-AML",
+                            weight_mode="aml",
+                        )
+                    cao2020_source = traditional_models.get("DFT-Cao2020-CRB")
+                    if cao2020_source is not None and hasattr(cao2020_source, "selected_bins"):
+                        direct_estimators["Cao2020-HighFC"] = Cao2017DFTAMLEstimator(
+                            cao2020_source.selected_bins.detach().cpu().numpy(),
+                            signal_len=sim.signal_len,
+                            label="Cao2020-HighFC",
+                            weight_mode="aml",
+                        )
+                    else:
+                        direct_estimators["Cao2020-HighFC"] = Cao2017DFTAMLEstimator(
+                            high_frequency_dft_bins(sim.signal_len, BASELINE_CR),
+                            signal_len=sim.signal_len,
+                            label="Cao2020-HighFC",
+                            weight_mode="aml",
+                        )
+                    zhai_crlb_source = traditional_models.get("DFT-Zhai-CRLB")
+                    if zhai_crlb_source is not None and hasattr(zhai_crlb_source, "selected_bins"):
+                        direct_estimators["Zhai-CRLB-Decimation"] = Cao2017DFTAMLEstimator(
+                            zhai_crlb_source.selected_bins.detach().cpu().numpy(),
+                            signal_len=sim.signal_len,
+                            label="Zhai-CRLB-Decimation",
+                            weight_mode="aml",
+                        )
+                    if (STRONG_INCLUDE_PHASE_SUPERPOSITION
+                            and zhai_crlb_source is not None
+                            and hasattr(zhai_crlb_source, "selected_bins")):
+                        direct_estimators["Zhai-Phase-Superposition"] = ZhaiPhaseSuperpositionEstimator(
+                            zhai_crlb_source.selected_bins.detach().cpu().numpy(),
+                            signal_len=sim.signal_len,
+                            label="Zhai-Phase-Superposition",
+                        )
 
                 baseline_all_results = run_urban_method_comparison(
                     fig6_models, sim, DEVICE, seed=current_seed,
@@ -805,12 +868,25 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "tdoa_lag_margin_samples": TDOA_LAG_MARGIN_SAMPLES,
                     "direct_dft_alias_diagnostics": dft_alias_diagnostics,
                     "baseline_include_legacy_variants": BASELINE_INCLUDE_LEGACY_VARIANTS,
+                    "run_strong_baselines": RUN_STRONG_BASELINES,
+                    "strong_include_phase_superposition": STRONG_INCLUDE_PHASE_SUPERPOSITION,
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
                     "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
                 }
                 baseline_all_results[0]["config"].update(common_config)
-                baseline_all_results[0]["config"]["task_aware_direct_methods"] = list(direct_estimators.keys())
+                baseline_all_results[0]["config"]["direct_methods"] = list(direct_estimators.keys())
+                baseline_all_results[0]["config"]["task_aware_direct_methods"] = [
+                    name for name in ["DFT", "DFT-Fisher-Direct"]
+                    if name in direct_estimators
+                ]
+                baseline_all_results[0]["config"]["strong_direct_methods"] = [
+                    name for name in [
+                        "Cao2017-DFT-AML", "Cao2020-HighFC",
+                        "Zhai-CRLB-Decimation", "Zhai-Phase-Superposition"
+                    ]
+                    if name in direct_estimators
+                ]
 
                 fig6_main_order = unique_order([
                     "Raw", f"DAE-CR{BASELINE_CR}", "DFT", had_main, "PCA"
@@ -834,8 +910,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
                         "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
                         "supplement_zoom_method_order": fig6_supp_order,
-                        "supplement_low_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_LowSNR_Zoom",
-                        "supplement_high_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_HighSNR_Zoom",
+                        "supplement_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_SNR_Zooms",
                         "table_prefix": "fig6",
                     },
                 )
@@ -855,9 +930,32 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "taskaware_title": f"Figure 7: Task-Aware Baseline Track (CR={BASELINE_CR})",
                             "taskaware_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}",
                             "taskaware_zoom_method_order": fig7_order,
-                            "taskaware_low_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_LowSNR_Zoom",
-                            "taskaware_high_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_HighSNR_Zoom",
+                            "taskaware_zoom_figure_filename": f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_SNR_Zooms",
                             "table_prefix": "fig7",
+                        },
+                    )
+
+                if RUN_STRONG_BASELINES and direct_estimators:
+                    fig8_order = unique_order([
+                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                        "DFT-Fisher-Direct", "Cao2017-DFT-AML",
+                        "Cao2020-HighFC", "Zhai-CRLB-Decimation",
+                        had_main, "PCA"
+                    ])
+                    if STRONG_INCLUDE_PHASE_SUPERPOSITION and "Zhai-Phase-Superposition" in direct_estimators:
+                        insert_at = max(0, len(fig8_order) - 2)
+                        fig8_order.insert(insert_at, "Zhai-Phase-Superposition")
+                    fig8_keep = unique_order(["Raw", "Clean", "Geometry"] + fig8_order)
+                    fig8_results = filter_method_comparison_data(
+                        baseline_all_results, fig8_keep,
+                        {
+                            **common_config,
+                            "strong_method_order": fig8_order,
+                            "strong_title": f"Figure 8: Strong Task-Aware Baselines (CR={BASELINE_CR})",
+                            "strong_figure_filename": f"Fig8_Strong_TaskAware_Baselines_CR{BASELINE_CR}",
+                            "strong_zoom_method_order": fig8_order,
+                            "strong_zoom_figure_filename": f"Fig8_Strong_TaskAware_Baselines_CR{BASELINE_CR}_SNR_Zooms",
+                            "table_prefix": "fig8",
                         },
                     )
 
@@ -869,6 +967,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'mc_results': mc_results,
             'fig6_results': fig6_results,
             'fig7_results': fig7_results,
+            'fig8_results': fig8_results,
             'baseline_all_results': baseline_all_results,
             'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
@@ -916,6 +1015,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'baseline_include_legacy_variants': BASELINE_INCLUDE_LEGACY_VARIANTS,
                 'baseline_random_variant_seeds': BASELINE_RANDOM_VARIANT_SEEDS,
                 'run_task_aware_baselines': RUN_TASK_AWARE_BASELINES,
+                'run_strong_baselines': RUN_STRONG_BASELINES,
+                'strong_include_phase_superposition': STRONG_INCLUDE_PHASE_SUPERPOSITION,
                 'use_physical_tdoa_lag_gate': USE_PHYSICAL_TDOA_LAG_GATE,
                 'tdoa_lag_limit_samples': method_tdoa_lag_limit,
                 'tdoa_lag_margin_samples': TDOA_LAG_MARGIN_SAMPLES,
@@ -974,30 +1075,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             if EXPORT_METHOD_ZOOM_FIGURES:
                 fig6_config = fig6_results[0].get("config", {})
                 zoom_order = fig6_config.get("supplement_zoom_method_order")
-                fig_methods_low = plot_method_comparison(
+                fig_methods_zoom = plot_method_zoom_pair(
                     fig6_results, plot_kind="supplement",
-                    snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    low_snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    high_snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
                     method_order=zoom_order,
-                    title_suffix="Low-SNR Zoom",
                 )
                 save_figure(
-                    fig_methods_low,
+                    fig_methods_zoom,
                     fig6_config.get(
-                        "supplement_low_zoom_figure_filename",
-                        f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}_LowSNR_Zoom",
-                    ),
-                )
-                fig_methods_high = plot_method_comparison(
-                    fig6_results, plot_kind="supplement",
-                    snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
-                    method_order=zoom_order,
-                    title_suffix="High-SNR Zoom",
-                )
-                save_figure(
-                    fig_methods_high,
-                    fig6_config.get(
-                        "supplement_high_zoom_figure_filename",
-                        f"Fig6_Supp_Baseline_Ablation_CR{BASELINE_CR}_HighSNR_Zoom",
+                        "supplement_zoom_figure_filename",
+                        f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_SNR_Zooms",
                     ),
                 )
 
@@ -1010,30 +1098,40 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             if EXPORT_METHOD_ZOOM_FIGURES:
                 fig7_config = fig7_results[0].get("config", {})
                 zoom_order = fig7_config.get("taskaware_zoom_method_order")
-                fig_task_low = plot_method_comparison(
+                fig_task_zoom = plot_method_zoom_pair(
                     fig7_results, plot_kind="taskaware",
-                    snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    low_snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    high_snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
                     method_order=zoom_order,
-                    title_suffix="Low-SNR Zoom",
                 )
                 save_figure(
-                    fig_task_low,
+                    fig_task_zoom,
                     fig7_config.get(
-                        "taskaware_low_zoom_figure_filename",
-                        f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_LowSNR_Zoom",
+                        "taskaware_zoom_figure_filename",
+                        f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_SNR_Zooms",
                     ),
                 )
-                fig_task_high = plot_method_comparison(
-                    fig7_results, plot_kind="taskaware",
-                    snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
+
+        if fig8_results is not None:
+            fig_strong = plot_method_comparison(fig8_results, plot_kind="strong")
+            fig8_name = fig8_results[0].get("config", {}).get(
+                "strong_figure_filename", f"Fig8_Strong_TaskAware_Baselines_CR{BASELINE_CR}"
+            )
+            save_figure(fig_strong, fig8_name)
+            if EXPORT_METHOD_ZOOM_FIGURES:
+                fig8_config = fig8_results[0].get("config", {})
+                zoom_order = fig8_config.get("strong_zoom_method_order")
+                fig_strong_zoom = plot_method_zoom_pair(
+                    fig8_results, plot_kind="strong",
+                    low_snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    high_snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
                     method_order=zoom_order,
-                    title_suffix="High-SNR Zoom",
                 )
                 save_figure(
-                    fig_task_high,
-                    fig7_config.get(
-                        "taskaware_high_zoom_figure_filename",
-                        f"Fig7_TaskAware_Baselines_CR{BASELINE_CR}_HighSNR_Zoom",
+                    fig_strong_zoom,
+                    fig8_config.get(
+                        "strong_zoom_figure_filename",
+                        f"Fig8_Strong_TaskAware_Baselines_CR{BASELINE_CR}_SNR_Zooms",
                     ),
                 )
 

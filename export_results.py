@@ -17,7 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from evaluate import plot_method_comparison
+from evaluate import plot_method_comparison, plot_method_zoom_pair
 
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -296,22 +296,16 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
             ]
             if config.get("export_method_zoom_figures", True):
                 zoom_order = config.get("supplement_zoom_method_order")
-                figure_kinds.extend([
+                figure_kinds.append(
                     {"plot_kind": "supplement",
                      "filename": config.get(
-                         "supplement_low_zoom_figure_filename",
-                         f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_LowSNR_Zoom"),
-                     "snr_max": config.get("method_zoom_low_snr_max", 0.0),
-                     "method_order": zoom_order,
-                     "title_suffix": "Low-SNR Zoom"},
-                    {"plot_kind": "supplement",
-                     "filename": config.get(
-                         "supplement_high_zoom_figure_filename",
-                         f"Fig6_Supp_Baseline_Ablation_CR{baseline_cr}_HighSNR_Zoom"),
-                     "snr_min": config.get("method_zoom_high_snr_min", 8.0),
-                     "method_order": zoom_order,
-                     "title_suffix": "High-SNR Zoom"},
-                ])
+                         "supplement_zoom_figure_filename",
+                         f"Fig6_Supp_Chen_Baseline_Ablation_CR{baseline_cr}_SNR_Zooms"),
+                     "zoom_pair": True,
+                     "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+                     "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+                     "method_order": zoom_order}
+                )
         for spec in figure_kinds:
             if isinstance(spec, dict):
                 plot_kind = spec.get("plot_kind", "main")
@@ -320,14 +314,27 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
                 snr_max = spec.get("snr_max")
                 method_order = spec.get("method_order")
                 title_suffix = spec.get("title_suffix")
+                zoom_pair = bool(spec.get("zoom_pair", False))
+                low_snr_max = spec.get("low_snr_max", 0.0)
+                high_snr_min = spec.get("high_snr_min", 8.0)
             else:
                 plot_kind, filename_stem = spec
                 snr_min = snr_max = method_order = title_suffix = None
-            fig = plot_method_comparison(
-                method_results, plot_kind=plot_kind,
-                snr_min=snr_min, snr_max=snr_max,
-                method_order=method_order, title_suffix=title_suffix,
-            )
+                zoom_pair = False
+                low_snr_max = 0.0
+                high_snr_min = 8.0
+            if zoom_pair:
+                fig = plot_method_zoom_pair(
+                    method_results, plot_kind=plot_kind,
+                    low_snr_max=low_snr_max, high_snr_min=high_snr_min,
+                    method_order=method_order,
+                )
+            else:
+                fig = plot_method_comparison(
+                    method_results, plot_kind=plot_kind,
+                    snr_min=snr_min, snr_max=snr_max,
+                    method_order=method_order, title_suffix=title_suffix,
+                )
             path = os.path.join(out_dir, f"{filename_stem}.svg")
             fig.savefig(path, format="svg", bbox_inches="tight")
             plt.close(fig)
@@ -357,24 +364,49 @@ def export_fig7_baselines(fig7_results, out_dir, export_figures=True):
     ]
     if config.get("export_method_zoom_figures", True):
         zoom_order = config.get("taskaware_zoom_method_order")
-        figure_kinds.extend([
+        figure_kinds.append(
             {"plot_kind": "taskaware",
              "filename": config.get(
-                 "taskaware_low_zoom_figure_filename",
-                 f"Fig7_TaskAware_Baselines_CR{baseline_cr}_LowSNR_Zoom"),
-             "snr_max": config.get("method_zoom_low_snr_max", 0.0),
-             "method_order": zoom_order,
-             "title_suffix": "Low-SNR Zoom"},
-            {"plot_kind": "taskaware",
-             "filename": config.get(
-                 "taskaware_high_zoom_figure_filename",
-                 f"Fig7_TaskAware_Baselines_CR{baseline_cr}_HighSNR_Zoom"),
-             "snr_min": config.get("method_zoom_high_snr_min", 8.0),
-             "method_order": zoom_order,
-             "title_suffix": "High-SNR Zoom"},
-        ])
+                 "taskaware_zoom_figure_filename",
+                 f"Fig7_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
     export_method_baselines(
         fig7_results, out_dir, table_prefix="fig7",
+        export_figures=export_figures,
+        figure_kinds=figure_kinds,
+    )
+
+
+def export_fig8_baselines(fig8_results, out_dir, export_figures=True):
+    if not fig8_results:
+        print("[Skip] No fig8_results found in plot_data.pkl")
+        return
+    results, _ = fig8_results
+    config = results.get("config", {})
+    baseline_cr = config.get("baseline_cr", 16)
+    figure_kinds = [
+        {"plot_kind": "strong",
+         "filename": config.get("strong_figure_filename",
+                                f"Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}")},
+    ]
+    if config.get("export_method_zoom_figures", True):
+        zoom_order = config.get("strong_zoom_method_order")
+        figure_kinds.append(
+            {"plot_kind": "strong",
+             "filename": config.get(
+                 "strong_zoom_figure_filename",
+                 f"Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
+    export_method_baselines(
+        fig8_results, out_dir, table_prefix="fig8",
         export_figures=export_figures,
         figure_kinds=figure_kinds,
     )
@@ -419,6 +451,12 @@ def export_summary_md(data, result_dir, out_dir):
                     "evaluation set, LOS mask, communication budget, and WLS localization chain. "
                     "DFT-Fisher-Direct uses balanced Fisher/FIM bin selection with physical-lag "
                     "sidelobe control.\n\n")
+        if data.get("fig8_results") is not None:
+            f.write("- Fig8 strong task-aware baselines: available; Cao/Zhai-style direct-TDOA "
+                    "methods share the same fixed evaluation set, LOS mask, physical lag gate, "
+                    "and all-pair WLS localizer. Zhai phase-superposition uses the same "
+                    "CRLB-selected DFT bins as Zhai-CRLB-Decimation and scores candidate delays "
+                    "by coherent superposition of delay-compensated unit phasors.\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")
@@ -452,6 +490,8 @@ def export(result_dir, export_fig6_figures=True):
     export_fig6_baselines(data.get("fig6_results"), out_dir,
                           export_figures=bool(export_fig6_figures))
     export_fig7_baselines(data.get("fig7_results"), out_dir,
+                          export_figures=bool(export_fig6_figures))
+    export_fig8_baselines(data.get("fig8_results"), out_dir,
                           export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)
     print("[Done] Export complete.")
