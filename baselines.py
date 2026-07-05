@@ -865,9 +865,10 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             "variance selection with physical-lag sidelobe control"
         ),
         "dft_cao2020_crb_role": (
-            "strong task-aware baseline candidate; Cao-2020-style one-sided "
+            "strong task-aware diagnostic candidate; Cao-2020-style one-sided "
             "partial-Fourier CRB/high-frequency selection with training-power "
-            "screening and physical-lag sidelobe control"
+            "screening and physical-lag sidelobe control; evaluated by segmented "
+            "incoherent high-FC delay scoring in main.py"
         ),
         "dft_cao2020_crb_selected_bins": dft_selected_bins_by_method.get("DFT-Cao2020-CRB"),
         "dft_zhai_crlb_selected_bins": dft_selected_bins_by_method.get("DFT-Zhai-CRLB"),

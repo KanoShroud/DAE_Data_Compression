@@ -412,6 +412,38 @@ def export_fig8_baselines(fig8_results, out_dir, export_figures=True):
     )
 
 
+def export_fig8_supp_baselines(fig8_supp_results, out_dir, export_figures=True):
+    if not fig8_supp_results:
+        print("[Skip] No fig8_supp_results found in plot_data.pkl")
+        return
+    results, _ = fig8_supp_results
+    config = results.get("config", {})
+    baseline_cr = config.get("baseline_cr", 16)
+    figure_kinds = [
+        {"plot_kind": "strong",
+         "filename": config.get(
+             "strong_figure_filename",
+             f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}")},
+    ]
+    if config.get("export_method_zoom_figures", True):
+        zoom_order = config.get("strong_zoom_method_order")
+        figure_kinds.append(
+            {"plot_kind": "strong",
+             "filename": config.get(
+                 "strong_zoom_figure_filename",
+                 f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
+    export_method_baselines(
+        fig8_supp_results, out_dir, table_prefix="fig8_supp",
+        export_figures=export_figures,
+        figure_kinds=figure_kinds,
+    )
+
+
 def export_summary_md(data, result_dir, out_dir):
     config = data.get("config", {})
     results, _ = data["mc_results"]
@@ -454,9 +486,14 @@ def export_summary_md(data, result_dir, out_dir):
         if data.get("fig8_results") is not None:
             f.write("- Fig8 strong task-aware baselines: available; Cao/Zhai-style direct-TDOA "
                     "methods share the same fixed evaluation set, LOS mask, physical lag gate, "
-                    "and all-pair WLS localizer. Zhai phase-superposition uses the same "
-                    "CRLB-selected DFT bins as Zhai-CRLB-Decimation and scores candidate delays "
-                    "by coherent superposition of delay-compensated unit phasors.\n\n")
+                    "and all-pair WLS localizer. The main Fig8 view keeps the stable official "
+                    "strong-baseline subset.\n\n")
+        if data.get("fig8_supp_results") is not None:
+            f.write("- Fig8 supplement strong diagnostics: available; Cao2020 uses segmented "
+                    "incoherent high-FC scoring, and Zhai phase-superposition uses "
+                    "sqrt-power-weighted delay-compensated phasor superposition. These "
+                    "curves are kept separate from the main Fig8 view until formal "
+                    "performance validation.\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")
@@ -493,6 +530,8 @@ def export(result_dir, export_fig6_figures=True):
                           export_figures=bool(export_fig6_figures))
     export_fig8_baselines(data.get("fig8_results"), out_dir,
                           export_figures=bool(export_fig6_figures))
+    export_fig8_supp_baselines(data.get("fig8_supp_results"), out_dir,
+                               export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)
     print("[Done] Export complete.")
 

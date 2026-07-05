@@ -227,6 +227,115 @@ class Cao2017DFTAMLEstimator(DirectDFTTDOAEstimator):
         return lag, weight, peak, sidelobe_ratio
 
 
+class Cao2020SegmentedFCEstimator(DirectDFTTDOAEstimator):
+    """
+    Cao-2020-style segmented high-FC estimator.
+
+    The selected Fourier coefficients are split into contiguous frequency
+    segments. Each segment produces its own delay-alignment likelihood, then the
+    segment scores are normalized and added incoherently. This keeps the
+    high-FC/CRB motivation while reducing the single-window alias sensitivity
+    seen in the earlier Cao2020 proxy.
+    """
+
+    def __init__(self, selected_bins, signal_len=1024,
+                 label="Cao2020-HighFC", n_segments=4,
+                 weight_mode="sqrt_power"):
+        super().__init__(
+            selected_bins=selected_bins,
+            signal_len=signal_len,
+            label=label,
+            phat=False,
+        )
+        self.n_segments = max(1, int(n_segments))
+        self.weight_mode = str(weight_mode).lower()
+        local_idx = np.arange(self.selected_bins.size)
+        self._segments = [
+            seg.astype(int)
+            for seg in np.array_split(local_idx, self.n_segments)
+            if seg.size > 0
+        ]
+
+    def _coherence_weights(self, cross):
+        mag = np.abs(cross).astype(float)
+        if self.weight_mode in ("unit", "phat", "phase"):
+            return np.ones_like(mag, dtype=float)
+        scale = float(np.percentile(mag, 75)) + 1e-12
+        if self.weight_mode in ("power", "aml"):
+            weights = mag / scale
+        else:
+            weights = np.sqrt(mag / scale)
+        return np.clip(weights, 0.05, 10.0)
+
+    @staticmethod
+    def _normalize_score(score, search_mask):
+        score = np.asarray(score, dtype=float)
+        if np.any(search_mask):
+            base = score[search_mask]
+        else:
+            base = score
+        lo = float(np.min(base))
+        hi = float(np.max(base))
+        return (score - lo) / (hi - lo + 1e-12)
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
+        spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
+        cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
+        search_mask = self._lag_mask(lag_limit_samples)
+        score = np.zeros(self.lags.size, dtype=float)
+        reliability_sum = 0.0
+
+        for seg in self._segments:
+            seg_cross = cross[seg]
+            if seg_cross.size == 0:
+                continue
+            phase = seg_cross / (np.abs(seg_cross) + 1e-12)
+            weights = self._coherence_weights(seg_cross)
+            seg_score = np.real(self._steering[:, seg] @ (weights * phase))
+            seg_score = self._normalize_score(seg_score, search_mask)
+            coherence = float(np.abs(np.sum(weights * phase)) / (np.sum(weights) + 1e-12))
+            energy = float(np.sqrt(np.mean(np.abs(seg_cross) ** 2)))
+            reliability = float(np.clip(0.5 + coherence + 0.1 * np.log1p(energy), 0.25, 3.0))
+            score += reliability * seg_score
+            reliability_sum += reliability
+
+        if reliability_sum <= 0:
+            phase = cross / (np.abs(cross) + 1e-12)
+            score = np.abs(self._steering @ phase)
+        else:
+            score = score / reliability_sum
+
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, score, search_mask, sub_sample=sub_sample
+        )
+        if not return_quality:
+            return lag
+        weight, peak, sidelobe_ratio = _quality_from_score(score, idx, search_mask)
+        return lag, weight, peak, sidelobe_ratio
+
+    def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
+        diag = super().alias_diagnostics(
+            lag_limit_samples=lag_limit_samples,
+            threshold=threshold,
+        )
+        diag["cao2020_estimator"] = "segmented_incoherent_fc"
+        diag["cao2020_n_segments"] = int(len(self._segments))
+        diag["cao2020_segment_sizes"] = [int(seg.size) for seg in self._segments]
+        diag["cao2020_weight_mode"] = self.weight_mode
+        return diag
+
+    def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
+                    sub_sample=True, lag_limit_samples=None):
+        diag = _diagnostics_from_estimator(
+            self, batch_np, meta, fs, c, use_los_only=use_los_only,
+            sub_sample=sub_sample, lag_limit_samples=lag_limit_samples
+        )
+        diag["direct_cao2020_segments"] = int(len(self._segments))
+        return diag
+
+
 class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
     """
     Zhai-style phase-superposition TDOA estimator on selected DFT bins.
@@ -240,18 +349,31 @@ class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
     phase ramp best aligns the selected frequency bins.
 
     In the current strong-baseline track the selected bins are supplied by the
-    Zhai CRLB/FIM decimation selector, so this curve represents "CRLB frequency
-    selection + phase-only superposition" under the same all-pair WLS localizer.
+    Zhai CRLB/FIM decimation selector. The default implementation uses a
+    clipped square-root magnitude weight, so it remains a phase-superposition
+    estimator but does not throw away all coherence/SNR information.
     """
 
     def __init__(self, selected_bins, signal_len=1024,
-                 label="Zhai-Phase-Superposition"):
+                 label="Zhai-Phase-Superposition", weight_mode="sqrt_power"):
         super().__init__(
             selected_bins=selected_bins,
             signal_len=signal_len,
             label=label,
             phat=True,
         )
+        self.weight_mode = str(weight_mode).lower()
+
+    def _phase_weights(self, cross):
+        mag = np.abs(cross).astype(float)
+        if self.weight_mode in ("unit", "phase", "phat", "unweighted"):
+            return np.ones_like(mag, dtype=float)
+        scale = float(np.percentile(mag, 75)) + 1e-12
+        if self.weight_mode in ("power", "aml"):
+            weights = mag / scale
+        else:
+            weights = np.sqrt(mag / scale)
+        return np.clip(weights, 0.05, 10.0)
 
     def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
                       lag_limit_samples=None):
@@ -259,7 +381,8 @@ class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
         phase = cross / (np.abs(cross) + 1e-12)
-        score = np.abs(self._steering @ phase)
+        weights = self._phase_weights(cross)
+        score = np.abs(self._steering @ (weights * phase)) / (np.sum(weights) + 1e-12)
         search_mask = self._lag_mask(lag_limit_samples)
         idx, lag, search_mask = _peak_from_score(
             self.lags, score, search_mask, sub_sample=sub_sample
@@ -274,7 +397,8 @@ class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
             lag_limit_samples=lag_limit_samples,
             threshold=threshold,
         )
-        diag["phase_superposition"] = "candidate_delay_compensated_unit_phasors"
+        diag["phase_superposition"] = "candidate_delay_compensated_weighted_phasors"
+        diag["phase_weight_mode"] = self.weight_mode
         diag["selection_source"] = "zhai_crlb_decimation_bins"
         return diag
 
@@ -285,4 +409,5 @@ class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
             sub_sample=sub_sample, lag_limit_samples=lag_limit_samples
         )
         diag["direct_phase_bin_count"] = int(self.selected_bins.size)
+        diag["direct_phase_weight_mode"] = self.weight_mode
         return diag

@@ -77,14 +77,27 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig8':
         strong_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
+            'Cao2017-DFT-AML', 'Zhai-CRLB-Decimation', had_main, 'PCA'
+        ])
+        config['strong_method_order'] = strong_order
+        config['strong_zoom_method_order'] = strong_order
+        config['strong_zoom_figure_filename'] = (
+            f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
+        )
+    elif view == 'fig8_supp':
+        strong_order = unique_order([
+            'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
             'Cao2017-DFT-AML', 'Cao2020-HighFC',
             'Zhai-CRLB-Decimation', 'Zhai-Phase-Superposition',
             had_main, 'PCA'
         ])
         config['strong_method_order'] = strong_order
         config['strong_zoom_method_order'] = strong_order
+        config['strong_figure_filename'] = (
+            f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}'
+        )
         config['strong_zoom_figure_filename'] = (
-            f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
+            f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}_SNR_Zooms'
         )
     return results, snr_range
 
@@ -264,6 +277,28 @@ def replot(result_dir):
             save_figure(fig_strong_zoom, os.path.join(
                 result_dir,
                 f"{fig8_config.get('strong_zoom_figure_filename', f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms')}.svg"
+            ))
+
+    fig8_supp_results = apply_current_method_view_config(data.get('fig8_supp_results'), 'fig8_supp')
+    if fig8_supp_results is not None:
+        baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig8_supp_config = fig8_supp_results[0].get('config', {})
+        fig_strong_supp = plot_method_comparison(fig8_supp_results, plot_kind="strong")
+        save_figure(fig_strong_supp, os.path.join(
+            result_dir,
+            f"{fig8_supp_config.get('strong_figure_filename', f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}')}.svg"
+        ))
+        if fig8_supp_config.get('export_method_zoom_figures', True):
+            zoom_order = fig8_supp_config.get('strong_zoom_method_order')
+            fig_strong_supp_zoom = plot_method_zoom_pair(
+                fig8_supp_results, plot_kind="strong",
+                low_snr_max=fig8_supp_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig8_supp_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+            )
+            save_figure(fig_strong_supp_zoom, os.path.join(
+                result_dir,
+                f"{fig8_supp_config.get('strong_zoom_figure_filename', f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}_SNR_Zooms')}.svg"
             ))
 
     if plt.get_fignums() and os.environ.get("DAE_REPLOT_NO_SHOW") != "1":

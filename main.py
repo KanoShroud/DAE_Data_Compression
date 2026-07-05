@@ -22,6 +22,7 @@ from model import DAE
 from signal_gen import SignalSimulator
 from baselines import build_traditional_baselines
 from task_baselines import (
+    Cao2020SegmentedFCEstimator,
     Cao2017DFTAMLEstimator,
     DirectDFTTDOAEstimator,
     ZhaiPhaseSuperpositionEstimator,
@@ -67,6 +68,7 @@ USER_BASELINE_RANDOM_VARIANT_SEEDS = 0
 USER_RUN_TASK_AWARE_BASELINES = True
 USER_RUN_STRONG_BASELINES = True        # 独立 Fig8：Cao/Zhai 等强 TDOA-aware baseline
 USER_STRONG_INCLUDE_PHASE_SUPERPOSITION = True   # Fig8: Zhai CRLB bins + phase superposition
+USER_RUN_STRONG_DIAGNOSTIC_SUPPLEMENT = True     # Fig8 supplement: proxy/diagnostic strong candidates
 USER_EVAL_ONLY_COPY_MODELS = False       # False: eval_only 不把源模型权重重复复制到新结果目录
 USER_FIG6_SHOW_ZOOM_INSET = True
 USER_FIG6_ZOOM_SNR_MIN = 8.0
@@ -285,6 +287,11 @@ STRONG_INCLUDE_PHASE_SUPERPOSITION = _cfg_bool(
     USER_STRONG_INCLUDE_PHASE_SUPERPOSITION,
     False
 )
+RUN_STRONG_DIAGNOSTIC_SUPPLEMENT = _cfg_bool(
+    "DAE_RUN_STRONG_DIAGNOSTIC_SUPPLEMENT",
+    USER_RUN_STRONG_DIAGNOSTIC_SUPPLEMENT,
+    True
+)
 EVAL_ONLY_COPY_MODELS = _cfg_bool(
     "DAE_EVAL_ONLY_COPY_MODELS", USER_EVAL_ONLY_COPY_MODELS, False
 )
@@ -409,6 +416,7 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"task_aware_baselines={RUN_TASK_AWARE_BASELINES} | "
       f"strong_baselines={RUN_STRONG_BASELINES} | "
       f"phase_superposition={STRONG_INCLUDE_PHASE_SUPERPOSITION} | "
+      f"strong_diagnostic_supplement={RUN_STRONG_DIAGNOSTIC_SUPPLEMENT} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
       f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
 print(f"[Config] dft_direct_source={BASELINE_DFT_DIRECT_SOURCE} | "
@@ -734,6 +742,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         fig6_results = None
         fig7_results = None
         fig8_results = None
+        fig8_supp_results = None
         baseline_all_results = None
         traditional_baseline_meta = None
         if RUN_TRADITIONAL_BASELINES:
@@ -803,18 +812,20 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         )
                     cao2020_source = traditional_models.get("DFT-Cao2020-CRB")
                     if cao2020_source is not None and hasattr(cao2020_source, "selected_bins"):
-                        direct_estimators["Cao2020-HighFC"] = Cao2017DFTAMLEstimator(
+                        direct_estimators["Cao2020-HighFC"] = Cao2020SegmentedFCEstimator(
                             cao2020_source.selected_bins.detach().cpu().numpy(),
                             signal_len=sim.signal_len,
                             label="Cao2020-HighFC",
-                            weight_mode="aml",
+                            n_segments=4,
+                            weight_mode="sqrt_power",
                         )
                     else:
-                        direct_estimators["Cao2020-HighFC"] = Cao2017DFTAMLEstimator(
+                        direct_estimators["Cao2020-HighFC"] = Cao2020SegmentedFCEstimator(
                             high_frequency_dft_bins(sim.signal_len, BASELINE_CR),
                             signal_len=sim.signal_len,
                             label="Cao2020-HighFC",
-                            weight_mode="aml",
+                            n_segments=4,
+                            weight_mode="sqrt_power",
                         )
                     zhai_crlb_source = traditional_models.get("DFT-Zhai-CRLB")
                     if zhai_crlb_source is not None and hasattr(zhai_crlb_source, "selected_bins"):
@@ -831,6 +842,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             zhai_crlb_source.selected_bins.detach().cpu().numpy(),
                             signal_len=sim.signal_len,
                             label="Zhai-Phase-Superposition",
+                            weight_mode="sqrt_power",
                         )
 
                 baseline_all_results = run_urban_method_comparison(
@@ -870,6 +882,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "baseline_include_legacy_variants": BASELINE_INCLUDE_LEGACY_VARIANTS,
                     "run_strong_baselines": RUN_STRONG_BASELINES,
                     "strong_include_phase_superposition": STRONG_INCLUDE_PHASE_SUPERPOSITION,
+                    "run_strong_diagnostic_supplement": RUN_STRONG_DIAGNOSTIC_SUPPLEMENT,
+                    "cao2020_estimator": "segmented_incoherent_fc",
+                    "zhai_phase_superposition": "sqrt_power_weighted_phase",
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
                     "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
@@ -936,15 +951,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     )
 
                 if RUN_STRONG_BASELINES and direct_estimators:
+                    # Fig8 main is intentionally reserved for stable, interpretable
+                    # strong baselines. Proxy/diagnostic variants remain computed
+                    # in baseline_all_results and are plotted in Fig8 supplement.
                     fig8_order = unique_order([
                         "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
                         "DFT-Fisher-Direct", "Cao2017-DFT-AML",
-                        "Cao2020-HighFC", "Zhai-CRLB-Decimation",
-                        had_main, "PCA"
+                        "Zhai-CRLB-Decimation", had_main, "PCA"
                     ])
-                    if STRONG_INCLUDE_PHASE_SUPERPOSITION and "Zhai-Phase-Superposition" in direct_estimators:
-                        insert_at = max(0, len(fig8_order) - 2)
-                        fig8_order.insert(insert_at, "Zhai-Phase-Superposition")
                     fig8_keep = unique_order(["Raw", "Clean", "Geometry"] + fig8_order)
                     fig8_results = filter_method_comparison_data(
                         baseline_all_results, fig8_keep,
@@ -958,6 +972,33 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "table_prefix": "fig8",
                         },
                     )
+                    if RUN_STRONG_DIAGNOSTIC_SUPPLEMENT:
+                        fig8_supp_order = unique_order([
+                            "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                            "DFT-Fisher-Direct", "Cao2017-DFT-AML",
+                            "Cao2020-HighFC", "Zhai-CRLB-Decimation",
+                            "Zhai-Phase-Superposition", had_main, "PCA"
+                        ])
+                        fig8_supp_keep = unique_order(["Raw", "Clean", "Geometry"] + fig8_supp_order)
+                        fig8_supp_results = filter_method_comparison_data(
+                            baseline_all_results, fig8_supp_keep,
+                            {
+                                **common_config,
+                                "strong_method_order": fig8_supp_order,
+                                "strong_title": (
+                                    f"Figure 8 Supplement: Strong Baseline Diagnostics "
+                                    f"(CR={BASELINE_CR})"
+                                ),
+                                "strong_figure_filename": (
+                                    f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{BASELINE_CR}"
+                                ),
+                                "strong_zoom_method_order": fig8_supp_order,
+                                "strong_zoom_figure_filename": (
+                                    f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{BASELINE_CR}_SNR_Zooms"
+                                ),
+                                "table_prefix": "fig8_supp",
+                            },
+                        )
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
         plot_data = {
@@ -968,6 +1009,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'fig6_results': fig6_results,
             'fig7_results': fig7_results,
             'fig8_results': fig8_results,
+            'fig8_supp_results': fig8_supp_results,
             'baseline_all_results': baseline_all_results,
             'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
@@ -1017,6 +1059,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'run_task_aware_baselines': RUN_TASK_AWARE_BASELINES,
                 'run_strong_baselines': RUN_STRONG_BASELINES,
                 'strong_include_phase_superposition': STRONG_INCLUDE_PHASE_SUPERPOSITION,
+                'run_strong_diagnostic_supplement': RUN_STRONG_DIAGNOSTIC_SUPPLEMENT,
                 'use_physical_tdoa_lag_gate': USE_PHYSICAL_TDOA_LAG_GATE,
                 'tdoa_lag_limit_samples': method_tdoa_lag_limit,
                 'tdoa_lag_margin_samples': TDOA_LAG_MARGIN_SAMPLES,
@@ -1132,6 +1175,29 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     fig8_config.get(
                         "strong_zoom_figure_filename",
                         f"Fig8_Strong_TaskAware_Baselines_CR{BASELINE_CR}_SNR_Zooms",
+                    ),
+                )
+
+        if fig8_supp_results is not None:
+            fig_strong_supp = plot_method_comparison(fig8_supp_results, plot_kind="strong")
+            fig8_supp_name = fig8_supp_results[0].get("config", {}).get(
+                "strong_figure_filename", f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{BASELINE_CR}"
+            )
+            save_figure(fig_strong_supp, fig8_supp_name)
+            if EXPORT_METHOD_ZOOM_FIGURES:
+                fig8_supp_config = fig8_supp_results[0].get("config", {})
+                zoom_order = fig8_supp_config.get("strong_zoom_method_order")
+                fig_strong_supp_zoom = plot_method_zoom_pair(
+                    fig8_supp_results, plot_kind="strong",
+                    low_snr_max=METHOD_ZOOM_LOW_SNR_MAX,
+                    high_snr_min=METHOD_ZOOM_HIGH_SNR_MIN,
+                    method_order=zoom_order,
+                )
+                save_figure(
+                    fig_strong_supp_zoom,
+                    fig8_supp_config.get(
+                        "strong_zoom_figure_filename",
+                        f"Fig8_Supp_Strong_Baseline_Diagnostics_CR{BASELINE_CR}_SNR_Zooms",
                     ),
                 )
 
