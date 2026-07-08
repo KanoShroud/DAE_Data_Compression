@@ -394,8 +394,12 @@ class NestedFrequencyPairwiseDAE(nn.Module):
 
     def encode_latent(self, x, cr=None):
         b = x.size(0)
-        z = self.fc_enc(self.enc(self._frequency_emphasis(x)).view(b, -1))
+        z = self.encode_full_latent(x)
         return self._mask_latent(z, cr=cr)
+
+    def encode_full_latent(self, x):
+        b = x.size(0)
+        return self.fc_enc(self.enc(self._frequency_emphasis(x)).view(b, -1))
 
     def decode_latent(self, z):
         b = z.size(0)
@@ -411,3 +415,48 @@ class NestedFrequencyPairwiseDAE(nn.Module):
     def pair_task_logits_from_latent(self, z1, z2):
         pair_feat = torch.cat([z1, z2, z1 - z2, z1 * z2], dim=1)
         return self.task_head(pair_feat)
+
+
+class NestedTaskSufficientDAE(NestedFrequencyPairwiseDAE):
+    """
+    FreqDAE v4-min: nested task-sufficient compression.
+
+    Compared with v3, this model keeps the same waveform reconstruction
+    interface but exposes an uncertainty head for the pairwise TDOA branch.
+    Training can evaluate all nested prefixes (CR4/8/16) from one full latent
+    vector, which lets the loss enforce monotonic resource use instead of
+    hoping that extra dimensions become useful indirectly.
+    """
+
+    def __init__(self, cr=16, signal_len=1024, max_cr=4,
+                 prior_strength=0.45, min_gain=0.70, max_gain=1.30,
+                 nested_crs=(4, 8, 16), task_hidden=512):
+        super().__init__(
+            cr=cr,
+            signal_len=signal_len,
+            max_cr=max_cr,
+            prior_strength=prior_strength,
+            min_gain=min_gain,
+            max_gain=max_gain,
+            nested_crs=nested_crs,
+            task_hidden=task_hidden,
+        )
+        pair_dim = self.max_real_latent_dim * 4
+        self.uncertainty_head = nn.Sequential(
+            nn.Linear(pair_dim, int(task_hidden // 2)),
+            nn.ReLU(),
+            nn.Linear(int(task_hidden // 2), 1),
+        )
+
+    def pair_features_from_latent(self, z1, z2):
+        return torch.cat([z1, z2, z1 - z2, z1 * z2], dim=1)
+
+    def pair_task_outputs_from_latent(self, z1, z2):
+        pair_feat = self.pair_features_from_latent(z1, z2)
+        logits = self.task_head(pair_feat)
+        log_var = torch.clamp(self.uncertainty_head(pair_feat).squeeze(-1), -6.0, 6.0)
+        return logits, log_var
+
+    def pair_task_logits_from_latent(self, z1, z2):
+        logits, _ = self.pair_task_outputs_from_latent(z1, z2)
+        return logits

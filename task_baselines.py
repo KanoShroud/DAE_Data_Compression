@@ -334,10 +334,12 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
     """
 
     def __init__(self, coarse_bins, fine_bins, signal_len=1024,
-                 label="GeoHybrid-DFT", coarse_mode="aml",
+                 label="GeoHybrid-B64", coarse_mode="aml",
                  fine_mode="aml", refinement_radius=4.0,
                  fine_gain=1.25, consistency_sigma=3.0,
-                 phat_gate=0.35, max_pair_weight=8.0):
+                 phat_gate=0.35, max_pair_weight=8.0,
+                 budget_limit_complex=None, use_consistency=True,
+                 use_pair_uncertainty=True, budget_note=""):
         super().__init__(fine_bins, signal_len=signal_len, label=label, phat=False)
         self.coarse_bins = np.asarray(coarse_bins, dtype=int)
         self.fine_bins = np.asarray(fine_bins, dtype=int)
@@ -366,7 +368,25 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
         self.consistency_sigma = float(consistency_sigma)
         self.phat_gate = float(phat_gate)
         self.max_pair_weight = float(max_pair_weight)
+        self.budget_limit_complex = (
+            None if budget_limit_complex is None else int(budget_limit_complex)
+        )
+        self.use_consistency = bool(use_consistency)
+        self.use_pair_uncertainty = bool(use_pair_uncertainty)
+        self.budget_note = str(budget_note)
+        self.union_bins = np.union1d(self.coarse_bins, self.fine_bins)
+        self.overlap_bin_count = int(np.intersect1d(self.coarse_bins, self.fine_bins).size)
+        self.union_bin_count = int(self.union_bins.size)
+        self.real_feature_budget = int(2 * self.union_bin_count)
+        self.effective_cr = float(2 * self.signal_len / max(self.real_feature_budget, 1))
         self.last_quality = {}
+
+    def _budget_status(self):
+        if self.budget_limit_complex is None:
+            return "unbounded_diagnostic"
+        if self.union_bin_count <= self.budget_limit_complex:
+            return "fair_cr16"
+        return "over_budget"
 
     @staticmethod
     def _reliability(coherence, sidelobe_ratio):
@@ -425,6 +445,7 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
             consistency = float(np.exp(
                 -0.5 * (coarse_fine_dev / max(self.consistency_sigma, 1e-12)) ** 2
             ))
+        consistency_for_fusion = consistency if self.use_consistency else 1.0
 
         local_mask = physical_mask & (
             np.abs(self.lags - coarse["lag"]) <= self.refinement_radius
@@ -432,7 +453,7 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
         if not np.any(local_mask):
             local_mask = physical_mask
         fine_beta = float(np.clip(
-            self.fine_gain * fine_rel * consistency / (coarse_rel + fine_rel + 1e-12),
+            self.fine_gain * fine_rel * consistency_for_fusion / (coarse_rel + fine_rel + 1e-12),
             0.0, self.fine_gain
         ))
         coarse_norm = _normalize_score(coarse["score"], physical_mask)
@@ -449,12 +470,15 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
             combined_score, idx, local_mask
         )
         combined_margin = _score_margin(sidelobe_ratio)
-        consistency_weight = 0.25 + 0.75 * consistency
-        reliability_weight = 0.25 + 2.0 * coarse_rel + 2.0 * fine_rel * consistency
-        weight = float(np.clip(
-            base_weight * combined_margin * reliability_weight * consistency_weight,
-            0.02, self.max_pair_weight
-        ))
+        consistency_weight = 0.25 + 0.75 * consistency_for_fusion
+        reliability_weight = 0.25 + 2.0 * coarse_rel + 2.0 * fine_rel * consistency_for_fusion
+        if self.use_pair_uncertainty:
+            weight = float(np.clip(
+                base_weight * combined_margin * reliability_weight * consistency_weight,
+                0.02, self.max_pair_weight
+            ))
+        else:
+            weight = 1.0
         self.last_quality = {
             "coarse_coherence": coarse["coherence"],
             "fine_coherence": fine["coherence"],
@@ -466,6 +490,7 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
             "fine_reliability": fine_rel,
             "coarse_fine_deviation_samples": coarse_fine_dev,
             "coarse_fine_consistency": consistency,
+            "coarse_fine_consistency_used": consistency_for_fusion,
             "fine_beta": fine_beta,
             "combined_margin": combined_margin,
             "pair_weight": weight,
@@ -494,6 +519,15 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
             "hybrid_refinement_radius": float(self.refinement_radius),
             "hybrid_fine_gain": float(self.fine_gain),
             "hybrid_consistency_sigma": float(self.consistency_sigma),
+            "hybrid_use_consistency": bool(self.use_consistency),
+            "hybrid_use_pair_uncertainty": bool(self.use_pair_uncertainty),
+            "hybrid_union_bin_count": int(self.union_bin_count),
+            "hybrid_overlap_bin_count": int(self.overlap_bin_count),
+            "hybrid_real_feature_budget": int(self.real_feature_budget),
+            "hybrid_effective_cr": float(self.effective_cr),
+            "hybrid_budget_limit_complex": self.budget_limit_complex,
+            "hybrid_budget_status": self._budget_status(),
+            "hybrid_budget_note": self.budget_note,
             "hybrid_coarse_max_sidelobe_inside_physical_lag": (
                 coarse_diag.get("max_sidelobe_inside_physical_lag")
             ),
@@ -511,6 +545,14 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
         )
         diag["hybrid_coarse_bin_count"] = int(self.coarse_bins.size)
         diag["hybrid_fine_bin_count"] = int(self.fine_bins.size)
+        diag["hybrid_union_bin_count"] = int(self.union_bin_count)
+        diag["hybrid_overlap_bin_count"] = int(self.overlap_bin_count)
+        diag["hybrid_real_feature_budget"] = int(self.real_feature_budget)
+        diag["hybrid_effective_cr"] = float(self.effective_cr)
+        diag["hybrid_budget_limit_complex"] = self.budget_limit_complex
+        diag["hybrid_budget_status"] = self._budget_status()
+        diag["hybrid_use_consistency"] = bool(self.use_consistency)
+        diag["hybrid_use_pair_uncertainty"] = bool(self.use_pair_uncertainty)
         diag["hybrid_refinement_radius"] = float(self.refinement_radius)
         diag["hybrid_fine_gain"] = float(self.fine_gain)
         return diag

@@ -23,6 +23,7 @@ from evaluate import (filter_method_comparison_data, plot_method_comparison,
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                   "运行结果", "20260702_000925")
+EXPORT_MARKDOWN_TABLES = True
 
 
 def _fmt(value):
@@ -48,6 +49,9 @@ def write_csv(path, rows, fieldnames):
 
 
 def write_markdown_table(path, rows, fieldnames):
+    if not EXPORT_MARKDOWN_TABLES:
+        print(f"[Skip] Markdown table disabled: {path}")
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write("| " + " | ".join(fieldnames) + " |\n")
@@ -552,6 +556,7 @@ def make_fig9_focus_results(data):
             "FreqDAE-CR4", "FreqDAE-CR8", "FreqDAE-CR16",
             "FreqDAE-v2-CR4", "FreqDAE-v2-CR8", "FreqDAE-v2-CR16",
             "FreqDAE-v3-CR4", "FreqDAE-v3-CR8", "FreqDAE-v3-CR16",
+            "FreqDAE-v4-CR4", "FreqDAE-v4-CR8", "FreqDAE-v4-CR16",
         ]
         if label in methods
     ]
@@ -674,17 +679,18 @@ def export_summary_md(data, result_dir, out_dir):
             f.write("- Fig8 strong task-aware baselines: available; Cao/Zhai-style direct-TDOA "
                     "methods share the same fixed evaluation set, LOS mask, physical lag gate, "
                     "and all-pair WLS localizer. The main Fig8 view keeps the stable official "
-                    "strong-baseline subset. GeoHybrid-DFT, when present, is a "
-                    "coherence-aware coarse-to-fine compressed-domain TDOA estimator; "
-                    "GeoAmbi-DFT v1 remains a fine-only ambiguity-suppression "
-                    "diagnostic/ablation.\n\n")
+                    "strong-baseline subset. GeoHybrid-B64 variants, when present, are "
+                    "strict union-budget coarse-to-fine compressed-domain TDOA estimators; "
+                    "GeoHybrid-OverBudget-C64F64 is supplement-only and must not be "
+                    "treated as a fair CR16 curve. GeoAmbi-DFT v1 remains a fine-only "
+                    "ambiguity-suppression diagnostic/ablation.\n\n")
         if data.get("fig8_supp_results") is not None:
             f.write("- Fig8 supplement strong diagnostics: available; Cao2020 uses segmented "
                     "incoherent high-FC scoring, and Zhai phase-superposition uses "
                     "sqrt-power-weighted delay-compensated phasor superposition. "
-                    "GeoAmbi fine-only and PHAT-gated hybrid variants are kept here "
-                    "to diagnose low-SNR variance, deterministic ambiguity, and "
-                    "uncertainty weighting.\n\n")
+                    "GeoAmbi fine-only, coarse-only, over-budget, no-consistency, and "
+                    "no-uncertainty variants are kept here to diagnose low-SNR variance, "
+                    "deterministic ambiguity, feature budget, and WLS weighting.\n\n")
         if data.get("fig9_results") is not None:
             f.write("- Fig9 innovation comparison: available; the frozen Chen-style DAE "
                     "references (CR4/CR8/CR16, when available) and the current "
@@ -718,7 +724,11 @@ def export_summary_md(data, result_dir, out_dir):
     print(f"[Saved] {path}")
 
 
-def export(result_dir, export_fig6_figures=True):
+def export(result_dir, export_fig6_figures=True, export_markdown_tables=True,
+           export_core_tables=True, export_core_figures=True,
+           export_fig6_results=True):
+    global EXPORT_MARKDOWN_TABLES
+    EXPORT_MARKDOWN_TABLES = bool(export_markdown_tables)
     pkl_path = os.path.join(result_dir, "plot_data.pkl")
     if not os.path.exists(pkl_path):
         raise FileNotFoundError(pkl_path)
@@ -726,12 +736,21 @@ def export(result_dir, export_fig6_figures=True):
         data = pickle.load(f)
     out_dir = os.path.join(result_dir, "tables")
     os.makedirs(out_dir, exist_ok=True)
-    export_training_summary(data["cv_results_dict"], out_dir)
-    export_rmse_tables(data["mc_results"], out_dir)
-    export_fig2_diagnostics(data["snr_data"], out_dir)
-    export_paper_figures(data["mc_results"], out_dir)
-    export_fig6_baselines(data.get("fig6_results"), out_dir,
-                          export_figures=bool(export_fig6_figures))
+    if export_core_tables:
+        export_training_summary(data["cv_results_dict"], out_dir)
+        export_rmse_tables(data["mc_results"], out_dir)
+        export_fig2_diagnostics(data["snr_data"], out_dir)
+    else:
+        print("[Skip] Core tables disabled (training/rmse/fig2).")
+    if export_core_figures:
+        export_paper_figures(data["mc_results"], out_dir)
+    else:
+        print("[Skip] Core paper figures disabled (tables/Fig3_*).")
+    if export_fig6_results:
+        export_fig6_baselines(data.get("fig6_results"), out_dir,
+                              export_figures=bool(export_fig6_figures))
+    else:
+        print("[Skip] Fig6 export disabled.")
     export_fig7_baselines(data.get("fig7_results"), out_dir,
                           export_figures=bool(export_fig6_figures))
     export_fig8_baselines(data.get("fig8_results"), out_dir,
@@ -756,6 +775,14 @@ if __name__ == "__main__":
                         help="Result directory containing plot_data.pkl")
     parser.add_argument("--no-fig6-svg", action="store_true",
                         help="Do not write duplicate Fig6 SVG files into tables/")
+    parser.add_argument("--csv-only", action="store_true",
+                        help="Do not export Markdown table copies; keep CSV plus summary.md")
+    parser.add_argument("--direct-only", action="store_true",
+                        help="Skip core Fig1-Fig3/Fig6 table/figure exports")
     args = parser.parse_args()
     export(args.result_dir_flag or args.result_dir or DEFAULT_RESULT_DIR,
-           export_fig6_figures=not args.no_fig6_svg)
+           export_fig6_figures=not args.no_fig6_svg,
+           export_markdown_tables=not args.csv_only,
+           export_core_tables=not args.direct_only,
+           export_core_figures=not args.direct_only,
+           export_fig6_results=not args.direct_only)

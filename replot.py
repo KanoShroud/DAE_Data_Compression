@@ -67,7 +67,9 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig7':
         task_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
-            'DFT-Fisher-Direct', 'GeoHybrid-DFT',
+            'DFT-Fisher-Direct',
+            'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
+            'GeoHybrid-B64-C32F32',
             'GeoAmbi-DFT-Direct',
             had_main, 'PCA'
         ])
@@ -79,7 +81,9 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig8':
         strong_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
-            'Cao2017-DFT-AML', 'GeoHybrid-DFT',
+            'Cao2017-DFT-AML',
+            'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
+            'GeoHybrid-B64-C32F32',
             'Zhai-CRLB-Decimation', had_main, 'PCA'
         ])
         config['strong_method_order'] = strong_order
@@ -90,8 +94,13 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig8_supp':
         strong_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
-            'Cao2017-DFT-AML', 'GeoHybrid-DFT',
-            'GeoHybrid-DFT-PHAT-gated', 'GeoAmbi-DFT-Direct',
+            'Cao2017-DFT-AML',
+            'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
+            'GeoHybrid-B64-C32F32', 'GeoHybrid-OverBudget-C64F64',
+            'GeoHybrid-B64-C40F24-no-consistency',
+            'GeoHybrid-B64-C40F24-no-uncertainty',
+            'GeoHybrid-CoarseOnly64', 'GeoHybrid-FineOnly64',
+            'GeoAmbi-DFT-Direct',
             'GeoAmbi-DFT-AML', 'GeoAmbi-DFT-PHAT',
             'Cao2020-HighFC',
             'Zhai-CRLB-Decimation', 'Zhai-Phase-Superposition',
@@ -112,6 +121,7 @@ def apply_current_method_view_config(method_results, view):
                 'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
                 'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
                 'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+                'FreqDAE-v4-CR4', 'FreqDAE-v4-CR8', 'FreqDAE-v4-CR16',
             ]
             if label in methods
         ]
@@ -119,7 +129,7 @@ def apply_current_method_view_config(method_results, view):
             'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
         ] + innovation_order + [
             'DFT', 'DFT-Fisher-Direct',
-            'Cao2017-DFT-AML', 'GeoHybrid-DFT', 'GeoAmbi-DFT-AML',
+            'Cao2017-DFT-AML', 'GeoHybrid-B64-C40F24', 'GeoAmbi-DFT-AML',
             'Zhai-CRLB-Decimation', had_main, 'PCA'
         ])
         config['strong_method_order'] = strong_order
@@ -137,6 +147,7 @@ def apply_current_method_view_config(method_results, view):
                 'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
                 'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
                 'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+                'FreqDAE-v4-CR4', 'FreqDAE-v4-CR8', 'FreqDAE-v4-CR16',
             ]
             if label in methods
         ]
@@ -185,6 +196,7 @@ def make_fig9_focus_results(data):
             'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
             'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
             'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+            'FreqDAE-v4-CR4', 'FreqDAE-v4-CR8', 'FreqDAE-v4-CR16',
         ]
         if label in methods
     ]

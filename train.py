@@ -461,6 +461,76 @@ def soft_tdoa_distribution_loss(logits, true_tdoa, sigma=1.5):
     return torch.mean(-torch.sum(weights * logp, dim=-1))
 
 
+def soft_tdoa_distribution_loss_per_sample(logits, true_tdoa, sigma=1.5):
+    n = logits.shape[-1]
+    lags = torch.arange(n, device=logits.device, dtype=logits.dtype) - (n // 2)
+    target = true_tdoa.to(logits.device, dtype=logits.dtype)
+    sigma = max(float(sigma), 1e-3)
+    weights = torch.exp(-0.5 * ((lags[None, :] - target[:, None]) / sigma) ** 2)
+    weights = weights / (torch.sum(weights, dim=-1, keepdim=True) + 1e-9)
+    logp = torch.log_softmax(logits, dim=-1)
+    return -torch.sum(weights * logp, dim=-1)
+
+
+def expected_tdoa_from_logits(logits):
+    n = logits.shape[-1]
+    lags = torch.arange(n, device=logits.device, dtype=logits.dtype) - (n // 2)
+    prob = torch.softmax(logits, dim=-1)
+    return torch.sum(prob * lags[None, :], dim=-1)
+
+
+def tdoa_uncertainty_nll(logits, log_var, true_tdoa):
+    pred = expected_tdoa_from_logits(logits)
+    target = true_tdoa.to(logits.device, dtype=logits.dtype)
+    err2 = (pred - target).pow(2)
+    log_var = torch.clamp(log_var.to(logits.device, dtype=logits.dtype), -6.0, 6.0)
+    return torch.mean(0.5 * (torch.exp(-log_var) * err2 + log_var))
+
+
+def nested_task_sufficient_losses(model, z_full1, z_full2, true_tdoa,
+                                  nested_crs=(4, 8, 16), sigma=1.5):
+    """
+    Evaluate task-head losses for all nested prefixes from one full latent pair.
+
+    Returns:
+        task_loss: mean soft-label CE across CR4/8/16 prefixes.
+        uncertainty_loss: Gaussian NLL from predicted TDOA uncertainty.
+        monotonic_loss: penalizes CR4 worse than CR8 and CR8 worse than CR16.
+    """
+    ce_by_cr = {}
+    uncertainty_terms = []
+    for cr in nested_crs:
+        z1 = model._mask_latent(z_full1, cr=cr)
+        z2 = model._mask_latent(z_full2, cr=cr)
+        if hasattr(model, "pair_task_outputs_from_latent"):
+            logits, log_var = model.pair_task_outputs_from_latent(z1, z2)
+            uncertainty_terms.append(tdoa_uncertainty_nll(logits, log_var, true_tdoa))
+        else:
+            logits = model.pair_task_logits_from_latent(z1, z2)
+        ce_by_cr[int(cr)] = soft_tdoa_distribution_loss_per_sample(
+            logits, true_tdoa.float(), sigma=sigma
+        )
+
+    task_loss = torch.stack([v.mean() for v in ce_by_cr.values()]).mean()
+    uncertainty_loss = (
+        torch.stack(uncertainty_terms).mean()
+        if uncertainty_terms
+        else torch.tensor(0.0, device=z_full1.device)
+    )
+
+    ordered = [int(v) for v in sorted(nested_crs)]
+    monotonic_terms = []
+    for better, worse in zip(ordered[:-1], ordered[1:]):
+        # Smaller CR means larger latent budget; its task CE should not be worse.
+        monotonic_terms.append(torch.relu(ce_by_cr[better] - ce_by_cr[worse]).mean())
+    monotonic_loss = (
+        torch.stack(monotonic_terms).mean()
+        if monotonic_terms
+        else torch.tensor(0.0, device=z_full1.device)
+    )
+    return task_loss, uncertainty_loss, monotonic_loss
+
+
 def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    fold_idx, patience=20, weight_decay=1e-4, corr_weight=1.0,
                    lambda_peak=0.0, beta_fi=0.0, epsilon_mse=1.0,
@@ -470,7 +540,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    spectral_blend=0.25, spectral_power=2.0,
                    pair_phase_weight=0.0, soft_peak_sigma=1.5,
                    soft_peak_sharpness_weight=0.0,
-                   pair_task_weight=0.0, nested_crs=(4, 8, 16)):
+                   pair_task_weight=0.0, pair_uncertainty_weight=0.0,
+                   cr_monotonic_weight=0.0, nested_crs=(4, 8, 16)):
     """
     在单个 fold 上训练模型，含早停机制。
 
@@ -494,8 +565,11 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     phase_mix = float(max(0.0, min(1.0, phase_mix)))
 
     freq_task_recon_enabled = loss_mode == "freq_task_mse"
-    nested_pair_task_enabled = loss_mode == "freq_task_nested_pair"
-    pair_freq_task_enabled = loss_mode in ("freq_task_pair", "freq_task_nested_pair")
+    nested_pair_task_enabled = loss_mode in ("freq_task_nested_pair", "freq_task_v4_min_pair")
+    v4_task_sufficient_enabled = loss_mode == "freq_task_v4_min_pair"
+    pair_freq_task_enabled = loss_mode in (
+        "freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"
+    )
     task_loss_enabled = (
         (loss_mode != "paper_mse")
         and (not freq_task_recon_enabled)
@@ -557,12 +631,20 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
                     active_cr = nested_crs[(ep + n_batches) % len(nested_crs)]
                     model.set_active_cr(active_cr)
-                if nested_pair_task_enabled:
+                if v4_task_sufficient_enabled and hasattr(model, "encode_full_latent"):
+                    z_full_all = model.encode_full_latent(bx_all)
+                    z_all = model._mask_latent(z_full_all, cr=active_cr)
+                    y_all = model.decode_latent(z_all)
+                    z_full1, z_full2 = z_full_all.chunk(2, dim=0)
+                    z1, z2 = z_all.chunk(2, dim=0)
+                elif nested_pair_task_enabled:
                     y_all, z_all = model(bx_all, return_latent=True)
                     z1, z2 = z_all.chunk(2, dim=0)
+                    z_full1 = z_full2 = None
                 else:
                     y_all = model(bx_all)
                     z1 = z2 = None
+                    z_full1 = z_full2 = None
                 y1, y2 = y_all.chunk(2, dim=0)
 
                 if pair_freq_task_enabled:
@@ -662,7 +744,17 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         y1, y2, by1, by2, fisher_power=spectral_power
                     )
                 loss_pair_task = torch.tensor(0.0, device=device)
-                if (nested_pair_task_enabled and pair_task_weight > 0
+                loss_pair_uncertainty = torch.tensor(0.0, device=device)
+                loss_cr_monotonic = torch.tensor(0.0, device=device)
+                if (v4_task_sufficient_enabled and true_tdoa is not None
+                        and z_full1 is not None):
+                    loss_pair_task, loss_pair_uncertainty, loss_cr_monotonic = (
+                        nested_task_sufficient_losses(
+                            model, z_full1, z_full2, true_tdoa.float(),
+                            nested_crs=nested_crs, sigma=soft_peak_sigma
+                        )
+                    )
+                elif (nested_pair_task_enabled and pair_task_weight > 0
                         and true_tdoa is not None
                         and hasattr(model, "pair_task_logits_from_latent")):
                     logits = model.pair_task_logits_from_latent(z1, z2)
@@ -677,6 +769,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     + mse_weight_current * loss_mse_norm
                     + pair_phase_weight * loss_pair_phase
                     + pair_task_weight * loss_pair_task
+                    + pair_uncertainty_weight * loss_pair_uncertainty
+                    + cr_monotonic_weight * loss_cr_monotonic
                     + beta_fi * loss_fi
                 )
 
@@ -688,7 +782,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 ep_corr += loss_corr.item() * bx1.size(0)
                 ep_peak += loss_peak.item() * bx1.size(0)
                 ep_fi += (
-                    (loss_pair_phase.item() + loss_pair_task.item())
+                    (loss_pair_phase.item() + loss_pair_task.item()
+                     + loss_pair_uncertainty.item() + loss_cr_monotonic.item())
                     if pair_freq_task_enabled else loss_fi.item()
                 ) * bx1.size(0)
                 ep_snr += avg_snr_batch * bx1.size(0)
@@ -739,12 +834,20 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     bx_all = torch.cat([bx1, bx2], dim=0)
                     if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
                         model.set_active_cr(nested_crs[0])
-                    if nested_pair_task_enabled:
+                    if v4_task_sufficient_enabled and hasattr(model, "encode_full_latent"):
+                        z_full_all = model.encode_full_latent(bx_all)
+                        z_all = model._mask_latent(z_full_all, cr=nested_crs[0])
+                        y_all = model.decode_latent(z_all)
+                        z_full1_v, z_full2_v = z_full_all.chunk(2, dim=0)
+                        z1_v, z2_v = z_all.chunk(2, dim=0)
+                    elif nested_pair_task_enabled:
                         y_all, z_all = model(bx_all, return_latent=True)
                         z1_v, z2_v = z_all.chunk(2, dim=0)
+                        z_full1_v = z_full2_v = None
                     else:
                         y_all = model(bx_all)
                         z1_v = z2_v = None
+                        z_full1_v = z_full2_v = None
                     y1, y2 = y_all.chunk(2, dim=0)
 
                     if pair_freq_task_enabled:
@@ -817,7 +920,17 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                             y1, y2, by1, by2, fisher_power=spectral_power
                         )
                     pair_task_v = torch.tensor(0.0, device=device)
-                    if (nested_pair_task_enabled and pair_task_weight > 0
+                    pair_uncertainty_v = torch.tensor(0.0, device=device)
+                    cr_monotonic_v = torch.tensor(0.0, device=device)
+                    if (v4_task_sufficient_enabled and true_tdoa_v is not None
+                            and z_full1_v is not None):
+                        pair_task_v, pair_uncertainty_v, cr_monotonic_v = (
+                            nested_task_sufficient_losses(
+                                model, z_full1_v, z_full2_v, true_tdoa_v.float(),
+                                nested_crs=nested_crs, sigma=soft_peak_sigma
+                            )
+                        )
+                    elif (nested_pair_task_enabled and pair_task_weight > 0
                             and true_tdoa_v is not None
                             and hasattr(model, "pair_task_logits_from_latent")):
                         logits_v = model.pair_task_logits_from_latent(z1_v, z2_v)
@@ -832,6 +945,8 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         + mse_weight_max * mse_v_norm
                         + pair_phase_weight * pair_phase_v
                         + pair_task_weight * pair_task_v
+                        + pair_uncertainty_weight * pair_uncertainty_v
+                        + cr_monotonic_weight * cr_monotonic_v
                     )
 
                     val_mse += mse_v_norm.item() * bx1.size(0)
@@ -906,12 +1021,19 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             val_peak_str = f" | ValPeak {val_peak:.5f}" if lambda_peak > 0 else ""
             snr_str = f" | SNR={ep_snr / len(train_loader.dataset):.1f}dB" if use_adaptive_peak and n_batches > 0 else ""
             if pair_freq_task_enabled:
-                metric_name = "NestedPairFreqNMSE" if nested_pair_task_enabled else "PairFreqNMSE"
+                metric_name = (
+                    "TaskSufficientFreqNMSE"
+                    if v4_task_sufficient_enabled
+                    else ("NestedPairFreqNMSE" if nested_pair_task_enabled else "PairFreqNMSE")
+                )
                 loss_state_str = (
                     f"{loss_mode} | recon_w={mse_weight_current:.3f} | "
                     f"corr_w={corr_weight:.3f} | xphase_w={pair_phase_weight:.3f} | "
                     f"peak_w={lambda_peak:.3f} | peak_sharp={soft_peak_sharpness_weight:.3f} | "
-                    f"task_w={pair_task_weight:.3f} | spectral_blend={spectral_blend:.3f}"
+                    f"task_w={pair_task_weight:.3f} | "
+                    f"unc_w={pair_uncertainty_weight:.3f} | "
+                    f"mono_w={cr_monotonic_weight:.3f} | "
+                    f"spectral_blend={spectral_blend:.3f}"
                 )
             elif task_loss_enabled:
                 metric_name = "NMSE"
@@ -973,7 +1095,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   spectral_blend=0.25, spectral_power=2.0,
                   pair_phase_weight=0.0, soft_peak_sigma=1.5,
                   soft_peak_sharpness_weight=0.0,
-                  pair_task_weight=0.0, nested_crs=(4, 8, 16)):
+                  pair_task_weight=0.0, pair_uncertainty_weight=0.0,
+                  cr_monotonic_weight=0.0, nested_crs=(4, 8, 16)):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
@@ -1021,6 +1144,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         spectral_power = loss_config.get('spectral_power', spectral_power)
         pair_phase_weight = loss_config.get('pair_phase_weight', pair_phase_weight)
         pair_task_weight = loss_config.get('pair_task_weight', pair_task_weight)
+        pair_uncertainty_weight = loss_config.get(
+            'pair_uncertainty_weight', pair_uncertainty_weight
+        )
+        cr_monotonic_weight = loss_config.get(
+            'cr_monotonic_weight', cr_monotonic_weight
+        )
         nested_crs = tuple(loss_config.get('nested_crs', nested_crs))
         soft_peak_sigma = loss_config.get('soft_peak_sigma', soft_peak_sigma)
         soft_peak_sharpness_weight = loss_config.get(
@@ -1043,7 +1172,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         use_adaptive_peak = False
         if selection_start_epoch is None:
             selection_start_epoch = 1
-    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
+    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"):
         use_adaptive_peak = False
         if selection_start_epoch is None:
             selection_start_epoch = 1
@@ -1066,7 +1195,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                               urban_min_los=urban_min_los,
                               urban_train_los_only=urban_train_los_only)
 
-    pair_freq_task_train = loss_mode in ("freq_task_pair", "freq_task_nested_pair")
+    pair_freq_task_train = loss_mode in (
+        "freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"
+    )
     dynamic_urban_train = (
         bool(resample_train_each_epoch)
         and loss_mode in ("paper_mse", "freq_task_mse")
@@ -1150,8 +1281,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
     elif loss_mode == "freq_task_mse":
         print("  Frequency-task Loss: time-domain NMSE + Fisher-weighted spectral NMSE "
               f"(blend={spectral_blend}, spectral_power={spectral_power})")
-    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
-        if loss_mode == "freq_task_nested_pair":
+    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"):
+        if loss_mode == "freq_task_v4_min_pair":
+            print("  Nested task-sufficient Pair Loss v4-min: shared nested latent + "
+                  "multi-prefix task-head TDOA + uncertainty calibration + "
+                  "CR monotonicity + weak waveform reconstruction")
+            print(f"  Nested CR masks: {tuple(nested_crs)}")
+        elif loss_mode == "freq_task_nested_pair":
             print("  Nested Frequency-task Pair Loss: shared nested latent + reconstruction + "
                   "GCC shape + soft peak + cross-spectrum phase + task-head TDOA")
             print(f"  Nested CR masks: {tuple(nested_crs)}")
@@ -1162,7 +1298,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
               f"xphase={pair_phase_weight}, peak={lambda_peak}, "
               f"soft_peak_sigma={soft_peak_sigma}, "
               f"soft_peak_sharpness={soft_peak_sharpness_weight}, "
-              f"task_head={pair_task_weight}")
+              f"task_head={pair_task_weight}, "
+              f"uncertainty={pair_uncertainty_weight}, "
+              f"cr_mono={cr_monotonic_weight}")
     else:
         print(f"  Unified Loss (R20.1 fixed blend): L = {corr_weight}*Corr + "
               f"lambda_peak(SNR)*Peak + mse_weight_current*"
@@ -1170,7 +1308,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         print(f"  mse_weight_max={mse_weight_max} | phase_mix={phase_mix} | "
               f"selection_start_epoch={selection_start_epoch if selection_start_epoch is not None else 100}")
     if lambda_peak > 0:
-        if loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
+        if loss_mode in ("freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"):
             print(f"  Soft Peak Weight: peak_weight={lambda_peak}, "
                   f"sigma={soft_peak_sigma}, "
                   f"sharpness={soft_peak_sharpness_weight}")
@@ -1226,6 +1364,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'spectral_blend': float(spectral_blend),
         'spectral_power': float(spectral_power),
         'pair_phase_weight': float(pair_phase_weight),
+        'pair_uncertainty_weight': float(pair_uncertainty_weight),
+        'cr_monotonic_weight': float(cr_monotonic_weight),
         'soft_peak_sigma': float(soft_peak_sigma),
         'soft_peak_sharpness_weight': float(soft_peak_sharpness_weight),
         'scenario_mode': sim.scenario_mode,
@@ -1248,11 +1388,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                    if training_protocol == "fixed_epoch_final_only"
                    else 'paper_repro_v3_urban8_fair_eval'))
             if loss_mode == "paper_mse" and sim.scenario_mode == "urban8"
-            else ('freq_task_dae_v3_nested_pair' if loss_mode == "freq_task_nested_pair"
+            else ('freq_task_dae_v4_min_pair' if loss_mode == "freq_task_v4_min_pair"
+                  else ('freq_task_dae_v3_nested_pair' if loss_mode == "freq_task_nested_pair"
                   else ('freq_task_dae_v2_pair' if loss_mode == "freq_task_pair"
                   else ('freq_task_dae_v1' if loss_mode == "freq_task_mse"
                   else ('paper_repro_v1' if loss_mode == "paper_mse" else 'R20.1'))
-                  ))
+                  )))
         ),
     }
 
@@ -1304,6 +1445,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 soft_peak_sigma=soft_peak_sigma,
                 soft_peak_sharpness_weight=soft_peak_sharpness_weight,
                 pair_task_weight=pair_task_weight,
+                pair_uncertainty_weight=pair_uncertainty_weight,
+                cr_monotonic_weight=cr_monotonic_weight,
                 nested_crs=nested_crs
             )
         cv_results.update({
@@ -1406,6 +1549,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 soft_peak_sigma=soft_peak_sigma,
                 soft_peak_sharpness_weight=soft_peak_sharpness_weight,
                 pair_task_weight=pair_task_weight,
+                pair_uncertainty_weight=pair_uncertainty_weight,
+                cr_monotonic_weight=cr_monotonic_weight,
                 nested_crs=nested_crs
             )
         fold_time = time.time() - t_fold
@@ -1497,6 +1642,8 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 soft_peak_sigma=soft_peak_sigma,
                 soft_peak_sharpness_weight=soft_peak_sharpness_weight,
                 pair_task_weight=pair_task_weight,
+                pair_uncertainty_weight=pair_uncertainty_weight,
+                cr_monotonic_weight=cr_monotonic_weight,
                 nested_crs=nested_crs
             )
         cv_results.update({

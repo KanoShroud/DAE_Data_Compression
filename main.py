@@ -18,7 +18,13 @@ from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_mo
                       clean_peak_consistency, run_urban_method_comparison,
                       plot_method_comparison, plot_method_zoom_pair,
                       filter_method_comparison_data)
-from model import DAE, FrequencyPairwiseDAE, FrequencySelectiveDAE, NestedFrequencyPairwiseDAE
+from model import (
+    DAE,
+    FrequencyPairwiseDAE,
+    FrequencySelectiveDAE,
+    NestedFrequencyPairwiseDAE,
+    NestedTaskSufficientDAE,
+)
 from signal_gen import SignalSimulator
 from baselines import build_traditional_baselines
 from task_baselines import (
@@ -27,6 +33,11 @@ from task_baselines import (
     DirectDFTTDOAEstimator,
     GeoHybridDFTTDOAEstimator,
     ZhaiPhaseSuperpositionEstimator,
+)
+from compressed_tdoa import (
+    LearnedCompressedTDOAEstimator,
+    V5ATrainConfig,
+    train_v5a_compressed_tdoa,
 )
 from experiment_cache import (
     load_static_baseline_cache,
@@ -49,7 +60,15 @@ FREQ_TASK_V3_TRAIN_MODES = (
 )
 FREQ_TASK_V3_EVAL_MODES = ("freq_task_v3_eval_only",)
 FREQ_TASK_V3_MODES = FREQ_TASK_V3_TRAIN_MODES + FREQ_TASK_V3_EVAL_MODES
-INNOVATION_MODES = FREQ_TASK_MODES + FREQ_TASK_V2_MODES + FREQ_TASK_V3_MODES
+FREQ_TASK_V4_TRAIN_MODES = (
+    "freq_task_v4_min", "freq_task_v4_min_fast", "freq_task_v4_min_200"
+)
+FREQ_TASK_V4_EVAL_MODES = ("freq_task_v4_min_eval_only",)
+FREQ_TASK_V4_MODES = FREQ_TASK_V4_TRAIN_MODES + FREQ_TASK_V4_EVAL_MODES
+INNOVATION_MODES = (
+    FREQ_TASK_MODES + FREQ_TASK_V2_MODES + FREQ_TASK_V3_MODES + FREQ_TASK_V4_MODES
+)
+COMPRESSED_TDOA_V5A_MODES = ("compressed_tdoa_v5a_fast",)
 BASELINE_RESULT_ID = "20260702_000925"
 BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "运行结果", BASELINE_RESULT_ID)
@@ -62,14 +81,16 @@ FREQ_TASK_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # 环境变量覆盖默认关闭，避免外部 shell/PyCharm 配置不一致导致误运行。
 ALLOW_ENV_OVERRIDES = False
 
-# 可选: "freq_task_v3_fast_final"、"freq_task_v3_200_final"、"freq_task_v3_eval_only"、
+# 可选: "compressed_tdoa_v5a_fast"、"freq_task_v4_min_fast"、
+#       "geohybrid_direct_only_eval"、"geohybrid_v2_eval"、
+#       "freq_task_v3_fast_final"、"freq_task_v3_200_final"、"freq_task_v3_eval_only"、
 #       "freq_task_v2_200_final"、"freq_task_v2_fast_final"、"freq_task_v2_eval_only"、
 #       "freq_task_eval_only"、"innovation_eval_only"、
 #       "freq_task"、"freq_task_fast_final"、"freq_task_200_final"、
 #       "paper_repro_eval_only"、"paper_repro"、"paper_repro_fast_final"、"r20_1"
 # 若 USER_EXPERIMENT_PROFILE 不为 None，会覆盖下方相关 USER_* 变量。
-USER_EXPERIMENT_PROFILE = "geohybrid_v2_eval"
-USER_EXPERIMENT_MODE = "freq_task_v3_fast_final"
+USER_EXPERIMENT_PROFILE = "compressed_tdoa_v5a_fast"
+USER_EXPERIMENT_MODE = "compressed_tdoa_v5a_fast"
 USER_MODEL_SOURCE_DIR = BASELINE_RESULT_DIR
 USER_FREQ_TASK_MODEL_SOURCE_DIR = FREQ_TASK_RESULT_DIR
 USER_FREQ_TASK_V2_MODEL_SOURCE_DIR = None
@@ -113,6 +134,31 @@ USER_FREQ_TASK_V3_TASK_HEAD_WEIGHT = 0.03
 USER_FREQ_TASK_V3_SOFT_PEAK_SIGMA = 1.5
 USER_FREQ_TASK_V3_PEAK_SHARPNESS_WEIGHT = 0.15
 USER_FREQ_TASK_V3_NESTED_CRS = (4, 8, 16)
+USER_FREQ_TASK_V4_FAST_EPOCHS = 40
+USER_FREQ_TASK_V4_FULL_EPOCHS = 200
+USER_FREQ_TASK_V4_SPECTRAL_BLEND = 0.10
+USER_FREQ_TASK_V4_SPECTRAL_POWER = 1.0
+USER_FREQ_TASK_V4_CORR_WEIGHT = 0.08
+USER_FREQ_TASK_V4_PHASE_WEIGHT = 0.04
+USER_FREQ_TASK_V4_PEAK_WEIGHT = 0.01
+USER_FREQ_TASK_V4_TASK_HEAD_WEIGHT = 0.12
+USER_FREQ_TASK_V4_UNCERTAINTY_WEIGHT = 0.02
+USER_FREQ_TASK_V4_CR_MONOTONIC_WEIGHT = 0.08
+USER_FREQ_TASK_V4_SOFT_PEAK_SIGMA = 1.5
+USER_FREQ_TASK_V4_PEAK_SHARPNESS_WEIGHT = 0.05
+USER_FREQ_TASK_V4_NESTED_CRS = (4, 8, 16)
+USER_V5A_N_PAIRS = None
+USER_V5A_EPOCHS = 40
+USER_V5A_BATCH_SIZE = None
+USER_V5A_LR = 5e-4
+USER_V5A_WEIGHT_DECAY = 1e-4
+USER_V5A_SOFT_LABEL_SIGMA = 1.0
+USER_V5A_AMBIGUITY_WEIGHT = 0.05
+USER_V5A_WIDTH_WEIGHT = 0.05
+USER_V5A_UNCERTAINTY_WEIGHT = 0.01
+USER_V5A_FILTER_REG_WEIGHT = 0.005
+USER_V5A_RESAMPLE_INTERVAL = 2
+USER_V5A_INIT_MODE = "wide"
 USER_INCLUDE_REPRO_REFERENCE = True
 
 # Fig6 传统 baseline 配置。
@@ -132,6 +178,11 @@ USER_RUN_STRONG_BASELINES = True        # 独立 Fig8：Cao/Zhai 等强 TDOA-awa
 USER_STRONG_INCLUDE_PHASE_SUPERPOSITION = True   # Fig8: Zhai CRLB bins + phase superposition
 USER_RUN_STRONG_DIAGNOSTIC_SUPPLEMENT = True     # Fig8 supplement: proxy/diagnostic strong candidates
 USER_RUN_GEOHYBRID_BASELINES = True     # GeoHybrid v2: coarse high-coherence + GeoAmbi fine refinement
+USER_DIRECT_ONLY_OUTPUT = False         # True: 只输出 direct baseline 图/表，跳过重复 Fig1-Fig3/Fig6
+USER_EXPORT_CORE_FIGURES = None         # None: 根据 DIRECT_ONLY 自动决定
+USER_EXPORT_CORE_TABLES = None          # None: 根据 DIRECT_ONLY 自动决定
+USER_EXPORT_FIG6_RESULTS = None         # None: 根据 DIRECT_ONLY 自动决定
+USER_EXPORT_MARKDOWN_TABLES = True      # False: tables/ 默认只保存 CSV，保留 summary.md
 USER_RUN_LOCALIZER_ABLATION = False      # Deprecated diagnostic; keep disabled to avoid bulky outputs.
 USER_LOCALIZER_ABLATION_SNR_RANGE = [10, 12, 14, 16, 18, 20]
 USER_LOCALIZER_ABLATION_ESTIMATORS = [
@@ -191,6 +242,7 @@ EXPERIMENT_MODE_SOURCE = (
     if ALLOW_ENV_OVERRIDES and "DAE_EXPERIMENT_MODE" in os.environ
     else "main.py:USER_EXPERIMENT_MODE"
 )
+RUN_COMPRESSED_TDOA_V5A = EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES
 CR_LIST = [4, 8, 16]
 FAST_FINAL_EPOCHS_BY_CR = {4: 197, 8: 197, 16: 197}
 BATCH_SIZE = 128
@@ -248,6 +300,26 @@ FREQ_TASK_V3_LOSS_CONFIG = {
          'selection_start_epoch': 1,
          'spectral_blend': USER_FREQ_TASK_V3_SPECTRAL_BLEND,
          'spectral_power': USER_FREQ_TASK_V3_SPECTRAL_POWER}
+    for cr in CR_LIST
+}
+
+# FreqDAE v4-min：嵌套任务充分表示。CR16/8/4 前缀在同一 batch
+# 同时接受 TDOA task-head 约束，并加入 uncertainty calibration 与 CR 单调约束。
+FREQ_TASK_V4_LOSS_CONFIG = {
+    cr: {'loss_mode': 'freq_task_v4_min_pair', 'epsilon_mse': 1.0,
+         'mse_weight_max': 0.35, 'phase_mix': 1.0,
+         'corr_weight': USER_FREQ_TASK_V4_CORR_WEIGHT,
+         'pair_phase_weight': USER_FREQ_TASK_V4_PHASE_WEIGHT,
+         'lambda_peak': USER_FREQ_TASK_V4_PEAK_WEIGHT,
+         'pair_task_weight': USER_FREQ_TASK_V4_TASK_HEAD_WEIGHT,
+         'pair_uncertainty_weight': USER_FREQ_TASK_V4_UNCERTAINTY_WEIGHT,
+         'cr_monotonic_weight': USER_FREQ_TASK_V4_CR_MONOTONIC_WEIGHT,
+         'soft_peak_sigma': USER_FREQ_TASK_V4_SOFT_PEAK_SIGMA,
+         'soft_peak_sharpness_weight': USER_FREQ_TASK_V4_PEAK_SHARPNESS_WEIGHT,
+         'nested_crs': USER_FREQ_TASK_V4_NESTED_CRS,
+         'selection_start_epoch': 1,
+         'spectral_blend': USER_FREQ_TASK_V4_SPECTRAL_BLEND,
+         'spectral_power': USER_FREQ_TASK_V4_SPECTRAL_POWER}
     for cr in CR_LIST
 }
 
@@ -499,6 +571,111 @@ elif EXPERIMENT_MODE in FREQ_TASK_V3_MODES:
     URBAN_TRAIN_LOS_ONLY = True
     FIXED_EVAL_SET = True
     LOCALIZATION_ESTIMATOR = "all_pair_wls"
+elif EXPERIMENT_MODE in FREQ_TASK_V4_MODES:
+    # 创新轨道 v4-min：Nested task-sufficient representation.
+    # 目标不是继续追逐 full-data Raw，而是在公平压缩预算下超过
+    # Chen-style DAE 和同预算强压缩 baseline。
+    N_SAMPLES = 10000
+    K_FOLDS = 0
+    if EXPERIMENT_MODE in FREQ_TASK_V4_EVAL_MODES:
+        default_freq_epochs = 0
+        DIAGNOSTICS_VERSION = "freq_task_dae_v4_min_eval_only"
+    elif EXPERIMENT_MODE == "freq_task_v4_min_fast":
+        default_freq_epochs = int(USER_FREQ_TASK_V4_FAST_EPOCHS)
+        DIAGNOSTICS_VERSION = "freq_task_dae_v4_min_fast"
+    elif EXPERIMENT_MODE == "freq_task_v4_min_200":
+        default_freq_epochs = int(USER_FREQ_TASK_V4_FULL_EPOCHS)
+        DIAGNOSTICS_VERSION = "freq_task_dae_v4_min_200_final"
+    else:
+        default_freq_epochs = int(USER_FREQ_TASK_V4_FULL_EPOCHS)
+        DIAGNOSTICS_VERSION = "freq_task_dae_v4_min"
+    MAX_EPOCHS = int(default_freq_epochs if USER_FREQ_TASK_EPOCHS is None else USER_FREQ_TASK_EPOCHS)
+    FAST_FINAL_EPOCHS_BY_CR = {cr: MAX_EPOCHS for cr in CR_LIST}
+    EARLY_STOPPING = False
+    RESTORE_BEST = False
+    FINAL_RETRAIN = False
+    FINAL_RETRAIN_EPOCHS = None
+    TRAINING_PROTOCOL = "fixed_epoch_final_only"
+    RESAMPLE_TRAIN_EACH_EPOCH = True
+    RESAMPLE_INTERVAL = 5
+    RUN_TRAINING = EXPERIMENT_MODE not in FREQ_TASK_V4_EVAL_MODES
+    MODEL_SOURCE_DIR = (
+        _cfg("DAE_FREQ_TASK_V4_MODEL_DIR", USER_FREQ_TASK_V3_MODEL_SOURCE_DIR,
+             FREQ_TASK_RESULT_DIR, str)
+        if EXPERIMENT_MODE in FREQ_TASK_V4_EVAL_MODES else None
+    )
+    if EXPERIMENT_MODE in FREQ_TASK_V4_EVAL_MODES:
+        TRAINING_PROTOCOL = "freq_task_v4_min_eval_only_pretrained"
+        RESAMPLE_TRAIN_EACH_EPOCH = False
+    CORR_WEIGHT = USER_FREQ_TASK_V4_CORR_WEIGHT
+    LAMBDA_PEAK = USER_FREQ_TASK_V4_PEAK_WEIGHT
+    BETA_FI = 0.0
+    LOSS_CONFIG = FREQ_TASK_V4_LOSS_CONFIG
+    LOSS_MODE = "freq_task_v4_min_pair"
+    USE_ADAPTIVE_PEAK = False
+    TRAIN_SNR_RANGE = (-10, 20)
+    EVAL_SNR_RANGE = np.arange(-10, 21, 2)
+    MONTE_CARLO_TRIALS = 200
+    FIG2_SNR_LIST = [-10, 0, 10, 20]
+    CHANNEL_MODE = "fixed"
+    N_FIXED_CHANNELS = 50
+    NLOS_PROB = 0.0
+    DELAY_LABEL_MODE = "los"
+    MULTIPATH_SCALE = 0.2
+    SCENARIO_MODE = "urban8"
+    NORMALIZATION_MODE = "per_observation_noisy_rms"
+    CV_GROUP_MODE = "snapshot"
+    EVALUATION_MODE = "urban_localization"
+    TDOA_SUB_SAMPLE = True
+    USE_LOS_ONLY = True
+    URBAN_BASE_DELAY = 16
+    URBAN_MIN_LOS = 5
+    URBAN_TRAIN_LOS_ONLY = True
+    FIXED_EVAL_SET = True
+    LOCALIZATION_ESTIMATOR = "all_pair_wls"
+elif EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES:
+    # V5-A：CR16-only learnable compressed-domain TDOA likelihood.
+    # 不训练 waveform decoder；加载冻结 Chen DAE 作为参照，并训练一个
+    # 64-complex-feature direct TDOA estimator 进入同一 all-pair WLS 链路。
+    N_SAMPLES = 10000
+    K_FOLDS = 0
+    MAX_EPOCHS = 0
+    EARLY_STOPPING = False
+    RESTORE_BEST = False
+    FINAL_RETRAIN = False
+    FINAL_RETRAIN_EPOCHS = None
+    TRAINING_PROTOCOL = "compressed_tdoa_v5a_direct_likelihood"
+    RESAMPLE_TRAIN_EACH_EPOCH = False
+    RESAMPLE_INTERVAL = 1
+    RUN_TRAINING = False
+    MODEL_SOURCE_DIR = _cfg("DAE_MODEL_DIR", USER_MODEL_SOURCE_DIR, BASELINE_RESULT_DIR, str)
+    CORR_WEIGHT = 0.0
+    LAMBDA_PEAK = 0.0
+    BETA_FI = 0.0
+    LOSS_CONFIG = PAPER_REPRO_LOSS_CONFIG
+    LOSS_MODE = "compressed_tdoa_v5a"
+    USE_ADAPTIVE_PEAK = False
+    TRAIN_SNR_RANGE = (-10, 20)
+    EVAL_SNR_RANGE = np.arange(-10, 21, 2)
+    MONTE_CARLO_TRIALS = 200
+    FIG2_SNR_LIST = [-10, 0, 10, 20]
+    DIAGNOSTICS_VERSION = "compressed_tdoa_v5a_cr16_fast"
+    CHANNEL_MODE = "fixed"
+    N_FIXED_CHANNELS = 50
+    NLOS_PROB = 0.0
+    DELAY_LABEL_MODE = "los"
+    MULTIPATH_SCALE = 0.2
+    SCENARIO_MODE = "urban8"
+    NORMALIZATION_MODE = "per_observation_noisy_rms"
+    CV_GROUP_MODE = "snapshot"
+    EVALUATION_MODE = "urban_localization"
+    TDOA_SUB_SAMPLE = True
+    USE_LOS_ONLY = True
+    URBAN_BASE_DELAY = 16
+    URBAN_MIN_LOS = 5
+    URBAN_TRAIN_LOS_ONLY = True
+    FIXED_EVAL_SET = True
+    LOCALIZATION_ESTIMATOR = "all_pair_wls"
 elif EXPERIMENT_MODE in ("r20_1", "r20.1", "task"):
     N_SAMPLES = 50000
     K_FOLDS = 3
@@ -547,7 +724,10 @@ else:
                      "'freq_task_v2_fast_final', 'freq_task_v2_200_final', "
                      "'freq_task_v2_eval_only', 'freq_task_v3', "
                      "'freq_task_v3_fast_final', 'freq_task_v3_200_final', "
-                     "'freq_task_v3_eval_only', "
+                     "'freq_task_v3_eval_only', 'freq_task_v4_min', "
+                     "'freq_task_v4_min_fast', 'freq_task_v4_min_200', "
+                     "'freq_task_v4_min_eval_only', "
+                     "'compressed_tdoa_v5a_fast', "
                      "or 'r20_1'")
 
 REFERENCE_MODEL_DIR = _cfg(
@@ -625,6 +805,25 @@ RUN_GEOHYBRID_BASELINES = _cfg_bool(
     USER_RUN_GEOHYBRID_BASELINES,
     True
 )
+DIRECT_ONLY_OUTPUT = _cfg_bool(
+    "DAE_DIRECT_ONLY_OUTPUT", USER_DIRECT_ONLY_OUTPUT, False
+)
+EXPORT_CORE_FIGURES = _cfg_bool(
+    "DAE_EXPORT_CORE_FIGURES", USER_EXPORT_CORE_FIGURES,
+    not DIRECT_ONLY_OUTPUT
+)
+EXPORT_CORE_TABLES = _cfg_bool(
+    "DAE_EXPORT_CORE_TABLES", USER_EXPORT_CORE_TABLES,
+    not DIRECT_ONLY_OUTPUT
+)
+EXPORT_FIG6_RESULTS = _cfg_bool(
+    "DAE_EXPORT_FIG6_RESULTS", USER_EXPORT_FIG6_RESULTS,
+    not DIRECT_ONLY_OUTPUT
+)
+EXPORT_MARKDOWN_TABLES = _cfg_bool(
+    "DAE_EXPORT_MARKDOWN_TABLES", USER_EXPORT_MARKDOWN_TABLES,
+    True
+)
 EVAL_ONLY_COPY_MODELS = _cfg_bool(
     "DAE_EVAL_ONLY_COPY_MODELS", USER_EVAL_ONLY_COPY_MODELS, False
 )
@@ -653,6 +852,36 @@ METHOD_ZOOM_LOW_SNR_MAX = _cfg(
 METHOD_ZOOM_HIGH_SNR_MIN = _cfg(
     "DAE_METHOD_ZOOM_HIGH_SNR_MIN", USER_METHOD_ZOOM_HIGH_SNR_MIN, 8.0, float
 )
+V5A_N_PAIRS = _cfg(
+    "DAE_V5A_N_PAIRS", USER_V5A_N_PAIRS, N_SAMPLES, int
+)
+V5A_EPOCHS = _cfg("DAE_V5A_EPOCHS", USER_V5A_EPOCHS, 40, int)
+V5A_BATCH_SIZE = _cfg(
+    "DAE_V5A_BATCH_SIZE", USER_V5A_BATCH_SIZE, BATCH_SIZE, int
+)
+V5A_LR = _cfg("DAE_V5A_LR", USER_V5A_LR, 5e-4, float)
+V5A_WEIGHT_DECAY = _cfg(
+    "DAE_V5A_WEIGHT_DECAY", USER_V5A_WEIGHT_DECAY, WEIGHT_DECAY, float
+)
+V5A_SOFT_LABEL_SIGMA = _cfg(
+    "DAE_V5A_SOFT_LABEL_SIGMA", USER_V5A_SOFT_LABEL_SIGMA, 1.0, float
+)
+V5A_AMBIGUITY_WEIGHT = _cfg(
+    "DAE_V5A_AMBIGUITY_WEIGHT", USER_V5A_AMBIGUITY_WEIGHT, 0.05, float
+)
+V5A_WIDTH_WEIGHT = _cfg(
+    "DAE_V5A_WIDTH_WEIGHT", USER_V5A_WIDTH_WEIGHT, 0.05, float
+)
+V5A_UNCERTAINTY_WEIGHT = _cfg(
+    "DAE_V5A_UNCERTAINTY_WEIGHT", USER_V5A_UNCERTAINTY_WEIGHT, 0.01, float
+)
+V5A_FILTER_REG_WEIGHT = _cfg(
+    "DAE_V5A_FILTER_REG_WEIGHT", USER_V5A_FILTER_REG_WEIGHT, 0.005, float
+)
+V5A_RESAMPLE_INTERVAL = _cfg(
+    "DAE_V5A_RESAMPLE_INTERVAL", USER_V5A_RESAMPLE_INTERVAL, 2, int
+)
+V5A_INIT_MODE = _cfg("DAE_V5A_INIT_MODE", USER_V5A_INIT_MODE, "wide", str)
 RUN_LOCALIZER_ABLATION = _cfg_bool(
     "DAE_RUN_LOCALIZER_ABLATION", USER_RUN_LOCALIZER_ABLATION, False
 )
@@ -684,7 +913,11 @@ if USER_FAST_FINAL_EPOCHS is not None or (
     if TRAINING_PROTOCOL == "fixed_epoch_final_only":
         MAX_EPOCHS = _fast_ep
 NO_SHOW = _cfg_bool("DAE_NO_SHOW", USER_NO_SHOW, False)
-if EXPERIMENT_MODE in FREQ_TASK_V3_MODES:
+if EXPERIMENT_MODE in FREQ_TASK_V4_MODES:
+    ACTIVE_MODEL_FACTORY = NestedTaskSufficientDAE
+    ACTIVE_MODEL_NAME = "NestedTaskSufficientDAE"
+    INNOVATION_LABEL_PREFIX = "FreqDAE-v4"
+elif EXPERIMENT_MODE in FREQ_TASK_V3_MODES:
     ACTIVE_MODEL_FACTORY = NestedFrequencyPairwiseDAE
     ACTIVE_MODEL_NAME = "NestedFrequencyPairwiseDAE"
     INNOVATION_LABEL_PREFIX = "FreqDAE-v3"
@@ -784,6 +1017,11 @@ print(f"[Config] traditional_baselines={RUN_TRADITIONAL_BASELINES} | "
       f"strong_diagnostic_supplement={RUN_STRONG_DIAGNOSTIC_SUPPLEMENT} | "
       f"eval_only_copy_models={EVAL_ONLY_COPY_MODELS} | "
       f"fig6_zoom={FIG6_SHOW_ZOOM_INSET} | export_fig6_svg_in_tables={EXPORT_FIG6_SVG_IN_TABLES}")
+print(f"[Config] direct_only_output={DIRECT_ONLY_OUTPUT} | "
+      f"export_core_figures={EXPORT_CORE_FIGURES} | "
+      f"export_core_tables={EXPORT_CORE_TABLES} | "
+      f"export_fig6_results={EXPORT_FIG6_RESULTS} | "
+      f"export_markdown_tables={EXPORT_MARKDOWN_TABLES}")
 print(f"[Config] dft_direct_source={BASELINE_DFT_DIRECT_SOURCE} | "
       f"physical_lag_gate={USE_PHYSICAL_TDOA_LAG_GATE} | "
       f"lag_limit_override={TDOA_LAG_LIMIT_SAMPLES} | lag_margin={TDOA_LAG_MARGIN_SAMPLES} | "
@@ -795,6 +1033,12 @@ print(f"[Config] localizer_ablation={RUN_LOCALIZER_ABLATION} | "
       f"localizer_estimators={LOCALIZER_ABLATION_ESTIMATORS} | "
       f"localizer_methods={LOCALIZER_ABLATION_METHODS} | "
       f"localizer_snr={list(LOCALIZER_ABLATION_SNR_RANGE)}")
+if RUN_COMPRESSED_TDOA_V5A:
+    print(f"[Config] V5-A compressed TDOA: pairs={V5A_N_PAIRS} | "
+          f"epochs={V5A_EPOCHS} | batch={V5A_BATCH_SIZE} | lr={V5A_LR:g} | "
+          f"init={V5A_INIT_MODE} | sigma={V5A_SOFT_LABEL_SIGMA} | "
+          f"amb={V5A_AMBIGUITY_WEIGHT} | width={V5A_WIDTH_WEIGHT} | "
+          f"unc={V5A_UNCERTAINTY_WEIGHT} | filt_reg={V5A_FILTER_REG_WEIGHT}")
 if SCENARIO_MODE == "urban8":
     print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
           f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
@@ -851,6 +1095,45 @@ def high_frequency_dft_bins(signal_len, cr):
     return np.argsort(-np.abs(freqs))[:n_bins].astype(int)
 
 
+def first_unique_bins(bins, count, exclude=()):
+    """Return the first unique bins while respecting an exclusion set."""
+    excluded = set(int(x) for x in exclude)
+    selected = []
+    seen = set()
+    for value in np.asarray(bins, dtype=int).tolist():
+        item = int(value)
+        if item in excluded or item in seen:
+            continue
+        selected.append(item)
+        seen.add(item)
+        if len(selected) >= int(count):
+            break
+    if len(selected) < int(count):
+        raise ValueError(
+            f"Could not select {count} unique bins; got {len(selected)}."
+        )
+    return np.asarray(selected, dtype=int)
+
+
+def make_budget64_hybrid_bins(coarse_ranked, fine_ranked, coarse_count, fine_count):
+    """
+    Build a strict CR16 hybrid split.
+
+    The fairness constraint is on the transmitted union, not on the nominal
+    coarse/fine counts separately. Fine bins are therefore selected outside the
+    chosen coarse set so len(union(coarse, fine)) == coarse_count + fine_count.
+    """
+    coarse = first_unique_bins(coarse_ranked, coarse_count)
+    fine = first_unique_bins(fine_ranked, fine_count, exclude=coarse)
+    union_count = int(np.union1d(coarse, fine).size)
+    expected = int(coarse_count) + int(fine_count)
+    if union_count != expected:
+        raise RuntimeError(
+            f"Budget split is not strict: union={union_count}, expected={expected}."
+        )
+    return coarse, fine
+
+
 def compute_physical_tdoa_lag_limit(simulator):
     if not USE_PHYSICAL_TDOA_LAG_GATE:
         return None
@@ -869,7 +1152,7 @@ def compute_physical_tdoa_lag_limit(simulator):
 def method_zoom_orders(baseline_cr, had_main):
     core = [
         "Raw", f"DAE-CR{baseline_cr}", "DFT", "DFT-SCS-lite",
-        "DFT-Fisher-Direct", "GeoHybrid-DFT",
+        "DFT-Fisher-Direct", "GeoHybrid-B64-C40F24",
         "GeoAmbi-DFT-Direct", "GeoAmbi-DFT-AML",
         had_main, "PCA"
     ]
@@ -975,6 +1258,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
     models_dict = {}
     cv_results_dict = {}
     reference_models_dict = {}
+    v5a_estimator = None
+    v5a_training_result = None
     source_plot_data = None
     source_cv_results_dict = {}
     static_baseline_cache = None
@@ -995,7 +1280,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             if RUN_STRONG_BASELINES:
                 required_cache_methods.append("GeoAmbi-DFT-AML")
                 if RUN_GEOHYBRID_BASELINES:
-                    required_cache_methods.append("GeoHybrid-DFT")
+                    required_cache_methods.append("GeoHybrid-B64-C40F24")
             if required_cache_methods and not method_data_contains(
                     static_baseline_cache.get("baseline_all_results"),
                     required_cache_methods):
@@ -1033,12 +1318,43 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
               f"mean_abs_err={clean_diag.get('mean_abs_peak_error', float('nan')):.2f}, "
               f"false_peaks>0.5={clean_diag.get('mean_false_peaks_gt_05', float('nan')):.2f}")
 
+    if RUN_COMPRESSED_TDOA_V5A:
+        v5_cfg = V5ATrainConfig(
+            n_pairs=int(V5A_N_PAIRS),
+            epochs=int(V5A_EPOCHS),
+            batch_size=int(V5A_BATCH_SIZE),
+            lr=float(V5A_LR),
+            weight_decay=float(V5A_WEIGHT_DECAY),
+            sigma=float(V5A_SOFT_LABEL_SIGMA),
+            ambiguity_weight=float(V5A_AMBIGUITY_WEIGHT),
+            width_weight=float(V5A_WIDTH_WEIGHT),
+            uncertainty_weight=float(V5A_UNCERTAINTY_WEIGHT),
+            filter_reg_weight=float(V5A_FILTER_REG_WEIGHT),
+            resample_train_each_epoch=True,
+            resample_interval=int(V5A_RESAMPLE_INTERVAL),
+            init_mode=str(V5A_INIT_MODE),
+        )
+        v5a_model, v5a_training_result = train_v5a_compressed_tdoa(
+            sim, DEVICE, seed=current_seed + 9000,
+            lag_limit_samples=method_tdoa_lag_limit,
+            config=v5_cfg,
+        )
+        v5a_model_path = os.path.join(RESULT_DIR, "model_v5a_cr16.pt")
+        torch.save(v5a_model.state_dict(), v5a_model_path)
+        v5a_training_result["model_path"] = v5a_model_path
+        v5a_training_result["model_class"] = "LearnableCompressedTDOALikelihood"
+        v5a_estimator = LearnedCompressedTDOAEstimator(
+            v5a_model, DEVICE, label="V5A-CR16"
+        )
+        print(f"[V5-A][Saved] {v5a_model_path}")
+
     # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
     shared_v3_state = None
     shared_v3_cv_results = None
     shared_v3_train_cr = min(CR_LIST)
+    shared_nested_loss = LOSS_MODE in ("freq_task_nested_pair", "freq_task_v4_min_pair")
     for cr in CR_LIST:
-        if RUN_TRAINING and LOSS_MODE == "freq_task_nested_pair" and shared_v3_state is not None:
+        if RUN_TRAINING and shared_nested_loss and shared_v3_state is not None:
             model = ACTIVE_MODEL_FACTORY(cr=cr).to(DEVICE)
             model.load_state_dict(shared_v3_state)
             if hasattr(model, "set_active_cr"):
@@ -1048,7 +1364,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             cv_results['shared_nested_supernet'] = True
             cv_results['shared_supernet_train_cr'] = shared_v3_train_cr
             cv_results['active_eval_cr'] = cr
-            print(f"[V3 Nested] Reusing shared supernet trained at CR={shared_v3_train_cr}; "
+            print(f"[Nested] Reusing shared supernet trained at CR={shared_v3_train_cr}; "
                   f"active mask set to CR={cr}.")
         elif RUN_TRAINING:
             final_epochs_for_cr = (
@@ -1093,9 +1409,16 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 soft_peak_sigma=LOSS_CONFIG[cr].get('soft_peak_sigma', 1.5),
                 soft_peak_sharpness_weight=LOSS_CONFIG[cr].get('soft_peak_sharpness_weight', 0.0),
                 pair_task_weight=LOSS_CONFIG[cr].get('pair_task_weight', 0.0),
-                nested_crs=LOSS_CONFIG[cr].get('nested_crs', USER_FREQ_TASK_V3_NESTED_CRS),
+                pair_uncertainty_weight=LOSS_CONFIG[cr].get('pair_uncertainty_weight', 0.0),
+                cr_monotonic_weight=LOSS_CONFIG[cr].get('cr_monotonic_weight', 0.0),
+                nested_crs=LOSS_CONFIG[cr].get(
+                    'nested_crs',
+                    USER_FREQ_TASK_V4_NESTED_CRS
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES
+                    else USER_FREQ_TASK_V3_NESTED_CRS
+                ),
             )
-            if LOSS_MODE == "freq_task_nested_pair":
+            if shared_nested_loss:
                 if hasattr(model, "set_active_cr"):
                     model.set_active_cr(cr)
                 shared_v3_state = {
@@ -1136,22 +1459,29 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             print(f"[EvalOnly] Skip copying CR={cr} model to result dir "
                   f"(set USER_EVAL_ONLY_COPY_MODELS=True to copy).")
 
-    # 3. Monte Carlo 评估
-    print("\n" + "=" * 40)
-    if EVALUATION_MODE == "urban_localization":
-        exp = UrbanLocalizationExperiment(
-            models_dict, sim, DEVICE, seed=current_seed,
-            snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
-            sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
-            batch_size=BATCH_SIZE, fixed_eval_set=FIXED_EVAL_SET,
-            estimator=LOCALIZATION_ESTIMATOR,
-            tdoa_lag_limit_samples=method_tdoa_lag_limit,
-        )
+    # 3. Monte Carlo 评估。Direct-only eval 只新增 direct baselines，
+    # 复用冻结源 Fig3 数据，避免重复生成不变的核心复现曲线。
+    if DIRECT_ONLY_OUTPUT and not RUN_TRAINING and source_plot_data is not None:
+        mc_results = source_plot_data.get("mc_results")
+        if mc_results is None:
+            raise KeyError("direct-only eval requires source mc_results in plot_data.pkl")
+        print("[DirectOnly] Reusing source mc_results; skip Fig3 Monte Carlo sweep.")
     else:
-        exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed,
-                                   snr_range=EVAL_SNR_RANGE,
-                                   num_trials=MONTE_CARLO_TRIALS)
-    mc_results = exp.run()
+        print("\n" + "=" * 40)
+        if EVALUATION_MODE == "urban_localization":
+            exp = UrbanLocalizationExperiment(
+                models_dict, sim, DEVICE, seed=current_seed,
+                snr_range=EVAL_SNR_RANGE, num_trials=MONTE_CARLO_TRIALS,
+                sub_sample=TDOA_SUB_SAMPLE, use_los_only=USE_LOS_ONLY,
+                batch_size=BATCH_SIZE, fixed_eval_set=FIXED_EVAL_SET,
+                estimator=LOCALIZATION_ESTIMATOR,
+                tdoa_lag_limit_samples=method_tdoa_lag_limit,
+            )
+        else:
+            exp = MonteCarloExperiment(models_dict, sim, DEVICE, seed=current_seed,
+                                       snr_range=EVAL_SNR_RANGE,
+                                       num_trials=MONTE_CARLO_TRIALS)
+        mc_results = exp.run()
     all_seed_results[current_seed] = mc_results
 
     # 4. 最后一个 seed：生成图片和保存数据
@@ -1191,6 +1521,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 mse_title = (f'CR={cr} | Freq-task pair '
                              f'(corr={LOSS_CONFIG[cr]["corr_weight"]}, '
                              f'xphase={LOSS_CONFIG[cr]["pair_phase_weight"]})')
+            elif LOSS_MODE == "freq_task_v4_min_pair":
+                mse_title = (f'CR={cr} | Task-sufficient v4 '
+                             f'(task={LOSS_CONFIG[cr]["pair_task_weight"]}, '
+                             f'mono={LOSS_CONFIG[cr]["cr_monotonic_weight"]}, '
+                             f'active={cr})')
             elif LOSS_MODE == "freq_task_nested_pair":
                 mse_title = (f'CR={cr} | Nested Freq-task pair '
                              f'(task={LOSS_CONFIG[cr]["pair_task_weight"]}, '
@@ -1238,7 +1573,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         ax_pk.plot(cr_data['fold_val_peak_loss'][fi], alpha=0.75,
                                    color=f'C{fi}', linewidth=1.0, linestyle='--',
                                    label=f'Val F{fi+1}' if n_folds > 1 else 'Val Peak')
-                if LOSS_MODE in ("freq_task_pair", "freq_task_nested_pair"):
+                if LOSS_MODE in ("freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"):
                     pk_title = (
                         f'CR={cr} | Soft TDOA Peak Loss '
                         f'(λ={LOSS_CONFIG[cr]["lambda_peak"]})'
@@ -1285,6 +1620,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                        f"peak={USER_FREQ_TASK_V3_PEAK_WEIGHT}, "
                        f"task={USER_FREQ_TASK_V3_TASK_HEAD_WEIGHT}, "
                        f"epochs={MAX_EPOCHS}")
+        elif LOSS_MODE == "freq_task_v4_min_pair":
+            cfg_str = (f"Nested task-sufficient DAE v4-min: {ACTIVE_MODEL_NAME}, "
+                       f"corr={USER_FREQ_TASK_V4_CORR_WEIGHT}, "
+                       f"xphase={USER_FREQ_TASK_V4_PHASE_WEIGHT}, "
+                       f"task={USER_FREQ_TASK_V4_TASK_HEAD_WEIGHT}, "
+                       f"unc={USER_FREQ_TASK_V4_UNCERTAINTY_WEIGHT}, "
+                       f"mono={USER_FREQ_TASK_V4_CR_MONOTONIC_WEIGHT}, "
+                       f"epochs={MAX_EPOCHS}")
         else:
             cfg_str = ", ".join([
                 f"CR{cr}: w={LOSS_CONFIG[cr]['mse_weight_max']}, "
@@ -1298,13 +1641,23 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         cv_title = (f'Figure 1: {fig1_protocol_label} Dynamics  ({cfg_str})')
         fig_cv.suptitle(cv_title, fontsize=12, y=0.995)
         fig_cv.tight_layout()
-        save_figure(fig_cv, "Fig1_CV_training_curves")
+        if EXPORT_CORE_FIGURES:
+            save_figure(fig_cv, "Fig1_CV_training_curves")
+        else:
+            plt.close(fig_cv)
+            print("[DirectOnly] Skip Fig1_CV_training_curves.svg")
 
         # 生成 Figure 2 的绘图数据（所有CR叠加）
-        snr_data_all = generate_snr_data_all(
-            models_dict, sim, DEVICE, snr_list=FIG2_SNR_LIST,
-            diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
-        )
+        if DIRECT_ONLY_OUTPUT and not RUN_TRAINING and source_plot_data is not None:
+            snr_data_all = source_plot_data.get("snr_data")
+            if snr_data_all is None:
+                raise KeyError("direct-only eval requires source snr_data in plot_data.pkl")
+            print("[DirectOnly] Reusing source Fig2 SNR diagnostics.")
+        else:
+            snr_data_all = generate_snr_data_all(
+                models_dict, sim, DEVICE, snr_list=FIG2_SNR_LIST,
+                diagnostic_trials=FIG2_DIAGNOSTIC_TRIALS
+            )
 
         fig6_results = None
         fig7_results = None
@@ -1377,7 +1730,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     f"{INNOVATION_LABEL_PREFIX}-CR8",
                     f"{INNOVATION_LABEL_PREFIX}-CR16",
                     "DFT", "DFT-Fisher-Direct",
-                    "Cao2017-DFT-AML", "GeoHybrid-DFT", "GeoAmbi-DFT-AML",
+                    "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24", "GeoAmbi-DFT-AML",
                     "Zhai-CRLB-Decimation",
                     had_main, "PCA"
                 ])
@@ -1483,6 +1836,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         signal_len=sim.signal_len,
                         label="DFT",
                     )
+                if v5a_estimator is not None:
+                    direct_estimators["V5A-CR16"] = v5a_estimator
                 if RUN_TASK_AWARE_BASELINES:
                     for src_label, dst_label in [
                         ("DFT-Fisher", "DFT-Fisher-Direct"),
@@ -1512,28 +1867,65 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         if dft_direct_source is not None and hasattr(dft_direct_source, "selected_bins"):
                             coarse_bins = dft_direct_source.selected_bins.detach().cpu().numpy()
                         if RUN_GEOHYBRID_BASELINES and coarse_bins is not None:
-                            direct_estimators["GeoHybrid-DFT"] = GeoHybridDFTTDOAEstimator(
-                                coarse_bins,
-                                geoambi_bins,
-                                signal_len=sim.signal_len,
-                                label="GeoHybrid-DFT",
-                                coarse_mode="aml",
-                                fine_mode="aml",
-                                refinement_radius=4.0,
-                                fine_gain=1.25,
-                                consistency_sigma=3.0,
+                            hybrid_budget_complex = int(sim.signal_len // BASELINE_CR)
+
+                            def add_geohybrid(label, c_bins, f_bins, note,
+                                              use_consistency=True,
+                                              use_pair_uncertainty=True,
+                                              fine_gain=1.25):
+                                direct_estimators[label] = GeoHybridDFTTDOAEstimator(
+                                    c_bins, f_bins, signal_len=sim.signal_len,
+                                    label=label, coarse_mode="aml", fine_mode="aml",
+                                    refinement_radius=4.0, fine_gain=fine_gain,
+                                    consistency_sigma=3.0,
+                                    budget_limit_complex=hybrid_budget_complex,
+                                    use_consistency=use_consistency,
+                                    use_pair_uncertainty=use_pair_uncertainty,
+                                    budget_note=note,
+                                )
+
+                            direct_estimators["GeoHybrid-CoarseOnly64"] = Cao2017DFTAMLEstimator(
+                                coarse_bins, signal_len=sim.signal_len,
+                                label="GeoHybrid-CoarseOnly64", weight_mode="aml",
                             )
-                            direct_estimators["GeoHybrid-DFT-PHAT-gated"] = GeoHybridDFTTDOAEstimator(
-                                coarse_bins,
-                                geoambi_bins,
-                                signal_len=sim.signal_len,
-                                label="GeoHybrid-DFT-PHAT-gated",
-                                coarse_mode="aml",
-                                fine_mode="phat_gated",
-                                refinement_radius=4.0,
-                                fine_gain=1.10,
-                                consistency_sigma=3.0,
-                                phat_gate=0.35,
+                            direct_estimators["GeoHybrid-FineOnly64"] = Cao2017DFTAMLEstimator(
+                                geoambi_bins, signal_len=sim.signal_len,
+                                label="GeoHybrid-FineOnly64", weight_mode="aml",
+                            )
+                            for c_count, f_count in [(48, 16), (40, 24), (32, 32)]:
+                                c_budget, f_budget = make_budget64_hybrid_bins(
+                                    coarse_bins, geoambi_bins, c_count, f_count
+                                )
+                                label = f"GeoHybrid-B64-C{c_count}F{f_count}"
+                                add_geohybrid(
+                                    label, c_budget, f_budget,
+                                    note=(
+                                        f"strict CR16 budget: union<=64 complex bins; "
+                                        f"coarse={c_count}, fine={f_count}"
+                                    ),
+                                )
+                            c_mid, f_mid = make_budget64_hybrid_bins(
+                                coarse_bins, geoambi_bins, 40, 24
+                            )
+                            add_geohybrid(
+                                "GeoHybrid-B64-C40F24-no-consistency",
+                                c_mid, f_mid,
+                                note="strict CR16 ablation: coarse-fine consistency disabled",
+                                use_consistency=False,
+                            )
+                            add_geohybrid(
+                                "GeoHybrid-B64-C40F24-no-uncertainty",
+                                c_mid, f_mid,
+                                note="strict CR16 ablation: pair uncertainty WLS weights disabled",
+                                use_pair_uncertainty=False,
+                            )
+                            add_geohybrid(
+                                "GeoHybrid-OverBudget-C64F64",
+                                coarse_bins, geoambi_bins,
+                                note=(
+                                    "over-budget diagnostic upper bound: independent "
+                                    "64-bin coarse and 64-bin fine sets"
+                                ),
                             )
                         direct_estimators["GeoAmbi-DFT-Direct"] = DirectDFTTDOAEstimator(
                             geoambi_bins,
@@ -1629,8 +2021,13 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "zhai_phase_superposition": "sqrt_power_weighted_phase",
                     "run_geohybrid_baselines": RUN_GEOHYBRID_BASELINES,
                     "geohybrid_estimator": (
-                        "coarse_high_coherence_plus_geoambi_fine_uncertainty_wls"
+                        "budget_checked_coarse_high_coherence_plus_geoambi_fine"
                     ),
+                    "geohybrid_budget_limit_complex": (
+                        int(sim.signal_len // BASELINE_CR) if RUN_GEOHYBRID_BASELINES else None
+                    ),
+                    "v5a_compressed_tdoa": bool(RUN_COMPRESSED_TDOA_V5A),
+                    "v5a_training": v5a_training_result,
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
                     "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
@@ -1639,15 +2036,23 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 baseline_all_results[0]["config"]["direct_methods"] = list(direct_estimators.keys())
                 baseline_all_results[0]["config"]["task_aware_direct_methods"] = [
                     name for name in [
-                        "DFT", "DFT-Fisher-Direct",
-                        "GeoHybrid-DFT", "GeoAmbi-DFT-Direct"
+                        "DFT", "V5A-CR16", "DFT-Fisher-Direct",
+                        "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
+                        "GeoHybrid-B64-C32F32", "GeoAmbi-DFT-Direct"
                     ]
                     if name in direct_estimators
                 ]
                 baseline_all_results[0]["config"]["strong_direct_methods"] = [
                     name for name in [
-                        "Cao2017-DFT-AML", "GeoHybrid-DFT",
-                        "GeoHybrid-DFT-PHAT-gated", "GeoAmbi-DFT-AML",
+                        "V5A-CR16",
+                        "Cao2017-DFT-AML",
+                        "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
+                        "GeoHybrid-B64-C32F32",
+                        "GeoHybrid-OverBudget-C64F64",
+                        "GeoHybrid-B64-C40F24-no-consistency",
+                        "GeoHybrid-B64-C40F24-no-uncertainty",
+                        "GeoHybrid-CoarseOnly64", "GeoHybrid-FineOnly64",
+                        "GeoAmbi-DFT-AML",
                         "GeoAmbi-DFT-Direct", "GeoAmbi-DFT-PHAT",
                         "Cao2020-HighFC",
                         "Zhai-CRLB-Decimation", "Zhai-Phase-Superposition"
@@ -1663,30 +2068,35 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "DFT-train-power", "DFT-bandlimited",
                     had_main, "Hadamard-block-2", "PCA"
                 ])
-                fig6_keep = unique_order(
-                    ["Raw", "Clean", "Geometry"] + fig6_supp_order
-                )
-                fig6_results = filter_method_comparison_data(
-                    baseline_all_results, fig6_keep,
-                    {
-                        **common_config,
-                        "main_method_order": fig6_main_order,
-                        "supplement_method_order": fig6_supp_order,
-                        "main_title": f"Figure 6: Chen-Style Traditional Baselines (CR={BASELINE_CR})",
-                        "supplement_title": f"Figure 6 Supplement: Baseline Sensitivity (CR={BASELINE_CR})",
-                        "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
-                        "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
-                        "supplement_zoom_method_order": fig6_supp_order,
-                        "supplement_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_SNR_Zooms",
-                        "table_prefix": "fig6",
-                    },
-                )
+                if EXPORT_FIG6_RESULTS:
+                    fig6_keep = unique_order(
+                        ["Raw", "Clean", "Geometry"] + fig6_supp_order
+                    )
+                    fig6_results = filter_method_comparison_data(
+                        baseline_all_results, fig6_keep,
+                        {
+                            **common_config,
+                            "main_method_order": fig6_main_order,
+                            "supplement_method_order": fig6_supp_order,
+                            "main_title": f"Figure 6: Chen-Style Traditional Baselines (CR={BASELINE_CR})",
+                            "supplement_title": f"Figure 6 Supplement: Baseline Sensitivity (CR={BASELINE_CR})",
+                            "main_figure_filename": f"Fig6_Chen_Traditional_Baselines_CR{BASELINE_CR}",
+                            "supplement_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}",
+                            "supplement_zoom_method_order": fig6_supp_order,
+                            "supplement_zoom_figure_filename": f"Fig6_Supp_Chen_Baseline_Ablation_CR{BASELINE_CR}_SNR_Zooms",
+                            "table_prefix": "fig6",
+                        },
+                    )
+                else:
+                    fig6_results = None
+                    print("[DirectOnly] Skip Fig6 result filtering/export.")
 
                 if RUN_TASK_AWARE_BASELINES and direct_estimators:
                     fig7_order = unique_order([
-                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
                         "DFT-SCS-lite", "DFT-Fisher-Direct",
-                        "GeoHybrid-DFT", "GeoAmbi-DFT-Direct",
+                        "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
+                        "GeoHybrid-B64-C32F32", "GeoAmbi-DFT-Direct",
                         had_main, "PCA"
                     ])
                     fig7_keep = unique_order(["Raw", "Clean", "Geometry"] + fig7_order)
@@ -1708,9 +2118,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     # strong baselines. Proxy/diagnostic variants remain computed
                     # in baseline_all_results and are plotted in Fig8 supplement.
                     fig8_order = unique_order([
-                        "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
                         "DFT-Fisher-Direct", "Cao2017-DFT-AML",
-                        "GeoHybrid-DFT",
+                        "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
+                        "GeoHybrid-B64-C32F32",
                         "Zhai-CRLB-Decimation", had_main, "PCA"
                     ])
                     fig8_keep = unique_order(["Raw", "Clean", "Geometry"] + fig8_order)
@@ -1728,9 +2139,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     )
                     if RUN_STRONG_DIAGNOSTIC_SUPPLEMENT:
                         fig8_supp_order = unique_order([
-                            "Raw", f"DAE-CR{BASELINE_CR}", "DFT",
+                            "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
                             "DFT-Fisher-Direct", "Cao2017-DFT-AML",
-                            "GeoHybrid-DFT", "GeoHybrid-DFT-PHAT-gated",
+                            "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
+                            "GeoHybrid-B64-C32F32",
+                            "GeoHybrid-OverBudget-C64F64",
+                            "GeoHybrid-B64-C40F24-no-consistency",
+                            "GeoHybrid-B64-C40F24-no-uncertainty",
+                            "GeoHybrid-CoarseOnly64", "GeoHybrid-FineOnly64",
                             "GeoAmbi-DFT-Direct", "GeoAmbi-DFT-AML",
                             "GeoAmbi-DFT-PHAT", "Cao2020-HighFC",
                             "Zhai-CRLB-Decimation",
@@ -1764,7 +2180,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         f"{INNOVATION_LABEL_PREFIX}-CR8",
                         f"{INNOVATION_LABEL_PREFIX}-CR16",
                         "DFT", "DFT-Fisher-Direct",
-                        "Cao2017-DFT-AML", "GeoHybrid-DFT", "GeoAmbi-DFT-AML",
+                        "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24", "GeoAmbi-DFT-AML",
                         "Zhai-CRLB-Decimation",
                         had_main, "PCA"
                     ])
@@ -1815,6 +2231,59 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "table_prefix": "fig9_focus",
                             "innovation_model": ACTIVE_MODEL_NAME,
                             "reference_model_dir": REFERENCE_MODEL_DIR,
+                        },
+                    )
+                elif RUN_COMPRESSED_TDOA_V5A:
+                    fig9_order = unique_order([
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        "DFT", "DFT-Fisher-Direct",
+                        "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24",
+                        "GeoAmbi-DFT-AML", "Zhai-CRLB-Decimation",
+                        had_main, "PCA"
+                    ])
+                    fig9_keep = unique_order(["Raw", "Clean", "Geometry"] + fig9_order)
+                    fig9_results = filter_method_comparison_data(
+                        baseline_all_results, fig9_keep,
+                        {
+                            **common_config,
+                            "strong_method_order": fig9_order,
+                            "strong_title": (
+                                "Figure 9: V5-A Compressed-Domain TDOA Likelihood "
+                                "vs Frozen Chen-DAE and Strong Baselines"
+                            ),
+                            "strong_figure_filename": (
+                                f"Fig9_V5A_Compressed_TDOA_CR{BASELINE_CR}"
+                            ),
+                            "strong_zoom_method_order": fig9_order,
+                            "strong_zoom_figure_filename": (
+                                f"Fig9_V5A_Compressed_TDOA_CR{BASELINE_CR}_SNR_Zooms"
+                            ),
+                            "table_prefix": "fig9_v5a",
+                            "innovation_model": "LearnableCompressedTDOALikelihood",
+                            "reference_model_dir": MODEL_SOURCE_DIR,
+                        },
+                    )
+                    fig9_focus_order = unique_order([
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        "DFT", "DFT-Fisher-Direct",
+                        "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24",
+                        "Zhai-CRLB-Decimation",
+                    ])
+                    fig9_focus_keep = unique_order(["Raw", "Clean", "Geometry"] + fig9_focus_order)
+                    fig9_focus_results = filter_method_comparison_data(
+                        baseline_all_results, fig9_focus_keep,
+                        {
+                            **common_config,
+                            "strong_method_order": fig9_focus_order,
+                            "strong_title": "Figure 9 Focus: V5-A vs Compressed TDOA Baselines",
+                            "strong_figure_filename": "Fig9_Focused_V5A_CR16_Comparison",
+                            "strong_zoom_method_order": fig9_focus_order,
+                            "strong_zoom_figure_filename": (
+                                "Fig9_Focused_V5A_CR16_Comparison_SNR_Zooms"
+                            ),
+                            "table_prefix": "fig9_v5a_focus",
+                            "innovation_model": "LearnableCompressedTDOALikelihood",
+                            "reference_model_dir": MODEL_SOURCE_DIR,
                         },
                     )
 
@@ -1899,6 +2368,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'fig9_results': fig9_results,
             'fig9_focus_results': fig9_focus_results,
             'fig10_localizer_results': fig10_localizer_results,
+            'v5a_training': v5a_training_result,
             'baseline_all_results': baseline_all_results,
             'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
@@ -1955,6 +2425,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'strong_include_phase_superposition': STRONG_INCLUDE_PHASE_SUPERPOSITION,
                 'run_strong_diagnostic_supplement': RUN_STRONG_DIAGNOSTIC_SUPPLEMENT,
                 'run_geohybrid_baselines': RUN_GEOHYBRID_BASELINES,
+                'direct_only_output': DIRECT_ONLY_OUTPUT,
+                'export_core_figures': EXPORT_CORE_FIGURES,
+                'export_core_tables': EXPORT_CORE_TABLES,
+                'export_fig6_results': EXPORT_FIG6_RESULTS,
+                'export_markdown_tables': EXPORT_MARKDOWN_TABLES,
                 'run_localizer_ablation': RUN_LOCALIZER_ABLATION,
                 'localizer_ablation_estimators': LOCALIZER_ABLATION_ESTIMATORS,
                 'localizer_ablation_methods': LOCALIZER_ABLATION_METHODS,
@@ -2053,6 +2528,61 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     list(USER_FREQ_TASK_V3_NESTED_CRS)
                     if EXPERIMENT_MODE in FREQ_TASK_V3_MODES else None
                 ),
+                'freq_task_v4_corr_weight': (
+                    USER_FREQ_TASK_V4_CORR_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_phase_weight': (
+                    USER_FREQ_TASK_V4_PHASE_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_peak_weight': (
+                    USER_FREQ_TASK_V4_PEAK_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_task_head_weight': (
+                    USER_FREQ_TASK_V4_TASK_HEAD_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_uncertainty_weight': (
+                    USER_FREQ_TASK_V4_UNCERTAINTY_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_cr_monotonic_weight': (
+                    USER_FREQ_TASK_V4_CR_MONOTONIC_WEIGHT
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'freq_task_v4_nested_crs': (
+                    list(USER_FREQ_TASK_V4_NESTED_CRS)
+                    if EXPERIMENT_MODE in FREQ_TASK_V4_MODES else None
+                ),
+                'v5a_enabled': bool(RUN_COMPRESSED_TDOA_V5A),
+                'v5a_n_pairs': (
+                    int(V5A_N_PAIRS) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_epochs': (
+                    int(V5A_EPOCHS) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_batch_size': (
+                    int(V5A_BATCH_SIZE) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_lr': float(V5A_LR) if RUN_COMPRESSED_TDOA_V5A else None,
+                'v5a_init_mode': str(V5A_INIT_MODE) if RUN_COMPRESSED_TDOA_V5A else None,
+                'v5a_soft_label_sigma': (
+                    float(V5A_SOFT_LABEL_SIGMA) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_ambiguity_weight': (
+                    float(V5A_AMBIGUITY_WEIGHT) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_width_weight': (
+                    float(V5A_WIDTH_WEIGHT) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_uncertainty_weight': (
+                    float(V5A_UNCERTAINTY_WEIGHT) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
+                'v5a_filter_reg_weight': (
+                    float(V5A_FILTER_REG_WEIGHT) if RUN_COMPRESSED_TDOA_V5A else None
+                ),
             },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
@@ -2061,16 +2591,19 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         print(f"[Saved] {pkl_path}")
 
         # 绘制 Figure 2 和 3。创建顺序与本地文件序号保持一致，避免窗口标题混乱。
-        fig2_suffix = f" - {ACTIVE_MODEL_NAME}" if EXPERIMENT_MODE in INNOVATION_MODES else ""
-        fig_snr = plot_snr_comparison_multi(
-            cr_list=CR_LIST, data_dict=snr_data_all, title_suffix=fig2_suffix
-        )
-        save_figure(fig_snr, "Fig2_SNR_Comparison")
+        if EXPORT_CORE_FIGURES:
+            fig2_suffix = f" - {ACTIVE_MODEL_NAME}" if EXPERIMENT_MODE in INNOVATION_MODES else ""
+            fig_snr = plot_snr_comparison_multi(
+                cr_list=CR_LIST, data_dict=snr_data_all, title_suffix=fig2_suffix
+            )
+            save_figure(fig_snr, "Fig2_SNR_Comparison")
 
-        fig_mc = plot_monte_carlo(mc_results)
-        save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
+            fig_mc = plot_monte_carlo(mc_results)
+            save_figure(fig_mc, "Fig3_MonteCarlo_TDOA_RMSE")
+        else:
+            print("[DirectOnly] Skip Fig2_SNR_Comparison.svg and Fig3_MonteCarlo_TDOA_RMSE.svg")
 
-        if fig6_results is not None:
+        if fig6_results is not None and EXPORT_FIG6_RESULTS:
             fig_methods = plot_method_comparison(fig6_results, plot_kind="main")
             fig6_name = fig6_results[0].get("config", {}).get(
                 "main_figure_filename", f"Fig6_Traditional_Baselines_CR{BASELINE_CR}"
@@ -2243,7 +2776,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
         try:
             from export_results import export as export_result_tables
-            export_result_tables(RESULT_DIR, export_fig6_figures=EXPORT_FIG6_SVG_IN_TABLES)
+            export_result_tables(
+                RESULT_DIR,
+                export_fig6_figures=EXPORT_FIG6_SVG_IN_TABLES,
+                export_markdown_tables=EXPORT_MARKDOWN_TABLES,
+                export_core_tables=EXPORT_CORE_TABLES,
+                export_core_figures=EXPORT_CORE_FIGURES,
+                export_fig6_results=EXPORT_FIG6_RESULTS,
+            )
         except Exception as exc:
             print(f"[Warn] Automatic table export failed: {exc}")
 

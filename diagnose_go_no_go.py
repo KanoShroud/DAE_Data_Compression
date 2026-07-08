@@ -335,14 +335,18 @@ def _make_direct_estimators(meta: dict, signal_len: int) -> dict:
         )
     if selected.get("DFT-GeoAmbi") is not None:
         if dft_source is not None:
-            estimators["GeoHybrid-DFT"] = GeoHybridDFTTDOAEstimator(
+            estimators["GeoHybrid-OverBudget-C64F64"] = GeoHybridDFTTDOAEstimator(
                 dft_source, selected["DFT-GeoAmbi"],
-                signal_len=signal_len, label="GeoHybrid-DFT"
+                signal_len=signal_len, label="GeoHybrid-OverBudget-C64F64",
+                budget_limit_complex=signal_len // 16,
+                budget_note="legacy go/no-go over-budget diagnostic"
             )
-            estimators["GeoHybrid-DFT-PHAT-gated"] = GeoHybridDFTTDOAEstimator(
+            estimators["GeoHybrid-OverBudget-C64F64-PHAT"] = GeoHybridDFTTDOAEstimator(
                 dft_source, selected["DFT-GeoAmbi"],
-                signal_len=signal_len, label="GeoHybrid-DFT-PHAT-gated",
-                fine_mode="phat_gated", fine_gain=1.10
+                signal_len=signal_len, label="GeoHybrid-OverBudget-C64F64-PHAT",
+                fine_mode="phat_gated", fine_gain=1.10,
+                budget_limit_complex=signal_len // 16,
+                budget_note="legacy go/no-go PHAT over-budget diagnostic"
             )
         estimators["GeoAmbi-DFT-Direct"] = DirectDFTTDOAEstimator(
             selected["DFT-GeoAmbi"], signal_len=signal_len,
@@ -433,8 +437,8 @@ def _plot_go_no_go(method_results, out_dir: Path, filename="Fig_GoNoGo_TaskHead_
         "DFT": "#756bb1",
         "Cao2017-DFT-AML": "#bcbddc",
         "Zhai-CRLB-Decimation": "#31a354",
-        "GeoHybrid-DFT": "#e6550d",
-        "GeoHybrid-DFT-PHAT-gated": "#fdae6b",
+        "GeoHybrid-OverBudget-C64F64": "#636363",
+        "GeoHybrid-OverBudget-C64F64-PHAT": "#969696",
         "TaskHead-CR4": "#e6550d",
         "TaskHead-CR8": "#fd8d3c",
         "TaskHead-CR16": "#fdae6b",
