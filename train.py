@@ -49,6 +49,56 @@ class RefreshableUrbanWaveformDataset(Dataset):
         return self.X_noisy[idx], self.X_clean[idx]
 
 
+class RefreshableUrbanPairDataset(Dataset):
+    """
+    固定 snapshot/UAV-pair 计划、按 epoch 周期性重采样 waveform 的 urban8 pair 训练集。
+
+    用于 FreqDAE v2：训练时显式看到同一 observation 内的 LOS pair，目标
+    TDOA 使用几何距离差的浮点采样值，与最终 all-pair WLS 评估保持一致。
+    """
+    def __init__(self, sim, snapshot_indices, uav_i_indices, uav_j_indices,
+                 base_seed=42, refresh_interval=1):
+        self.sim = sim
+        self.snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+        self.uav_i_indices = np.asarray(uav_i_indices, dtype=int)
+        self.uav_j_indices = np.asarray(uav_j_indices, dtype=int)
+        self.base_seed = int(base_seed)
+        self.refresh_interval = max(1, int(refresh_interval))
+        self._refresh_id = None
+        self.X1_noisy = None
+        self.X1_clean = None
+        self.X2_noisy = None
+        self.X2_clean = None
+        self.tdoa = None
+        self.set_epoch(0)
+
+    def set_epoch(self, epoch):
+        refresh_id = int(epoch) // self.refresh_interval
+        if refresh_id == self._refresh_id:
+            return
+        seed = self.base_seed + refresh_id
+        self.X1_noisy, self.X1_clean, self.X2_noisy, self.X2_clean, self.tdoa = (
+            self.sim.generate_urban_pair_training_dataset_from_plan(
+                self.snapshot_indices,
+                self.uav_i_indices,
+                self.uav_j_indices,
+                seed=seed,
+                return_groups=False,
+            )
+        )
+        self._refresh_id = refresh_id
+
+    def __len__(self):
+        return len(self.snapshot_indices)
+
+    def __getitem__(self, idx):
+        return (
+            self.X1_noisy[idx], self.X1_clean[idx],
+            self.X2_noisy[idx], self.X2_clean[idx],
+            self.tdoa[idx],
+        )
+
+
 def _refresh_epoch_dataset(dataset, epoch):
     """支持 DataLoader.dataset 或 Subset.dataset 上的 set_epoch(epoch)。"""
     if hasattr(dataset, "set_epoch"):
@@ -282,12 +332,145 @@ def fisher_tdoa_loss(y1_r, y1_i, y2_r, y2_i, c1_r, c1_i, c2_r, c2_i, fs=40e6):
     return torch.mean(rel_err)
 
 
+def frequency_task_reconstruction_loss(y, target, spectral_blend=0.25,
+                                       fisher_power=2.0):
+    """
+    Reconstruction loss with a TDOA-aware spectral term.
+
+    The time-domain NMSE preserves waveform fidelity. The spectral NMSE
+    upweights high-RMS-bandwidth components, reflecting the delay-estimation
+    Fisher-information intuition without hard-selecting bins or changing the
+    evaluation chain.
+    """
+    spectral_blend = float(max(0.0, min(1.0, spectral_blend)))
+    fisher_power = float(max(0.0, fisher_power))
+
+    sig_power = torch.mean(target[:, 0, :] ** 2 + target[:, 1, :] ** 2, dim=1)
+    # Complex NMSE must use I/Q power as a sum. Averaging over both channel and
+    # time would make a zero output look like NMSE=0.5 instead of NMSE=1.0.
+    time_mse = torch.mean(
+        (y[:, 0, :] - target[:, 0, :]) ** 2
+        + (y[:, 1, :] - target[:, 1, :]) ** 2,
+        dim=1,
+    )
+    time_nmse = time_mse / (sig_power + 1e-9)
+
+    yc = torch.complex(y[:, 0, :], y[:, 1, :])
+    tc = torch.complex(target[:, 0, :], target[:, 1, :])
+    Y = torch.fft.fft(yc, dim=-1)
+    T = torch.fft.fft(tc, dim=-1)
+
+    freq = torch.fft.fftfreq(y.shape[-1], device=y.device, dtype=y.dtype)
+    freq_norm = torch.abs(freq) / (torch.max(torch.abs(freq)) + 1e-12)
+    weight = 1.0 + freq_norm.pow(fisher_power)
+    spec_err = torch.mean(weight[None, :] * torch.abs(Y - T) ** 2, dim=1)
+    spec_ref = torch.mean(weight[None, :] * torch.abs(T) ** 2, dim=1)
+    spec_nmse = spec_err / (spec_ref + 1e-9)
+
+    combined = (1.0 - spectral_blend) * time_nmse + spectral_blend * spec_nmse
+    return torch.mean(combined), torch.mean(time_nmse), torch.mean(spec_nmse)
+
+
+def pairwise_cross_spectrum_phase_loss(y1, y2, c1, c2, fisher_power=1.0):
+    """
+    Pairwise cross-spectrum phase consistency loss.
+
+    TDOA is encoded in the relative phase slope between two receivers. This loss
+    compares the normalized cross spectra of the DAE outputs and clean targets,
+    so it directly penalizes systematic pairwise delay bias without caring about
+    trivial output amplitude scaling.
+    """
+    yc1 = torch.complex(y1[:, 0, :], y1[:, 1, :])
+    yc2 = torch.complex(y2[:, 0, :], y2[:, 1, :])
+    cc1 = torch.complex(c1[:, 0, :], c1[:, 1, :])
+    cc2 = torch.complex(c2[:, 0, :], c2[:, 1, :])
+
+    Y_raw = torch.fft.fft(yc1, dim=-1) * torch.conj(torch.fft.fft(yc2, dim=-1))
+    C_raw = torch.fft.fft(cc1, dim=-1) * torch.conj(torch.fft.fft(cc2, dim=-1))
+    c_mag = torch.abs(C_raw)
+    Y = Y_raw / (torch.abs(Y_raw) + 1e-9)
+    C = C_raw / (c_mag + 1e-9)
+
+    freq = torch.fft.fftfreq(y1.shape[-1], device=y1.device, dtype=y1.dtype)
+    freq_norm = torch.abs(freq) / (torch.max(torch.abs(freq)) + 1e-12)
+    phase_weight = 1.0 + freq_norm.pow(float(max(0.0, fisher_power)))
+    # Reliability must come from the unnormalized clean cross-spectrum magnitude.
+    # If it is computed after phase normalization, it is nearly constant and
+    # low-energy/noisy bins receive the same phase weight as active bins.
+    reliability = torch.sqrt(
+        c_mag / (torch.max(c_mag, dim=-1, keepdim=True)[0] + 1e-9)
+    )
+    weight = phase_weight[None, :] * reliability
+
+    phase_agreement = torch.real(Y * torch.conj(C))
+    loss_per_sample = torch.sum(weight * (1.0 - phase_agreement), dim=-1) / (
+        torch.sum(weight, dim=-1) + 1e-9
+    )
+    return torch.mean(loss_per_sample)
+
+
+def soft_gcc_peak_loss_per_sample(gcc_mag_same, true_tdoa, sigma=1.5,
+                                  sharpness_weight=0.0):
+    """
+    Float-TDOA soft peak loss on a same-window GCC magnitude sequence.
+
+    Unlike the legacy integer-index peak loss, this uses a Gaussian target
+    around the physical float TDOA. A small optional sharpness term compares the
+    true-lag neighborhood against the strongest outside-lag response, preventing
+    the broad-peak shortcut observed in FreqDAE v2.
+    """
+    n = gcc_mag_same.shape[-1]
+    lags = torch.arange(n, device=gcc_mag_same.device, dtype=gcc_mag_same.dtype) - (n // 2)
+    target = true_tdoa.to(gcc_mag_same.device, dtype=gcc_mag_same.dtype)
+    sigma = max(float(sigma), 1e-3)
+    weights = torch.exp(-0.5 * ((lags[None, :] - target[:, None]) / sigma) ** 2)
+    peak_at_true = torch.sum(weights * gcc_mag_same, dim=-1) / (torch.sum(weights, dim=-1) + 1e-9)
+    peak_max = torch.max(gcc_mag_same, dim=-1)[0]
+    peak_loss = 1.0 - peak_at_true / (peak_max + 1e-9)
+    sharpness_weight = float(max(0.0, sharpness_weight))
+    if sharpness_weight <= 0.0:
+        return peak_loss
+
+    guard = max(2.0, 2.0 * sigma)
+    outside = torch.abs(lags[None, :] - target[:, None]) > guard
+    side_values = torch.where(
+        outside,
+        gcc_mag_same,
+        torch.full_like(gcc_mag_same, -1e9),
+    )
+    side_max = torch.max(side_values, dim=-1)[0].clamp_min(0.0)
+    sharpness_loss = side_max / (peak_at_true + 1e-9)
+    return peak_loss + sharpness_weight * sharpness_loss
+
+
+def soft_tdoa_distribution_loss(logits, true_tdoa, sigma=1.5):
+    """
+    Cross-entropy from a soft Gaussian TDOA target to predicted lag logits.
+
+    The lag axis is the same centered "same" GCC window used elsewhere:
+    index n//2 corresponds to zero delay, negative/positive indices correspond
+    to negative/positive TDOA samples.
+    """
+    n = logits.shape[-1]
+    lags = torch.arange(n, device=logits.device, dtype=logits.dtype) - (n // 2)
+    target = true_tdoa.to(logits.device, dtype=logits.dtype)
+    sigma = max(float(sigma), 1e-3)
+    weights = torch.exp(-0.5 * ((lags[None, :] - target[:, None]) / sigma) ** 2)
+    weights = weights / (torch.sum(weights, dim=-1, keepdim=True) + 1e-9)
+    logp = torch.log_softmax(logits, dim=-1)
+    return torch.mean(-torch.sum(weights * logp, dim=-1))
+
+
 def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                    fold_idx, patience=20, weight_decay=1e-4, corr_weight=1.0,
                    lambda_peak=0.0, beta_fi=0.0, epsilon_mse=1.0,
                    mse_weight_max=None, phase_mix=None, selection_start_epoch=None,
                    use_adaptive_peak=False, snr_threshold=0.0, lambda_temperature=5.0,
-                   loss_mode="task", early_stopping=True, restore_best=True):
+                   loss_mode="task", early_stopping=True, restore_best=True,
+                   spectral_blend=0.25, spectral_power=2.0,
+                   pair_phase_weight=0.0, soft_peak_sigma=1.5,
+                   soft_peak_sharpness_weight=0.0,
+                   pair_task_weight=0.0, nested_crs=(4, 8, 16)):
     """
     在单个 fold 上训练模型，含早停机制。
 
@@ -310,7 +493,14 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         phase_mix = epsilon_mse
     phase_mix = float(max(0.0, min(1.0, phase_mix)))
 
-    task_loss_enabled = (loss_mode != "paper_mse") and (corr_weight > 0 or lambda_peak > 0 or beta_fi > 0)
+    freq_task_recon_enabled = loss_mode == "freq_task_mse"
+    nested_pair_task_enabled = loss_mode == "freq_task_nested_pair"
+    pair_freq_task_enabled = loss_mode in ("freq_task_pair", "freq_task_nested_pair")
+    task_loss_enabled = (
+        (loss_mode != "paper_mse")
+        and (not freq_task_recon_enabled)
+        and (corr_weight > 0 or lambda_peak > 0 or beta_fi > 0)
+    )
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = StepLR(optimizer, step_size=30, gamma=0.5)
@@ -333,7 +523,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     best_epoch = 0
     epochs_no_improve = 0
     stopped_epoch = epochs
-    warmup_ep = 100 if task_loss_enabled else 0
+    warmup_ep = 100 if task_loss_enabled and not pair_freq_task_enabled else 0
     if selection_start_epoch is None:
         selection_start_epoch = warmup_ep if task_loss_enabled else 1
 
@@ -364,27 +554,49 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
                 # 合并 X1/X2 为单次前向传播
                 bx_all = torch.cat([bx1, bx2], dim=0)
-                y_all = model(bx_all)
+                if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
+                    active_cr = nested_crs[(ep + n_batches) % len(nested_crs)]
+                    model.set_active_cr(active_cr)
+                if nested_pair_task_enabled:
+                    y_all, z_all = model(bx_all, return_latent=True)
+                    z1, z2 = z_all.chunk(2, dim=0)
+                else:
+                    y_all = model(bx_all)
+                    z1 = z2 = None
                 y1, y2 = y_all.chunk(2, dim=0)
 
-                # === 固定比例混合 NMSE（α=ε，无ramp） ===
-                # 包络NMSE：约束幅度轮廓，不与Corr冲突，但遇相位地板(~0.38)
-                # 复NMSE：微量加入打破相位地板，比例=ε，ε小则几乎不进
-                # CR4(ε=0.15): 15%复+85%包 → 温和相位引导中CR区分最大
-                # CR16(ε=0.03): 3%复+97%包 → 近乎纯包络，无内战
-                mag_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
-                mag_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
-                mag_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
-                mag_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
-                mag_mse1 = torch.mean((mag_y1 - mag_s1)**2, dim=1)
-                mag_mse2 = torch.mean((mag_y2 - mag_s2)**2, dim=1)
-                mag_mse = mag_mse1 + mag_mse2
-                complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
-                sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
-                nmse_mag = mag_mse / (sig_power + 1e-9)
-                nmse_complex = complex_mse / (sig_power + 1e-9)
-                env_ratio = 1.0 - phase_mix
-                nmse = env_ratio * nmse_mag + phase_mix * nmse_complex
+                if pair_freq_task_enabled:
+                    # FreqDAE v2: reconstruction remains single-waveform, while
+                    # pairwise phase/GCC terms directly constrain TDOA behavior.
+                    y_pair = torch.cat([y1, y2], dim=0)
+                    clean_pair = torch.cat([by1, by2], dim=0)
+                    loss_mse_norm, loss_mse_mag, loss_mse_complex = (
+                        frequency_task_reconstruction_loss(
+                            y_pair, clean_pair,
+                            spectral_blend=spectral_blend,
+                            fisher_power=spectral_power,
+                        )
+                    )
+                else:
+                    # === 固定比例混合 NMSE（α=ε，无ramp） ===
+                    # 包络NMSE：约束幅度轮廓，不与Corr冲突，但遇相位地板(~0.38)
+                    # 复NMSE：微量加入打破相位地板，比例=ε，ε小则几乎不进
+                    mag_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
+                    mag_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
+                    mag_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
+                    mag_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
+                    mag_mse1 = torch.mean((mag_y1 - mag_s1)**2, dim=1)
+                    mag_mse2 = torch.mean((mag_y2 - mag_s2)**2, dim=1)
+                    mag_mse = mag_mse1 + mag_mse2
+                    complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
+                    sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
+                    nmse_mag = mag_mse / (sig_power + 1e-9)
+                    nmse_complex = complex_mse / (sig_power + 1e-9)
+                    env_ratio = 1.0 - phase_mix
+                    nmse = env_ratio * nmse_mag + phase_mix * nmse_complex
+                    loss_mse_norm = torch.mean(nmse)
+                    loss_mse_mag = torch.mean(nmse_mag)
+                    loss_mse_complex = torch.mean(nmse_complex)
 
                 # Clean 信号 GCC 不需要梯度
                 with torch.no_grad():
@@ -413,7 +625,13 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 # PNCC 峰值损失
                 loss_peak = torch.tensor(0.0, device=device)
                 if lambda_peak > 0 and true_tdoa is not None:
-                    if snr_per_sample is not None:
+                    if pair_freq_task_enabled:
+                        peak_per_sample = soft_gcc_peak_loss_per_sample(
+                            gcc_dae_n, true_tdoa.float(), sigma=soft_peak_sigma,
+                            sharpness_weight=soft_peak_sharpness_weight,
+                        )
+                        loss_peak = lambda_peak * torch.mean(peak_per_sample)
+                    elif snr_per_sample is not None:
                         peak_per_sample = gcc_peak_loss_per_sample(
                             y1[:, 0, :], y1[:, 1, :],
                             y2[:, 0, :], y2[:, 1, :],
@@ -438,12 +656,29 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         by1[:, 0, :], by1[:, 1, :], by2[:, 0, :], by2[:, 1, :]
                     )
 
-                # R20.1: decouple total reconstruction weight and mag/complex mixture.
-                loss_mse_norm = torch.mean(nmse)
-                loss_mse_mag = torch.mean(nmse_mag)
-                loss_mse_complex = torch.mean(nmse_complex)
+                loss_pair_phase = torch.tensor(0.0, device=device)
+                if pair_freq_task_enabled and pair_phase_weight > 0:
+                    loss_pair_phase = pairwise_cross_spectrum_phase_loss(
+                        y1, y2, by1, by2, fisher_power=spectral_power
+                    )
+                loss_pair_task = torch.tensor(0.0, device=device)
+                if (nested_pair_task_enabled and pair_task_weight > 0
+                        and true_tdoa is not None
+                        and hasattr(model, "pair_task_logits_from_latent")):
+                    logits = model.pair_task_logits_from_latent(z1, z2)
+                    loss_pair_task = soft_tdoa_distribution_loss(
+                        logits, true_tdoa.float(), sigma=soft_peak_sigma
+                    )
+
                 loss_corr = torch.mean(corr_per_sample)
-                loss = corr_weight * loss_corr + loss_peak + mse_weight_current * loss_mse_norm + beta_fi * loss_fi
+                loss = (
+                    corr_weight * loss_corr
+                    + loss_peak
+                    + mse_weight_current * loss_mse_norm
+                    + pair_phase_weight * loss_pair_phase
+                    + pair_task_weight * loss_pair_task
+                    + beta_fi * loss_fi
+                )
 
                 loss.backward()
                 optimizer.step()
@@ -452,19 +687,32 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                 ep_nmse_complex += loss_mse_complex.item() * bx1.size(0)
                 ep_corr += loss_corr.item() * bx1.size(0)
                 ep_peak += loss_peak.item() * bx1.size(0)
-                ep_fi += loss_fi.item() * bx1.size(0)
+                ep_fi += (
+                    (loss_pair_phase.item() + loss_pair_task.item())
+                    if pair_freq_task_enabled else loss_fi.item()
+                ) * bx1.size(0)
                 ep_snr += avg_snr_batch * bx1.size(0)
                 n_batches += 1
             else:
-                # 单信号数据：(noisy, clean) — 论文复现基线：实部/虚部标准 MSE
+                # 单信号数据：(noisy, clean)。论文复现分支使用标准 MSE；
+                # 频域任务感知分支使用 time NMSE + Fisher-weighted spectral NMSE。
                 bx, by = batch[0].to(device), batch[1].to(device)
                 optimizer.zero_grad()
-                loss = criterion(model(bx), by)
+                y = model(bx)
+                if freq_task_recon_enabled:
+                    loss, time_nmse, spec_nmse = frequency_task_reconstruction_loss(
+                        y, by, spectral_blend=spectral_blend,
+                        fisher_power=spectral_power
+                    )
+                else:
+                    loss = criterion(y, by)
+                    time_nmse = loss
+                    spec_nmse = loss
                 loss.backward()
                 optimizer.step()
                 ep_loss += loss.item() * bx.size(0)
-                ep_nmse_mag += loss.item() * bx.size(0)
-                ep_nmse_complex += loss.item() * bx.size(0)
+                ep_nmse_mag += time_nmse.item() * bx.size(0)
+                ep_nmse_complex += spec_nmse.item() * bx.size(0)
         train_loss_hist.append(ep_loss / len(train_loader.dataset))
         train_nmse_mag_hist.append(ep_nmse_mag / len(train_loader.dataset))
         train_nmse_complex_hist.append(ep_nmse_complex / len(train_loader.dataset))
@@ -489,23 +737,43 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                     true_tdoa_v = batch[4].to(device) if len(batch) >= 5 else None
                     bx_all = torch.cat([bx1, bx2], dim=0)
-                    y_all = model(bx_all)
+                    if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
+                        model.set_active_cr(nested_crs[0])
+                    if nested_pair_task_enabled:
+                        y_all, z_all = model(bx_all, return_latent=True)
+                        z1_v, z2_v = z_all.chunk(2, dim=0)
+                    else:
+                        y_all = model(bx_all)
+                        z1_v = z2_v = None
                     y1, y2 = y_all.chunk(2, dim=0)
 
-                    # 验证NMSE：与训练同公式（固定比例混合，α=ε）
-                    v_sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
-                    vm_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
-                    vm_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
-                    vm_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
-                    vm_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
-                    vm_mag_mse = torch.mean((vm_y1-vm_s1)**2 + (vm_y2-vm_s2)**2, dim=1)
-                    v_nmse_mag = vm_mag_mse / (v_sig_power + 1e-9)
-                    v_complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
-                    v_nmse_complex = v_complex_mse / (v_sig_power + 1e-9)
-                    v_env_ratio = 1.0 - phase_mix
-                    mse_v_mag = torch.mean(v_nmse_mag)
-                    mse_v_complex = torch.mean(v_nmse_complex)
-                    mse_v_norm = torch.mean(v_env_ratio * v_nmse_mag + phase_mix * v_nmse_complex)
+                    if pair_freq_task_enabled:
+                        y_pair = torch.cat([y1, y2], dim=0)
+                        clean_pair = torch.cat([by1, by2], dim=0)
+                        mse_v_norm, mse_v_mag, mse_v_complex = (
+                            frequency_task_reconstruction_loss(
+                                y_pair, clean_pair,
+                                spectral_blend=spectral_blend,
+                                fisher_power=spectral_power,
+                            )
+                        )
+                    else:
+                        # 验证NMSE：与训练同公式（固定比例混合，α=ε）
+                        v_sig_power = torch.mean(by1**2 + by2**2, dim=[1,2])
+                        vm_y1 = torch.sqrt(y1[:,0,:]**2 + y1[:,1,:]**2 + 1e-10)
+                        vm_y2 = torch.sqrt(y2[:,0,:]**2 + y2[:,1,:]**2 + 1e-10)
+                        vm_s1 = torch.sqrt(by1[:,0,:]**2 + by1[:,1,:]**2 + 1e-10)
+                        vm_s2 = torch.sqrt(by2[:,0,:]**2 + by2[:,1,:]**2 + 1e-10)
+                        vm_mag_mse = torch.mean((vm_y1-vm_s1)**2 + (vm_y2-vm_s2)**2, dim=1)
+                        v_nmse_mag = vm_mag_mse / (v_sig_power + 1e-9)
+                        v_complex_mse = torch.mean((y1-by1)**2 + (y2-by2)**2, dim=[1,2])
+                        v_nmse_complex = v_complex_mse / (v_sig_power + 1e-9)
+                        v_env_ratio = 1.0 - phase_mix
+                        mse_v_mag = torch.mean(v_nmse_mag)
+                        mse_v_complex = torch.mean(v_nmse_complex)
+                        mse_v_norm = torch.mean(
+                            v_env_ratio * v_nmse_mag + phase_mix * v_nmse_complex
+                        )
 
                     # GCC 分量（验证时也计算，确保早停反映真实目标）
                     gcc_clean = gcc_torch(by1[:, 0, :], by1[:, 1, :],
@@ -521,7 +789,13 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     # Peak 分量：验证时使用与训练相同的逐样本SNR自适应权重
                     peak_v = torch.tensor(0.0, device=device)
                     if lambda_peak > 0 and true_tdoa_v is not None:
-                        if use_adaptive_peak:
+                        if pair_freq_task_enabled:
+                            peak_per_sample_v = soft_gcc_peak_loss_per_sample(
+                                gcc_dae_n, true_tdoa_v.float(), sigma=soft_peak_sigma,
+                                sharpness_weight=soft_peak_sharpness_weight,
+                            )
+                            peak_v = lambda_peak * torch.mean(peak_per_sample_v)
+                        elif use_adaptive_peak:
                             snr_per_sample_v = estimate_per_sample_snr(bx1, by1)
                             peak_per_sample_v = gcc_peak_loss_per_sample(
                                 y1[:, 0, :], y1[:, 1, :],
@@ -537,8 +811,28 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                                 y2[:, 0, :], y2[:, 1, :],
                                 true_tdoa_v.float())
 
+                    pair_phase_v = torch.tensor(0.0, device=device)
+                    if pair_freq_task_enabled and pair_phase_weight > 0:
+                        pair_phase_v = pairwise_cross_spectrum_phase_loss(
+                            y1, y2, by1, by2, fisher_power=spectral_power
+                        )
+                    pair_task_v = torch.tensor(0.0, device=device)
+                    if (nested_pair_task_enabled and pair_task_weight > 0
+                            and true_tdoa_v is not None
+                            and hasattr(model, "pair_task_logits_from_latent")):
+                        logits_v = model.pair_task_logits_from_latent(z1_v, z2_v)
+                        pair_task_v = soft_tdoa_distribution_loss(
+                            logits_v, true_tdoa_v.float(), sigma=soft_peak_sigma
+                        )
+
                     # Validation uses the final reconstruction weight for comparable selection.
-                    loss_v = corr_weight * corr_v + peak_v + mse_weight_max * mse_v_norm
+                    loss_v = (
+                        corr_weight * corr_v
+                        + peak_v
+                        + mse_weight_max * mse_v_norm
+                        + pair_phase_weight * pair_phase_v
+                        + pair_task_weight * pair_task_v
+                    )
 
                     val_mse += mse_v_norm.item() * bx1.size(0)
                     val_mse_mag += mse_v_mag.item() * bx1.size(0)
@@ -549,10 +843,23 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     n_val += bx1.size(0)
                 else:
                     bx, by = batch[0].to(device), batch[1].to(device)
-                    mse_v = criterion(model(bx), by).item()
+                    y = model(bx)
+                    if freq_task_recon_enabled:
+                        loss_v, time_nmse_v, spec_nmse_v = frequency_task_reconstruction_loss(
+                            y, by, spectral_blend=spectral_blend,
+                            fisher_power=spectral_power
+                        )
+                        mse_v = loss_v.item()
+                        mse_mag_v = time_nmse_v.item()
+                        mse_complex_v = spec_nmse_v.item()
+                    else:
+                        loss_v = criterion(y, by)
+                        mse_v = loss_v.item()
+                        mse_mag_v = mse_v
+                        mse_complex_v = mse_v
                     val_mse += mse_v * bx.size(0)
-                    val_mse_mag += mse_v * bx.size(0)
-                    val_mse_complex += mse_v * bx.size(0)
+                    val_mse_mag += mse_mag_v * bx.size(0)
+                    val_mse_complex += mse_complex_v * bx.size(0)
                     val_total += mse_v * bx.size(0)
                     n_val += bx.size(0)
 
@@ -591,14 +898,32 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
             early_mark = " [EARLY STOP]" if early_stopping and epochs_no_improve >= patience else ""
             corr_str = f" | Corr {ep_corr / len(train_loader.dataset):.5f}" if corr_weight > 0 else ""
             peak_str = f" | Peak {ep_peak / len(train_loader.dataset):.5f}" if lambda_peak > 0 else ""
-            fi_str = f" | FI {ep_fi / len(train_loader.dataset):.5f}" if beta_fi > 0 else ""
+            if pair_freq_task_enabled and pair_phase_weight > 0:
+                fi_str = f" | XPhase {ep_fi / len(train_loader.dataset):.5f}"
+            else:
+                fi_str = f" | FI {ep_fi / len(train_loader.dataset):.5f}" if beta_fi > 0 else ""
             val_corr_str = f" | ValCorr {val_corr:.5f}" if corr_weight > 0 else ""
             val_peak_str = f" | ValPeak {val_peak:.5f}" if lambda_peak > 0 else ""
             snr_str = f" | SNR={ep_snr / len(train_loader.dataset):.1f}dB" if use_adaptive_peak and n_batches > 0 else ""
-            metric_name = "NMSE" if task_loss_enabled else "MSE"
-            loss_state_str = (f"mse_w={mse_weight_current:.3f} | phase_mix={phase_mix:.3f} | "
-                              f"NetComplex={mse_weight_current * phase_mix:.4f}"
-                              if task_loss_enabled else "paper_mse")
+            if pair_freq_task_enabled:
+                metric_name = "NestedPairFreqNMSE" if nested_pair_task_enabled else "PairFreqNMSE"
+                loss_state_str = (
+                    f"{loss_mode} | recon_w={mse_weight_current:.3f} | "
+                    f"corr_w={corr_weight:.3f} | xphase_w={pair_phase_weight:.3f} | "
+                    f"peak_w={lambda_peak:.3f} | peak_sharp={soft_peak_sharpness_weight:.3f} | "
+                    f"task_w={pair_task_weight:.3f} | spectral_blend={spectral_blend:.3f}"
+                )
+            elif task_loss_enabled:
+                metric_name = "NMSE"
+                loss_state_str = (f"mse_w={mse_weight_current:.3f} | phase_mix={phase_mix:.3f} | "
+                                  f"NetComplex={mse_weight_current * phase_mix:.4f}")
+            elif freq_task_recon_enabled:
+                metric_name = "FreqNMSE"
+                loss_state_str = (f"freq_task_mse | spectral_blend={spectral_blend:.3f} | "
+                                  f"spectral_power={spectral_power:.2f}")
+            else:
+                metric_name = "MSE"
+                loss_state_str = "paper_mse"
             print(f"  Fold {fold_idx} Epoch {ep + 1}/{epochs}: "
                   f"Train{metric_name} {train_loss_hist[-1]:.5f} | "
                   f"Val{metric_name} {val_mse:.5f}{val_corr_str}{val_peak_str} | "
@@ -644,7 +969,11 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                   urban_train_los_only=False, early_stopping=True,
                   restore_best=True, final_retrain=False, final_epochs=None,
                   training_protocol=None, resample_train_each_epoch=False,
-                  resample_interval=1):
+                  resample_interval=1, model_factory=DAE, model_name=None,
+                  spectral_blend=0.25, spectral_power=2.0,
+                  pair_phase_weight=0.0, soft_peak_sigma=1.5,
+                  soft_peak_sharpness_weight=0.0,
+                  pair_task_weight=0.0, nested_crs=(4, 8, 16)):
     """
     训练 DAE 模型，支持 K-fold CV 或单次 train/val 划分。
 
@@ -660,6 +989,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                                统一公式: L = corr_weight·L_corr + λp·L_peak + ε·NMSE。
                                R20中ε为温和重建/相位引导强度。
         loss_mode:             "task" 使用R20.1任务驱动损失；"paper_mse" 使用论文式MSE复现基线。
+                               "freq_task_mse" 使用频域任务感知重构损失。
         cv_group_mode:         "sample" 随机样本划分；"snapshot" 按 urban snapshot 分组划分。
         resample_train_each_epoch:
                                urban8 MSE 复现轨道下，训练集按固定 snapshot/UAV
@@ -684,7 +1014,18 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         selection_start_epoch = loss_config.get('selection_start_epoch', selection_start_epoch)
         loss_mode = loss_config.get('loss_mode', loss_mode)
         epsilon_mse = legacy_eps
+        corr_weight = loss_config.get('corr_weight', corr_weight)
         lambda_peak = loss_config.get('lambda_peak', lambda_peak)
+        beta_fi = loss_config.get('beta_fi', beta_fi)
+        spectral_blend = loss_config.get('spectral_blend', spectral_blend)
+        spectral_power = loss_config.get('spectral_power', spectral_power)
+        pair_phase_weight = loss_config.get('pair_phase_weight', pair_phase_weight)
+        pair_task_weight = loss_config.get('pair_task_weight', pair_task_weight)
+        nested_crs = tuple(loss_config.get('nested_crs', nested_crs))
+        soft_peak_sigma = loss_config.get('soft_peak_sigma', soft_peak_sigma)
+        soft_peak_sharpness_weight = loss_config.get(
+            'soft_peak_sharpness_weight', soft_peak_sharpness_weight
+        )
 
     if loss_mode == "paper_mse":
         corr_weight = 0.0
@@ -693,6 +1034,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         use_adaptive_peak = False
         mse_weight_max = 1.0
         phase_mix = 1.0
+        if selection_start_epoch is None:
+            selection_start_epoch = 1
+    elif loss_mode == "freq_task_mse":
+        corr_weight = 0.0
+        lambda_peak = 0.0
+        beta_fi = 0.0
+        use_adaptive_peak = False
+        if selection_start_epoch is None:
+            selection_start_epoch = 1
+    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
+        use_adaptive_peak = False
         if selection_start_epoch is None:
             selection_start_epoch = 1
 
@@ -714,18 +1066,41 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                               urban_min_los=urban_min_los,
                               urban_train_los_only=urban_train_los_only)
 
+    pair_freq_task_train = loss_mode in ("freq_task_pair", "freq_task_nested_pair")
     dynamic_urban_train = (
         bool(resample_train_each_epoch)
-        and loss_mode == "paper_mse"
+        and loss_mode in ("paper_mse", "freq_task_mse")
         and scenario_mode == "urban8"
         and corr_weight == 0.0
         and lambda_peak == 0.0
     )
+    dynamic_urban_pair_train = (
+        bool(resample_train_each_epoch)
+        and pair_freq_task_train
+        and scenario_mode == "urban8"
+    )
 
     urban_snapshot_plan = None
     urban_uav_plan = None
+    urban_pair_snapshot_plan = None
+    urban_pair_uav_i_plan = None
+    urban_pair_uav_j_plan = None
 
-    if corr_weight > 0 or lambda_peak > 0:
+    if pair_freq_task_train and scenario_mode == "urban8":
+        urban_pair_snapshot_plan, urban_pair_uav_i_plan, urban_pair_uav_j_plan = (
+            sim.build_urban_pair_training_plan(n_samples, seed=seed)
+        )
+        X1_n, X1_c, X2_n, X2_c, tdoa, cv_groups = (
+            sim.generate_urban_pair_training_dataset_from_plan(
+                urban_pair_snapshot_plan,
+                urban_pair_uav_i_plan,
+                urban_pair_uav_j_plan,
+                seed=seed,
+                return_groups=True,
+            )
+        )
+        dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c, tdoa)
+    elif corr_weight > 0 or lambda_peak > 0:
         # 配对数据：X1 和 X2 来自同信道同噪声，用于 GCC 损失和峰值损失
         X1_n, X1_c, X2_n, X2_c, tdoa = sim.generate_paired_training_dataset(n_samples, seed=seed)
         dataset = TensorDataset(X1_n, X1_c, X2_n, X2_c, tdoa)
@@ -762,14 +1137,32 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         n_folds_actual = k
 
     print(f"\n{'='*60}")
-    print(f"Training DAE (CR={cr}) with {suffix}")
+    resolved_model_name = model_name or getattr(model_factory, "__name__", str(model_factory))
+    print(f"Training {resolved_model_name} (CR={cr}) with {suffix}")
     print(f"  Samples: {n_samples} | Max Epochs: {epochs} | Batch: {batch_size} | LR: {lr}")
     early_stop_text = f"patience={patience}" if early_stopping else "disabled"
     print(f"  Early Stopping: {early_stop_text} | Restore Best: {restore_best} | "
           f"Weight Decay: {weight_decay}")
+    print(f"  Model: {resolved_model_name}")
     print(f"  Loss Mode: {loss_mode}")
     if loss_mode == "paper_mse":
         print("  Paper Repro Loss: real/imag MSE only (Corr/Peak/FI disabled)")
+    elif loss_mode == "freq_task_mse":
+        print("  Frequency-task Loss: time-domain NMSE + Fisher-weighted spectral NMSE "
+              f"(blend={spectral_blend}, spectral_power={spectral_power})")
+    elif loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
+        if loss_mode == "freq_task_nested_pair":
+            print("  Nested Frequency-task Pair Loss: shared nested latent + reconstruction + "
+                  "GCC shape + soft peak + cross-spectrum phase + task-head TDOA")
+            print(f"  Nested CR masks: {tuple(nested_crs)}")
+        else:
+            print("  Frequency-task Pair Loss: reconstruction + GCC shape + soft peak + "
+                  "cross-spectrum phase consistency")
+        print(f"  Pair Loss Weights: recon={mse_weight_max}, corr={corr_weight}, "
+              f"xphase={pair_phase_weight}, peak={lambda_peak}, "
+              f"soft_peak_sigma={soft_peak_sigma}, "
+              f"soft_peak_sharpness={soft_peak_sharpness_weight}, "
+              f"task_head={pair_task_weight}")
     else:
         print(f"  Unified Loss (R20.1 fixed blend): L = {corr_weight}*Corr + "
               f"lambda_peak(SNR)*Peak + mse_weight_current*"
@@ -777,21 +1170,32 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         print(f"  mse_weight_max={mse_weight_max} | phase_mix={phase_mix} | "
               f"selection_start_epoch={selection_start_epoch if selection_start_epoch is not None else 100}")
     if lambda_peak > 0:
-        print(f"  Adaptive Peak Weight: λ_peak(SNR) = {lambda_peak}·σ(({snr_threshold}-SNR)/{lambda_temperature}), "
-              f"range ~[0, {lambda_peak}]")
+        if loss_mode in ("freq_task_pair", "freq_task_nested_pair"):
+            print(f"  Soft Peak Weight: peak_weight={lambda_peak}, "
+                  f"sigma={soft_peak_sigma}, "
+                  f"sharpness={soft_peak_sharpness_weight}")
+        else:
+            print(f"  Adaptive Peak Weight: lambda_peak(SNR) = "
+                  f"{lambda_peak}*sigmoid(({snr_threshold}-SNR)/{lambda_temperature}), "
+                  f"range ~[0, {lambda_peak}]")
     print(f"  Training SNR: [{snr_train_range[0]}, {snr_train_range[1]}] dB uniform")
     print(f"  Scenario: {sim.scenario_mode} | normalization={sim.normalization_mode} | CV group={cv_group_mode}")
     if sim.scenario_mode == "urban8":
         print(f"  Urban: base_delay={sim.urban_base_delay:g} samples | "
               f"min_los={sim.urban_min_los} | train_los_only={sim.urban_train_los_only}")
-        print(f"  Urban sample unit: single-UAV waveform | planned waveforms={n_samples}")
+        sample_unit = "LOS UAV pair" if pair_freq_task_train else "single-UAV waveform"
+        print(f"  Urban sample unit: {sample_unit} | planned samples={n_samples}")
         if dynamic_urban_train:
             n_groups = len(np.unique(urban_snapshot_plan))
             print(f"  Train waveform resampling: enabled every {max(1, int(resample_interval))} epoch(s) "
                   f"on fixed snapshot/UAV plan ({n_groups} snapshots)")
+        if dynamic_urban_pair_train:
+            n_groups = len(np.unique(urban_pair_snapshot_plan))
+            print(f"  Pair train resampling: enabled every {max(1, int(resample_interval))} epoch(s) "
+                  f"on fixed snapshot/UAV-pair plan ({n_groups} snapshots)")
     if beta_fi > 0:
         print(f"  Fisher Loss: β_fi={beta_fi}")
-    model_params = sum(p.numel() for p in DAE(cr=cr).parameters())
+    model_params = sum(p.numel() for p in model_factory(cr=cr).parameters())
     print(f"  Model Parameters: {model_params:,}")
     print(f"{'='*60}")
 
@@ -818,6 +1222,12 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'phase_mix': phase_mix,
         'selection_start_epoch': selection_start_epoch if selection_start_epoch is not None else 100,
         'loss_mode': loss_mode,
+        'model_name': resolved_model_name,
+        'spectral_blend': float(spectral_blend),
+        'spectral_power': float(spectral_power),
+        'pair_phase_weight': float(pair_phase_weight),
+        'soft_peak_sigma': float(soft_peak_sigma),
+        'soft_peak_sharpness_weight': float(soft_peak_sharpness_weight),
         'scenario_mode': sim.scenario_mode,
         'normalization_mode': sim.normalization_mode,
         'cv_group_mode': cv_group_mode,
@@ -838,7 +1248,11 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                    if training_protocol == "fixed_epoch_final_only"
                    else 'paper_repro_v3_urban8_fair_eval'))
             if loss_mode == "paper_mse" and sim.scenario_mode == "urban8"
-            else ('paper_repro_v1' if loss_mode == "paper_mse" else 'R20.1')
+            else ('freq_task_dae_v3_nested_pair' if loss_mode == "freq_task_nested_pair"
+                  else ('freq_task_dae_v2_pair' if loss_mode == "freq_task_pair"
+                  else ('freq_task_dae_v1' if loss_mode == "freq_task_mse"
+                  else ('paper_repro_v1' if loss_mode == "paper_mse" else 'R20.1'))
+                  ))
         ),
     }
 
@@ -852,8 +1266,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
               f"{final_epochs_resolved} fixed epochs...")
         torch.manual_seed(seed + 10000 + int(cr))
         np.random.seed(seed + 10000 + int(cr))
-        final_model = DAE(cr=cr).to(device)
-        if dynamic_urban_train:
+        final_model = model_factory(cr=cr).to(device)
+        if dynamic_urban_pair_train:
+            final_train_dataset = RefreshableUrbanPairDataset(
+                sim,
+                urban_pair_snapshot_plan,
+                urban_pair_uav_i_plan,
+                urban_pair_uav_j_plan,
+                base_seed=seed + 200000 + int(cr) * 1000,
+                refresh_interval=resample_interval,
+            )
+        elif dynamic_urban_train:
             final_train_dataset = RefreshableUrbanWaveformDataset(
                 sim, urban_snapshot_plan, urban_uav_plan,
                 base_seed=seed + 200000 + int(cr) * 1000,
@@ -875,7 +1298,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 phase_mix=phase_mix, selection_start_epoch=1,
                 use_adaptive_peak=use_adaptive_peak,
                 snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
-                loss_mode=loss_mode, early_stopping=False, restore_best=False
+                loss_mode=loss_mode, early_stopping=False, restore_best=False,
+                spectral_blend=spectral_blend, spectral_power=spectral_power,
+                pair_phase_weight=pair_phase_weight,
+                soft_peak_sigma=soft_peak_sigma,
+                soft_peak_sharpness_weight=soft_peak_sharpness_weight,
+                pair_task_weight=pair_task_weight,
+                nested_crs=nested_crs
             )
         cv_results.update({
             'fold_train_loss': [final_train_loss],
@@ -932,7 +1361,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
             split_iterator = list(kf.split(range(n_samples)))
 
     for fold_idx, (train_idx, val_idx) in enumerate(split_iterator):
-        if dynamic_urban_train:
+        if dynamic_urban_pair_train:
+            idx_arr = np.asarray(train_idx, dtype=int)
+            train_dataset = RefreshableUrbanPairDataset(
+                sim,
+                urban_pair_snapshot_plan[idx_arr],
+                urban_pair_uav_i_plan[idx_arr],
+                urban_pair_uav_j_plan[idx_arr],
+                base_seed=seed + 100000 + fold_idx * 1000,
+                refresh_interval=resample_interval,
+            )
+        elif dynamic_urban_train:
             train_dataset = RefreshableUrbanWaveformDataset(
                 sim,
                 urban_snapshot_plan[np.asarray(train_idx, dtype=int)],
@@ -946,7 +1385,7 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         val_loader = DataLoader(Subset(dataset, val_idx),
                                 batch_size=batch_size, shuffle=False)
 
-        model = DAE(cr=cr).to(device)
+        model = model_factory(cr=cr).to(device)
         t_fold = time.time()
 
         model, train_loss, val_loss, best_val, stopped, corr_loss, peak_loss, avg_snr, \
@@ -961,7 +1400,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 use_adaptive_peak=use_adaptive_peak,
                 snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
                 loss_mode=loss_mode, early_stopping=early_stopping,
-                restore_best=restore_best
+                restore_best=restore_best,
+                spectral_blend=spectral_blend, spectral_power=spectral_power,
+                pair_phase_weight=pair_phase_weight,
+                soft_peak_sigma=soft_peak_sigma,
+                soft_peak_sharpness_weight=soft_peak_sharpness_weight,
+                pair_task_weight=pair_task_weight,
+                nested_crs=nested_crs
             )
         fold_time = time.time() - t_fold
 
@@ -1014,8 +1459,17 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
               f"(policy={cv_results['final_epoch_policy']})...")
         torch.manual_seed(seed + 10000 + int(cr))
         np.random.seed(seed + 10000 + int(cr))
-        final_model = DAE(cr=cr).to(device)
-        if dynamic_urban_train:
+        final_model = model_factory(cr=cr).to(device)
+        if dynamic_urban_pair_train:
+            final_train_dataset = RefreshableUrbanPairDataset(
+                sim,
+                urban_pair_snapshot_plan,
+                urban_pair_uav_i_plan,
+                urban_pair_uav_j_plan,
+                base_seed=seed + 200000 + int(cr) * 1000,
+                refresh_interval=resample_interval,
+            )
+        elif dynamic_urban_train:
             final_train_dataset = RefreshableUrbanWaveformDataset(
                 sim, urban_snapshot_plan, urban_uav_plan,
                 base_seed=seed + 200000 + int(cr) * 1000,
@@ -1037,7 +1491,13 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
                 phase_mix=phase_mix, selection_start_epoch=1,
                 use_adaptive_peak=use_adaptive_peak,
                 snr_threshold=snr_threshold, lambda_temperature=lambda_temperature,
-                loss_mode=loss_mode, early_stopping=False, restore_best=False
+                loss_mode=loss_mode, early_stopping=False, restore_best=False,
+                spectral_blend=spectral_blend, spectral_power=spectral_power,
+                pair_phase_weight=pair_phase_weight,
+                soft_peak_sigma=soft_peak_sigma,
+                soft_peak_sharpness_weight=soft_peak_sharpness_weight,
+                pair_task_weight=pair_task_weight,
+                nested_crs=nested_crs
             )
         cv_results.update({
             'final_train_loss': final_train_loss,

@@ -17,7 +17,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from evaluate import plot_method_comparison, plot_method_zoom_pair
+from evaluate import (filter_method_comparison_data, plot_method_comparison,
+                      plot_method_zoom_pair)
 
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -236,19 +237,32 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
     methods = results.get("methods", {})
     order = results.get("method_order", list(methods.keys()))
     rows = []
+    metric_specs = [
+        ("rmse", "mean_rmse_m"),
+        ("median", "median_rmse_m"),
+        ("trimmed_rmse", "trimmed_rmse_m"),
+        ("p90", "p90_rmse_m"),
+        ("p95", "p95_rmse_m"),
+        ("max", "max_rmse_m"),
+        ("valid_count", "valid_count"),
+        ("failure_rate", "failure_rate"),
+        ("outlier_gt20_rate", "outlier_gt20_rate"),
+        ("outlier_gt50_rate", "outlier_gt50_rate"),
+    ]
     for i, snr in enumerate(snr_range):
         row = {"SNR_dB": float(snr)}
         for label in order:
             if label in methods:
-                row[f"{label}_mean_rmse_m"] = methods[label]["rmse"][i]
-                row[f"{label}_median_rmse_m"] = methods[label]["median"][i]
-                row[f"{label}_trimmed_rmse_m"] = methods[label]["trimmed_rmse"][i]
+                for key, suffix in metric_specs:
+                    vals = methods[label].get(key, [])
+                    if i < len(vals):
+                        row[f"{label}_{suffix}"] = vals[i]
         rows.append(row)
     fields = ["SNR_dB"]
     for label in order:
-        fields.extend([f"{label}_mean_rmse_m",
-                       f"{label}_median_rmse_m",
-                       f"{label}_trimmed_rmse_m"])
+        for key, suffix in metric_specs:
+            if label in methods and key in methods[label]:
+                fields.append(f"{label}_{suffix}")
     baseline_table = (
         "fig6_traditional_baselines"
         if table_prefix == "fig6" else f"{table_prefix}_baselines"
@@ -281,6 +295,7 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
         write_markdown_table(os.path.join(out_dir, f"{table_prefix}_method_diagnostics.md"),
                              diag_rows, diag_fields)
 
+    export_method_outlier_details(method_results, out_dir, table_prefix=table_prefix)
     export_method_group_summary(method_results, out_dir, table_prefix=table_prefix)
 
     if export_figures:
@@ -341,6 +356,53 @@ def export_method_baselines(method_results, out_dir, table_prefix="fig6",
             print(f"[Saved] {path}")
     else:
         print(f"[Skip] {table_prefix} SVG export to tables/ disabled; root result folder already contains SVG.")
+
+
+def export_method_outlier_details(method_results, out_dir, table_prefix="fig6"):
+    results, _ = method_results
+    outliers = results.get("outlier_details", {})
+    if not outliers:
+        return
+    rows = []
+    for label in results.get("method_order", []):
+        for snr_entry in outliers.get(label, []):
+            snr = snr_entry.get("snr_db", "")
+            for rank, detail in enumerate(snr_entry.get("top", []), start=1):
+                row = {
+                    "SNR_dB": snr,
+                    "method": label,
+                    "rank": rank,
+                }
+                row.update(detail)
+                rows.append(row)
+    if not rows:
+        return
+    fields = [
+        "SNR_dB", "method", "rank", "sample_index", "error_m",
+        "source_x", "source_y", "estimated_x", "estimated_y",
+        "los_count", "los_uav_indices", "los_uav_xy",
+        "used_uav_indices", "n_pairs", "n_uavs", "wls_cost",
+        "wls_normalized_cost", "residual_rmse_m",
+        "mean_abs_residual_m", "max_abs_residual_m",
+        "geometry_condition", "geometry_gdop", "boundary_hit",
+        "candidate_count", "second_best_cost", "second_best_x",
+        "second_best_y", "cost_gap", "pruned_pairs_removed",
+        "pre_prune_cost", "pre_prune_normalized_cost",
+        "max_pair_abs_tdoa_error_samples",
+        "mean_pair_abs_tdoa_error_samples",
+        "median_pair_abs_tdoa_error_samples",
+        "mean_pair_sidelobe_ratio",
+        "pair_uav_indices",
+        "pair_true_tdoa_samples",
+        "pair_est_tdoa_samples",
+        "pair_tdoa_error_samples",
+        "pair_weight",
+        "pair_sidelobe_ratio",
+    ]
+    write_csv(os.path.join(out_dir, f"{table_prefix}_worst_localization_errors.csv"),
+              rows, fields)
+    write_markdown_table(os.path.join(out_dir, f"{table_prefix}_worst_localization_errors.md"),
+                         rows, fields)
 
 
 def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
@@ -444,6 +506,131 @@ def export_fig8_supp_baselines(fig8_supp_results, out_dir, export_figures=True):
     )
 
 
+def export_fig9_innovation(fig9_results, out_dir, export_figures=True):
+    if not fig9_results:
+        print("[Skip] No fig9_results found in plot_data.pkl")
+        return
+    results, _ = fig9_results
+    config = results.get("config", {})
+    baseline_cr = config.get("baseline_cr", 16)
+    figure_kinds = [
+        {"plot_kind": "strong",
+         "filename": config.get(
+             "strong_figure_filename",
+             f"Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}")},
+    ]
+    if config.get("export_method_zoom_figures", True):
+        zoom_order = config.get("strong_zoom_method_order")
+        figure_kinds.append(
+            {"plot_kind": "strong",
+             "filename": config.get(
+                 "strong_zoom_figure_filename",
+                 f"Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
+    export_method_baselines(
+        fig9_results, out_dir, table_prefix="fig9",
+        export_figures=export_figures,
+        figure_kinds=figure_kinds,
+    )
+
+
+def make_fig9_focus_results(data):
+    fig9_focus_results = data.get("fig9_focus_results")
+    if fig9_focus_results is not None:
+        return fig9_focus_results
+    fig9_results = data.get("fig9_results")
+    if fig9_results is None:
+        return None
+    config = fig9_results[0].get("config", {})
+    methods = fig9_results[0].get("methods", {})
+    innovation_order = [
+        label for label in [
+            "FreqDAE-CR4", "FreqDAE-CR8", "FreqDAE-CR16",
+            "FreqDAE-v2-CR4", "FreqDAE-v2-CR8", "FreqDAE-v2-CR16",
+            "FreqDAE-v3-CR4", "FreqDAE-v3-CR8", "FreqDAE-v3-CR16",
+        ]
+        if label in methods
+    ]
+    focus_order = [
+        "Raw", "DAE-CR4", "DAE-CR8", "DAE-CR16",
+    ] + innovation_order
+    focus_keep = ["Raw", "Clean", "Geometry"] + focus_order
+    return filter_method_comparison_data(
+        fig9_results, focus_keep,
+        {
+            **config,
+            "strong_method_order": focus_order,
+            "strong_title": "Figure 9 Focus: Frozen Chen-DAE vs Frequency-Task DAE",
+            "strong_figure_filename": "Fig9_Focused_DAE_CR_Comparison",
+            "strong_zoom_method_order": focus_order,
+            "strong_zoom_figure_filename": "Fig9_Focused_DAE_CR_Comparison_SNR_Zooms",
+            "table_prefix": "fig9_focus",
+        },
+    )
+
+
+def export_fig9_focus(fig9_focus_results, out_dir, export_figures=True):
+    if not fig9_focus_results:
+        print("[Skip] No fig9_focus_results found in plot_data.pkl")
+        return
+    config = fig9_focus_results[0].get("config", {})
+    figure_kinds = [
+        {"plot_kind": "strong",
+         "filename": config.get("strong_figure_filename", "Fig9_Focused_DAE_CR_Comparison")},
+    ]
+    if config.get("export_method_zoom_figures", True):
+        zoom_order = config.get("strong_zoom_method_order")
+        figure_kinds.append(
+            {"plot_kind": "strong",
+             "filename": config.get(
+                 "strong_zoom_figure_filename",
+                 "Fig9_Focused_DAE_CR_Comparison_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
+    export_method_baselines(
+        fig9_focus_results, out_dir, table_prefix="fig9_focus",
+        export_figures=export_figures,
+        figure_kinds=figure_kinds,
+    )
+
+
+def export_fig10_localizer(fig10_results, out_dir, export_figures=True):
+    if not fig10_results:
+        print("[Skip] No fig10_localizer_results found in plot_data.pkl")
+        return
+    config = fig10_results[0].get("config", {})
+    figure_kinds = [
+        {"plot_kind": "strong",
+         "filename": config.get(
+             "strong_figure_filename",
+             "Fig10_Localizer_Robustness_Ablation")},
+    ]
+    if config.get("export_method_zoom_figures", False):
+        zoom_order = config.get("strong_zoom_method_order")
+        figure_kinds.append(
+            {"plot_kind": "strong",
+             "filename": config.get(
+                 "strong_zoom_figure_filename",
+                 "Fig10_Localizer_Robustness_Ablation_SNR_Zooms"),
+             "zoom_pair": True,
+             "low_snr_max": config.get("method_zoom_low_snr_max", 0.0),
+             "high_snr_min": config.get("method_zoom_high_snr_min", 8.0),
+             "method_order": zoom_order}
+        )
+    export_method_baselines(
+        fig10_results, out_dir, table_prefix="fig10_localizer",
+        export_figures=export_figures,
+        figure_kinds=figure_kinds,
+    )
+
+
 def export_summary_md(data, result_dir, out_dir):
     config = data.get("config", {})
     results, _ = data["mc_results"]
@@ -487,13 +674,32 @@ def export_summary_md(data, result_dir, out_dir):
             f.write("- Fig8 strong task-aware baselines: available; Cao/Zhai-style direct-TDOA "
                     "methods share the same fixed evaluation set, LOS mask, physical lag gate, "
                     "and all-pair WLS localizer. The main Fig8 view keeps the stable official "
-                    "strong-baseline subset.\n\n")
+                    "strong-baseline subset. GeoHybrid-DFT, when present, is a "
+                    "coherence-aware coarse-to-fine compressed-domain TDOA estimator; "
+                    "GeoAmbi-DFT v1 remains a fine-only ambiguity-suppression "
+                    "diagnostic/ablation.\n\n")
         if data.get("fig8_supp_results") is not None:
             f.write("- Fig8 supplement strong diagnostics: available; Cao2020 uses segmented "
                     "incoherent high-FC scoring, and Zhai phase-superposition uses "
-                    "sqrt-power-weighted delay-compensated phasor superposition. These "
-                    "curves are kept separate from the main Fig8 view until formal "
-                    "performance validation.\n\n")
+                    "sqrt-power-weighted delay-compensated phasor superposition. "
+                    "GeoAmbi fine-only and PHAT-gated hybrid variants are kept here "
+                    "to diagnose low-SNR variance, deterministic ambiguity, and "
+                    "uncertainty weighting.\n\n")
+        if data.get("fig9_results") is not None:
+            f.write("- Fig9 innovation comparison: available; the frozen Chen-style DAE "
+                    "references (CR4/CR8/CR16, when available) and the current "
+                    "FrequencySelectiveDAE models are evaluated "
+                    "on the same fixed urban8 set, physical lag gate, and all-pair WLS "
+                    "localizer.\n\n")
+        if make_fig9_focus_results(data) is not None:
+            f.write("- Fig9 focused DAE comparison: available; this view removes "
+                    "traditional/strong baselines and keeps Raw plus Chen-DAE/FreqDAE "
+                    "CR4/CR8/CR16 for direct new-vs-old CR readability.\n\n")
+        if data.get("fig10_localizer_results") is not None:
+            f.write("- Fig10 localizer robustness ablation: available; this is a "
+                    "supplement-only high-SNR check that compares default all-pair WLS "
+                    "against grid-start/pruned variants. It does not replace Fig3/Fig6-Fig9 "
+                    "main conclusions.\n\n")
         f.write("## Mean RMSE Averages\n\n")
         for key, value in mean_avgs.items():
             f.write(f"- {key}: {value:.4f} m\n")
@@ -532,6 +738,12 @@ def export(result_dir, export_fig6_figures=True):
                           export_figures=bool(export_fig6_figures))
     export_fig8_supp_baselines(data.get("fig8_supp_results"), out_dir,
                                export_figures=bool(export_fig6_figures))
+    export_fig9_innovation(data.get("fig9_results"), out_dir,
+                           export_figures=bool(export_fig6_figures))
+    export_fig9_focus(make_fig9_focus_results(data), out_dir,
+                      export_figures=bool(export_fig6_figures))
+    export_fig10_localizer(data.get("fig10_localizer_results"), out_dir,
+                           export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)
     print("[Done] Export complete.")
 

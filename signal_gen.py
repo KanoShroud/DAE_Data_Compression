@@ -431,6 +431,45 @@ class SignalSimulator:
         return (np.asarray(snapshot_indices, dtype=int),
                 np.asarray(uav_indices, dtype=int))
 
+    def build_urban_pair_training_plan(self, n_pairs, seed=42):
+        """
+        为 urban8 pair-aware 训练构造固定的 snapshot/UAV-pair 计划。
+
+        每个样本对应同一 observation 内的两个 UAV waveform。pair 从 LOS UAV
+        中随机抽取，训练目标的 TDOA 使用几何距离差的浮点采样值，和最终
+        all-pair WLS 定位评估保持同一物理定义。
+        """
+        if self.scenario_mode != "urban8":
+            raise RuntimeError("build_urban_pair_training_plan requires scenario_mode='urban8'")
+
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        snapshot_indices = []
+        uav_i_indices = []
+        uav_j_indices = []
+        n_snapshots = len(self._urban_snapshots)
+        while len(snapshot_indices) < n_pairs:
+            si = int(np.random.randint(0, n_snapshots))
+            snap = self._urban_snapshots[si]
+            if self.urban_train_los_only:
+                candidates = np.where(snap['los'])[0]
+            else:
+                candidates = np.arange(self.n_uavs)
+            if len(candidates) < 2:
+                continue
+            pair = np.random.choice(candidates, size=2, replace=False)
+            snapshot_indices.append(si)
+            uav_i_indices.append(int(pair[0]))
+            uav_j_indices.append(int(pair[1]))
+
+        np.random.set_state(rng_state)
+        return (
+            np.asarray(snapshot_indices, dtype=int),
+            np.asarray(uav_i_indices, dtype=int),
+            np.asarray(uav_j_indices, dtype=int),
+        )
+
     def generate_urban_training_dataset_from_plan(self, snapshot_indices, uav_indices,
                                                   seed=42, return_groups=False):
         """
@@ -470,6 +509,64 @@ class SignalSimulator:
         if return_groups:
             return X_noisy, X_clean, groups
         return X_noisy, X_clean
+
+    def generate_urban_pair_training_dataset_from_plan(self, snapshot_indices,
+                                                       uav_i_indices, uav_j_indices,
+                                                       seed=42, return_groups=False):
+        """
+        按固定 snapshot/UAV-pair 计划生成 urban8 成对 waveform 训练集。
+
+        返回的 tdoa 为 tau_i_minus_j，单位是 samples，使用几何距离差而非
+        整数 delay label，从而和定位评估中的 pairwise TDOA 定义一致。
+        """
+        if self.scenario_mode != "urban8":
+            raise RuntimeError("generate_urban_pair_training_dataset_from_plan requires scenario_mode='urban8'")
+        snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+        uav_i_indices = np.asarray(uav_i_indices, dtype=int)
+        uav_j_indices = np.asarray(uav_j_indices, dtype=int)
+        if not (len(snapshot_indices) == len(uav_i_indices) == len(uav_j_indices)):
+            raise ValueError(
+                "snapshot_indices, uav_i_indices and uav_j_indices must have the same length"
+            )
+
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+        batch_cap = 500
+        x1n_list, x1c_list = [], []
+        x2n_list, x2c_list = [], []
+        tdoa_list = []
+        for start in range(0, len(snapshot_indices), batch_cap):
+            end = min(start + batch_cap, len(snapshot_indices))
+            snap_chunk = snapshot_indices[start:end]
+            ui_chunk = uav_i_indices[start:end]
+            uj_chunk = uav_j_indices[start:end]
+            Xn, Xc, meta = self.generate_urban_batch(
+                len(snap_chunk), snr_db=None, snapshot_indices=snap_chunk
+            )
+            row_idx = torch.arange(len(snap_chunk), dtype=torch.long)
+            ui_idx = torch.tensor(ui_chunk, dtype=torch.long)
+            uj_idx = torch.tensor(uj_chunk, dtype=torch.long)
+            x1n_list.append(Xn[row_idx, ui_idx])
+            x1c_list.append(Xc[row_idx, ui_idx])
+            x2n_list.append(Xn[row_idx, uj_idx])
+            x2c_list.append(Xc[row_idx, uj_idx])
+            distances = np.asarray(meta['distances'], dtype=float)
+            rows = np.arange(len(snap_chunk))
+            tdoa = (distances[rows, ui_chunk] - distances[rows, uj_chunk]) / (self.c / self.fs)
+            tdoa_list.append(torch.tensor(tdoa, dtype=torch.float32))
+
+        X1_noisy = torch.cat(x1n_list, dim=0)
+        X1_clean = torch.cat(x1c_list, dim=0)
+        X2_noisy = torch.cat(x2n_list, dim=0)
+        X2_clean = torch.cat(x2c_list, dim=0)
+        tdoa = torch.cat(tdoa_list, dim=0)
+        groups = torch.tensor(snapshot_indices, dtype=torch.long)
+
+        np.random.set_state(rng_state)
+        if return_groups:
+            return X1_noisy, X1_clean, X2_noisy, X2_clean, tdoa, groups
+        return X1_noisy, X1_clean, X2_noisy, X2_clean, tdoa
 
     def _build_channel_pool(self, n_channels, seed):
         """

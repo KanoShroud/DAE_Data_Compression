@@ -215,6 +215,221 @@ def _window_lag_sidelobes(selected_bins, signal_len, lag_limit_samples=None,
     return float(np.max(response[side_mask])), float(np.sqrt(np.mean(response[side_mask] ** 2)))
 
 
+def _geometry_lag_weights(simulator, signal_len, lag_limit_samples=None,
+                          use_los_only=True, guard_samples=2):
+    """
+    Geometry-aware weights over physically valid TDOA lags.
+
+    The selected-bin steering response should not only have low uniform
+    sidelobes; it should especially avoid ambiguity at lag values that are
+    common and localization-sensitive for the current UAV geometry. The weight
+    is a smoothed histogram of LOS pair TDOAs, weighted by the norm of the TDOA
+    Jacobian row ||u_i - u_j|| at the source position.
+    """
+    n = int(signal_len)
+    lags = np.arange(-n // 2, n // 2, dtype=float)
+    if lag_limit_samples is None:
+        lag_limit_samples = min(64, max(4, n // 16))
+    physical_mask = np.abs(lags) <= float(lag_limit_samples)
+    physical_lags = lags[physical_mask]
+    if physical_lags.size == 0:
+        physical_lags = lags
+
+    weights = np.ones(physical_lags.size, dtype=np.float64)
+    snapshots = getattr(simulator, "_urban_snapshots", None)
+    sample_distance = getattr(simulator, "sample_distance_m", None)
+    if not snapshots or sample_distance is None:
+        return weights / (np.sum(weights) + 1e-12)
+
+    hist = np.zeros_like(weights)
+    sigma = 1.5
+    for snap in snapshots:
+        los = np.asarray(snap.get("los", []), dtype=bool)
+        if los.size == 0:
+            continue
+        candidates = np.where(los)[0] if use_los_only else np.arange(los.size)
+        if len(candidates) < 2:
+            continue
+        source = np.asarray(snap["source"], dtype=float)
+        uavs = np.asarray(snap["uavs"], dtype=float)
+        distances = np.asarray(snap["distances"], dtype=float)
+        for ai in range(len(candidates)):
+            for bi in range(ai + 1, len(candidates)):
+                ui, uj = int(candidates[ai]), int(candidates[bi])
+                tau = (distances[ui] - distances[uj]) / float(sample_distance)
+                if abs(tau) > float(lag_limit_samples):
+                    continue
+                vi = (source - uavs[ui]) / (distances[ui] + 1e-12)
+                vj = (source - uavs[uj]) / (distances[uj] + 1e-12)
+                sensitivity = float(np.linalg.norm(vi - vj))
+                sensitivity = float(np.clip(sensitivity, 0.15, 2.0))
+                hist += (sensitivity ** 2) * np.exp(
+                    -0.5 * ((physical_lags - float(tau)) / sigma) ** 2
+                )
+
+    if np.max(hist) <= 0:
+        return weights / (np.sum(weights) + 1e-12)
+    hist = hist / (np.max(hist) + 1e-12)
+    # Keep a uniform floor so rare but physically valid lags are not ignored.
+    weights = 0.35 * np.ones_like(hist) + 0.65 * hist
+    side_mask = np.abs(physical_lags) > float(guard_samples)
+    if np.any(side_mask):
+        weights[side_mask] = weights[side_mask] / (np.mean(weights[side_mask]) + 1e-12)
+    return weights / (np.sum(weights) + 1e-12)
+
+
+def _geo_ambiguity_bins(waveforms, count, simulator=None, chunk_size=512,
+                        min_power_frac=0.02, lag_limit_samples=None,
+                        candidate_factor=14, sidelobe_weight=0.50,
+                        geo_sidelobe_weight=0.55, rms_sidelobe_weight=0.20,
+                        cluster_weight=0.18, balance_weight=0.08,
+                        guard_samples=2):
+    """
+    Geometry/ambiguity-aware direct-DFT frequency selection.
+
+    This selector keeps the CRLB/Fisher motivation of high-frequency, high-power
+    bins, but it explicitly suppresses partial-Fourier ambiguity in the physical
+    TDOA window and discourages frequency clustering. Compared with the older
+    balanced Fisher selector, the lag-domain penalty is weighted by the current
+    urban UAV geometry and LOS-pair TDOA distribution.
+    """
+    count = int(count)
+    avg_power = _average_shifted_fft_power(waveforms, chunk_size=chunk_size)
+    n = int(avg_power.numel())
+    if count < 1 or count > n:
+        raise ValueError("Invalid GeoAmbi DFT selection size")
+
+    center = n // 2
+    freq = (torch.arange(n, dtype=avg_power.dtype) - float(center)) / max(float(center), 1.0)
+    freq_abs = torch.abs(freq)
+    fisher_score = avg_power * (freq_abs ** 2)
+    power_floor = torch.max(avg_power) * float(min_power_frac)
+    valid = avg_power >= power_floor
+    if int(torch.sum(valid).item()) < count:
+        valid = torch.ones_like(valid, dtype=torch.bool)
+    masked_score = torch.where(valid, fisher_score, torch.full_like(fisher_score, -torch.inf))
+    finite_count = int(torch.isfinite(masked_score).sum().item())
+    if finite_count < count:
+        masked_score = fisher_score
+        finite_count = n
+
+    candidate_count = min(n, max(count, count * int(candidate_factor)))
+    candidate_count = min(candidate_count, finite_count)
+    top_fisher = torch.topk(masked_score, k=candidate_count, largest=True).indices
+    top_power = torch.topk(avg_power, k=min(n, candidate_count), largest=True).indices
+    # A sparse uniform scaffold improves conditioning if Fisher candidates
+    # collapse into a narrow high-frequency cluster.
+    scaffold = torch.linspace(0, n - 1, steps=max(count, min(n, candidate_count // 2)))
+    scaffold = scaffold.round().long().clamp(0, n - 1)
+    candidate_bins = torch.unique(
+        torch.cat((top_fisher, top_power, scaffold)), sorted=True
+    )
+    if candidate_bins.numel() > candidate_count:
+        cand_score = fisher_score[candidate_bins]
+        keep = torch.topk(cand_score, k=candidate_count, largest=True).indices
+        candidate_bins = candidate_bins[keep].sort().values
+    if candidate_bins.numel() < count:
+        fallback = torch.topk(fisher_score, k=count, largest=True).indices
+        candidate_bins = torch.unique(torch.cat((candidate_bins, fallback)), sorted=True)
+
+    candidate_np = candidate_bins.detach().cpu().numpy().astype(int)
+    cand_power = avg_power[candidate_bins].detach().cpu().numpy().astype(np.float64)
+    cand_freq = freq[candidate_bins].detach().cpu().numpy().astype(np.float64)
+    cand_freq_abs = np.abs(cand_freq)
+
+    lags = np.arange(-n // 2, n // 2, dtype=float)
+    if lag_limit_samples is None:
+        lag_limit_samples = min(64, max(4, n // 16))
+    physical_mask = np.abs(lags) <= float(lag_limit_samples)
+    physical_lags = lags[physical_mask]
+    if physical_lags.size == 0:
+        physical_lags = lags
+    side_mask = np.abs(physical_lags) > float(guard_samples)
+    if not np.any(side_mask):
+        side_mask = np.ones_like(physical_lags, dtype=bool)
+    geo_weights = _geometry_lag_weights(
+        simulator, n, lag_limit_samples=lag_limit_samples,
+        use_los_only=True, guard_samples=guard_samples
+    )
+    if geo_weights.shape[0] != physical_lags.shape[0]:
+        geo_weights = np.ones(physical_lags.size, dtype=np.float64)
+        geo_weights = geo_weights / np.sum(geo_weights)
+    side_weights = geo_weights[side_mask]
+    side_weights = side_weights / (np.sum(side_weights) + 1e-12)
+
+    steering = np.exp(
+        2j * np.pi * np.outer(physical_lags, np.fft.fftshift(np.fft.fftfreq(n))[candidate_np])
+    ).astype(np.complex64)
+
+    selected_local = []
+    remaining = np.ones(candidate_np.size, dtype=bool)
+    response = np.zeros(physical_lags.size, dtype=np.complex64)
+    w_sum = 0.0
+    wf_sum = 0.0
+    wf2_sum = 0.0
+    power_sum = 0.0
+    info_scale = max(float(np.max(cand_power * cand_freq ** 2)), 1e-12)
+    power_scale = max(float(np.max(cand_power)), 1e-12)
+    cluster_width = max(4.0, 0.025 * n)
+
+    for step in range(count):
+        remaining_idx = np.where(remaining)[0]
+        if remaining_idx.size == 0:
+            break
+        w_new = w_sum + cand_power[remaining_idx]
+        wf_new = wf_sum + cand_power[remaining_idx] * cand_freq[remaining_idx]
+        wf2_new = wf2_sum + cand_power[remaining_idx] * cand_freq[remaining_idx] ** 2
+        crlb_info = wf2_new - (wf_new ** 2) / (w_new + 1e-12)
+        crlb_info = np.maximum(crlb_info, 0.0)
+        trial_response = response[:, None] + steering[:, remaining_idx]
+        amp = np.abs(trial_response) / float(step + 1)
+        side_amp = amp[side_mask]
+        max_side = np.max(side_amp, axis=0)
+        rms_side = np.sqrt(np.mean(side_amp ** 2, axis=0))
+        geo_side = np.sqrt(np.sum(side_weights[:, None] * (side_amp ** 2), axis=0))
+
+        if selected_local:
+            selected_bins = candidate_np[np.asarray(selected_local, dtype=int)]
+            dist = np.min(np.abs(candidate_np[remaining_idx, None] - selected_bins[None, :]), axis=1)
+            cluster_penalty = np.exp(-(dist / cluster_width) ** 2)
+            sign_balance = np.abs(
+                (np.sum(np.sign(cand_freq[selected_local]))
+                 + np.sign(cand_freq[remaining_idx])) / float(step + 1)
+            )
+        else:
+            cluster_penalty = np.zeros(remaining_idx.size, dtype=np.float64)
+            sign_balance = np.abs(np.sign(cand_freq[remaining_idx]))
+
+        power_new = power_sum + cand_power[remaining_idx]
+        highness = (
+            np.sum(cand_freq_abs[selected_local]) + cand_freq_abs[remaining_idx]
+        ) / float(step + 1)
+        objective = (
+            np.log1p(crlb_info / info_scale)
+            + 0.10 * np.log1p(power_new / power_scale)
+            + 0.12 * highness
+            - float(sidelobe_weight) * max_side
+            - float(geo_sidelobe_weight) * geo_side
+            - float(rms_sidelobe_weight) * rms_side
+            - float(cluster_weight) * cluster_penalty
+            - float(balance_weight) * sign_balance
+        )
+        best_local = int(remaining_idx[int(np.argmax(objective))])
+        selected_local.append(best_local)
+        remaining[best_local] = False
+        response += steering[:, best_local]
+        w_sum += float(cand_power[best_local])
+        wf_sum += float(cand_power[best_local] * cand_freq[best_local])
+        wf2_sum += float(cand_power[best_local] * cand_freq[best_local] ** 2)
+        power_sum += float(cand_power[best_local])
+
+    if len(selected_local) < count:
+        fallback = np.where(remaining)[0][:count - len(selected_local)]
+        selected_local.extend([int(v) for v in fallback.tolist()])
+    selected = torch.as_tensor(candidate_np[selected_local[:count]], dtype=torch.long)
+    return selected.sort().values.contiguous()
+
+
 def _cao2020_crb_fc_bins(waveforms, count, chunk_size=512, min_power_frac=0.02,
                          lag_limit_samples=None, sidelobe_weight=0.85,
                          rms_sidelobe_weight=0.30, guard_samples=2):
@@ -307,6 +522,17 @@ def select_balanced_fisher_dft_bins(waveforms, signal_len=1024, cr=16,
     return _balanced_fisher_bins(
         waveforms, n_complex_bins, chunk_size=chunk_size,
         lag_limit_samples=lag_limit_samples
+    )
+
+
+def select_geo_ambiguity_dft_bins(waveforms, simulator=None, signal_len=1024,
+                                  cr=16, lag_limit_samples=None,
+                                  chunk_size=512):
+    """Public helper for geometry/ambiguity-aware direct DFT bin selection."""
+    n_complex_bins = max(1, latent_real_dim(int(signal_len), int(cr)) // 2)
+    return _geo_ambiguity_bins(
+        waveforms, n_complex_bins, simulator=simulator,
+        chunk_size=chunk_size, lag_limit_samples=lag_limit_samples
     )
 
 
@@ -772,6 +998,15 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             ).to(device)
 
     if include_strong_variants and "DFT-Zhai-CRLB" not in baselines:
+        selected = select_geo_ambiguity_dft_bins(
+            pca_waveforms, simulator=simulator, signal_len=signal_len, cr=cr,
+            lag_limit_samples=dft_lag_limit_samples
+        )
+        baselines["DFT-GeoAmbi"] = DFTCompressionBaseline(
+            signal_len=signal_len, cr=cr, mode="center", seed=seed + 57,
+            selected_bins=selected
+        ).to(device)
+
         selected = select_cao2020_crb_dft_bins(
             pca_waveforms, signal_len=signal_len, cr=cr,
             lag_limit_samples=dft_lag_limit_samples
@@ -860,6 +1095,12 @@ def build_traditional_baselines(simulator, cr=16, n_pca_samples=10000, seed=42,
             else None
         ),
         "dft_selected_bins_by_method": dft_selected_bins_by_method,
+        "dft_geoambi_role": (
+            "stage-A main candidate for the innovation baseline track; greedy "
+            "CRLB/Fisher frequency selection with physical-lag sidelobe, "
+            "geometry-weighted ambiguity, clustering, and sign-balance penalties"
+        ),
+        "dft_geoambi_selected_bins": dft_selected_bins_by_method.get("DFT-GeoAmbi"),
         "dft_zhai_crlb_role": (
             "strong task-aware baseline candidate; greedy CRLB/FIM spectral "
             "variance selection with physical-lag sidelobe control"

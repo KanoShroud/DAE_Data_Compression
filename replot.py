@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from evaluate import (plot_snr_comparison, plot_snr_comparison_multi,
                       plot_monte_carlo, plot_method_comparison,
-                      plot_method_zoom_pair)
+                      plot_method_zoom_pair, filter_method_comparison_data)
 
 # ========== 在此修改结果目录路径 ==========
 RESULT_DIR = "运行结果/20260601_145854"
@@ -67,7 +67,9 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig7':
         task_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
-            'DFT-Fisher-Direct', had_main, 'PCA'
+            'DFT-Fisher-Direct', 'GeoHybrid-DFT',
+            'GeoAmbi-DFT-Direct',
+            had_main, 'PCA'
         ])
         config['taskaware_method_order'] = task_order
         config['taskaware_zoom_method_order'] = task_order
@@ -77,7 +79,8 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig8':
         strong_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
-            'Cao2017-DFT-AML', 'Zhai-CRLB-Decimation', had_main, 'PCA'
+            'Cao2017-DFT-AML', 'GeoHybrid-DFT',
+            'Zhai-CRLB-Decimation', had_main, 'PCA'
         ])
         config['strong_method_order'] = strong_order
         config['strong_zoom_method_order'] = strong_order
@@ -87,7 +90,10 @@ def apply_current_method_view_config(method_results, view):
     elif view == 'fig8_supp':
         strong_order = unique_order([
             'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
-            'Cao2017-DFT-AML', 'Cao2020-HighFC',
+            'Cao2017-DFT-AML', 'GeoHybrid-DFT',
+            'GeoHybrid-DFT-PHAT-gated', 'GeoAmbi-DFT-Direct',
+            'GeoAmbi-DFT-AML', 'GeoAmbi-DFT-PHAT',
+            'Cao2020-HighFC',
             'Zhai-CRLB-Decimation', 'Zhai-Phase-Superposition',
             had_main, 'PCA'
         ])
@@ -99,7 +105,105 @@ def apply_current_method_view_config(method_results, view):
         config['strong_zoom_figure_filename'] = (
             f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}_SNR_Zooms'
         )
+    elif view == 'fig9':
+        methods = results.get('methods', {})
+        innovation_order = [
+            label for label in [
+                'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
+                'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
+                'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+            ]
+            if label in methods
+        ]
+        strong_order = unique_order([
+            'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
+        ] + innovation_order + [
+            'DFT', 'DFT-Fisher-Direct',
+            'Cao2017-DFT-AML', 'GeoHybrid-DFT', 'GeoAmbi-DFT-AML',
+            'Zhai-CRLB-Decimation', had_main, 'PCA'
+        ])
+        config['strong_method_order'] = strong_order
+        config['strong_zoom_method_order'] = strong_order
+        config['strong_figure_filename'] = (
+            f'Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}'
+        )
+        config['strong_zoom_figure_filename'] = (
+            f'Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}_SNR_Zooms'
+        )
+    elif view == 'fig9_focus':
+        methods = results.get('methods', {})
+        innovation_order = [
+            label for label in [
+                'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
+                'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
+                'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+            ]
+            if label in methods
+        ]
+        strong_order = unique_order([
+            'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
+        ] + innovation_order)
+        config['strong_method_order'] = strong_order
+        config['strong_zoom_method_order'] = strong_order
+        config['strong_title'] = (
+            'Figure 9 Focus: Frozen Chen-DAE vs Frequency-Task DAE'
+        )
+        config['strong_figure_filename'] = 'Fig9_Focused_DAE_CR_Comparison'
+        config['strong_zoom_figure_filename'] = (
+            'Fig9_Focused_DAE_CR_Comparison_SNR_Zooms'
+        )
+    elif view == 'fig10_localizer':
+        order = config.get('strong_method_order', results.get('method_order', []))
+        config['strong_method_order'] = order
+        config['strong_zoom_method_order'] = order
+        config['strong_title'] = config.get(
+            'strong_title',
+            'Figure 10: Localizer Robustness Ablation (High-SNR Outlier Check)'
+        )
+        config['strong_figure_filename'] = config.get(
+            'strong_figure_filename',
+            'Fig10_Localizer_Robustness_Ablation'
+        )
+        config['strong_zoom_figure_filename'] = config.get(
+            'strong_zoom_figure_filename',
+            'Fig10_Localizer_Robustness_Ablation_SNR_Zooms'
+        )
     return results, snr_range
+
+
+def make_fig9_focus_results(data):
+    fig9_focus_results = data.get('fig9_focus_results')
+    if fig9_focus_results is not None:
+        return apply_current_method_view_config(fig9_focus_results, 'fig9_focus')
+    fig9_results = data.get('fig9_results')
+    if fig9_results is None:
+        return None
+    config = fig9_results[0].get('config', {})
+    methods = fig9_results[0].get('methods', {})
+    innovation_order = [
+        label for label in [
+            'FreqDAE-CR4', 'FreqDAE-CR8', 'FreqDAE-CR16',
+            'FreqDAE-v2-CR4', 'FreqDAE-v2-CR8', 'FreqDAE-v2-CR16',
+            'FreqDAE-v3-CR4', 'FreqDAE-v3-CR8', 'FreqDAE-v3-CR16',
+        ]
+        if label in methods
+    ]
+    focus_order = unique_order([
+        'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
+    ] + innovation_order)
+    focus_keep = unique_order(['Raw', 'Clean', 'Geometry'] + focus_order)
+    return filter_method_comparison_data(
+        fig9_results, focus_keep,
+        {
+            **config,
+            'strong_method_order': focus_order,
+            'strong_zoom_method_order': focus_order,
+            'strong_title': 'Figure 9 Focus: Frozen Chen-DAE vs Frequency-Task DAE',
+            'strong_figure_filename': 'Fig9_Focused_DAE_CR_Comparison',
+            'strong_zoom_figure_filename': 'Fig9_Focused_DAE_CR_Comparison_SNR_Zooms',
+            'table_prefix': 'fig9_focus',
+        },
+    )
 
 
 def replot(result_dir):
@@ -299,6 +403,72 @@ def replot(result_dir):
             save_figure(fig_strong_supp_zoom, os.path.join(
                 result_dir,
                 f"{fig8_supp_config.get('strong_zoom_figure_filename', f'Fig8_Supp_Strong_Baseline_Diagnostics_CR{baseline_cr}_SNR_Zooms')}.svg"
+            ))
+
+    fig9_results = apply_current_method_view_config(data.get('fig9_results'), 'fig9')
+    if fig9_results is not None:
+        baseline_cr = data.get('config', {}).get('baseline_cr', 16)
+        fig9_config = fig9_results[0].get('config', {})
+        fig_innov = plot_method_comparison(fig9_results, plot_kind="strong")
+        save_figure(fig_innov, os.path.join(
+            result_dir,
+            f"{fig9_config.get('strong_figure_filename', f'Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}')}.svg"
+        ))
+        if fig9_config.get('export_method_zoom_figures', True):
+            zoom_order = fig9_config.get('strong_zoom_method_order')
+            fig_innov_zoom = plot_method_zoom_pair(
+                fig9_results, plot_kind="strong",
+                low_snr_max=fig9_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig9_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+            )
+            save_figure(fig_innov_zoom, os.path.join(
+                result_dir,
+                f"{fig9_config.get('strong_zoom_figure_filename', f'Fig9_FrequencyTaskDAE_vs_Repro_CR{baseline_cr}_SNR_Zooms')}.svg"
+            ))
+
+    fig9_focus_results = make_fig9_focus_results(data)
+    if fig9_focus_results is not None:
+        fig9_focus_config = fig9_focus_results[0].get('config', {})
+        fig_innov_focus = plot_method_comparison(fig9_focus_results, plot_kind="strong")
+        save_figure(fig_innov_focus, os.path.join(
+            result_dir,
+            f"{fig9_focus_config.get('strong_figure_filename', 'Fig9_Focused_DAE_CR_Comparison')}.svg"
+        ))
+        if fig9_focus_config.get('export_method_zoom_figures', True):
+            zoom_order = fig9_focus_config.get('strong_zoom_method_order')
+            fig_innov_focus_zoom = plot_method_zoom_pair(
+                fig9_focus_results, plot_kind="strong",
+                low_snr_max=fig9_focus_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig9_focus_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+            )
+            save_figure(fig_innov_focus_zoom, os.path.join(
+                result_dir,
+                f"{fig9_focus_config.get('strong_zoom_figure_filename', 'Fig9_Focused_DAE_CR_Comparison_SNR_Zooms')}.svg"
+            ))
+
+    fig10_localizer_results = apply_current_method_view_config(
+        data.get('fig10_localizer_results'), 'fig10_localizer'
+    )
+    if fig10_localizer_results is not None:
+        fig10_config = fig10_localizer_results[0].get('config', {})
+        fig_localizer = plot_method_comparison(fig10_localizer_results, plot_kind="strong")
+        save_figure(fig_localizer, os.path.join(
+            result_dir,
+            f"{fig10_config.get('strong_figure_filename', 'Fig10_Localizer_Robustness_Ablation')}.svg"
+        ))
+        if fig10_config.get('export_method_zoom_figures', False):
+            zoom_order = fig10_config.get('strong_zoom_method_order')
+            fig_localizer_zoom = plot_method_zoom_pair(
+                fig10_localizer_results, plot_kind="strong",
+                low_snr_max=fig10_config.get('method_zoom_low_snr_max', 0.0),
+                high_snr_min=fig10_config.get('method_zoom_high_snr_min', 8.0),
+                method_order=zoom_order,
+            )
+            save_figure(fig_localizer_zoom, os.path.join(
+                result_dir,
+                f"{fig10_config.get('strong_zoom_figure_filename', 'Fig10_Localizer_Robustness_Ablation_SNR_Zooms')}.svg"
             ))
 
     if plt.get_fignums() and os.environ.get("DAE_REPLOT_NO_SHOW") != "1":

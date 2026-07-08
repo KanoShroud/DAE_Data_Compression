@@ -197,7 +197,33 @@ def _localize_from_tdoa(uav_pos, ref_idx, tdoa_samples, fs, c, area_size):
     return res.x if np.all(np.isfinite(res.x)) else None
 
 
-def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size):
+def _pair_geometry_metrics(p, pairs, uav_pos, sqrt_w):
+    p = np.asarray(p, dtype=float)
+    rows = []
+    for row_w, (i, j, _, _) in zip(sqrt_w, pairs):
+        vi = p - uav_pos[i]
+        vj = p - uav_pos[j]
+        ni = np.linalg.norm(vi)
+        nj = np.linalg.norm(vj)
+        if ni < 1e-9 or nj < 1e-9:
+            continue
+        rows.append(float(row_w) * (vi / ni - vj / nj))
+    if len(rows) < 2:
+        return float('inf'), float('inf')
+    jmat = np.asarray(rows, dtype=float)
+    try:
+        svals = np.linalg.svd(jmat, compute_uv=False)
+        cond = float(svals[0] / max(svals[-1], 1e-12))
+        fisher = jmat.T @ jmat
+        gdop = float(np.sqrt(np.trace(np.linalg.pinv(fisher))))
+    except Exception:
+        cond = float('inf')
+        gdop = float('inf')
+    return cond, gdop
+
+
+def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size,
+                              robust_mode="standard"):
     """
     WLS-style all-pair TDOA localization.
 
@@ -213,51 +239,121 @@ def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size):
     if len(pairs) < 3:
         return None, {'success': False, 'cost': float('inf'), 'n_pairs': len(pairs)}
 
-    idx_used = sorted(set([i for i, _, _, _ in pairs] + [j for _, j, _, _ in pairs]))
-    selected = uav_pos[idx_used]
-    delta_ranges = np.asarray([tau * c / fs for _, _, tau, _ in pairs], dtype=float)
-    weights = np.asarray([w for _, _, _, w in pairs], dtype=float)
-    weights = weights / (np.median(weights) + 1e-12)
-    sqrt_w = np.sqrt(np.clip(weights, 0.05, 20.0))
-
-    def residual(p):
-        vals = []
-        for (i, j, _, _), dr in zip(pairs, delta_ranges):
-            vals.append(np.linalg.norm(p - uav_pos[i]) - np.linalg.norm(p - uav_pos[j]) - dr)
-        return sqrt_w * np.asarray(vals)
-
     bounds = ([0.0, 0.0], [float(area_size[0]), float(area_size[1])])
-    starts = [
-        np.mean(selected, axis=0),
-        np.asarray([area_size[0] / 2.0, area_size[1] / 2.0], dtype=float),
-    ]
-    starts.extend(selected)
-    starts.extend([
-        np.asarray([0.15 * area_size[0], 0.15 * area_size[1]]),
-        np.asarray([0.85 * area_size[0], 0.15 * area_size[1]]),
-        np.asarray([0.15 * area_size[0], 0.85 * area_size[1]]),
-        np.asarray([0.85 * area_size[0], 0.85 * area_size[1]]),
-    ])
 
-    best = None
-    best_cost = float('inf')
-    for x0 in starts:
-        x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
-        try:
-            res = optimize.least_squares(residual, x0=x0, bounds=bounds, loss='linear',
-                                         max_nfev=200)
-        except Exception:
-            continue
-        if res.success and np.all(np.isfinite(res.x)) and res.cost < best_cost:
-            best = res.x
-            best_cost = float(res.cost)
+    def solve(active_pairs, start_mode):
+        idx_used = sorted(set([i for i, _, _, _ in active_pairs]
+                              + [j for _, j, _, _ in active_pairs]))
+        selected = uav_pos[idx_used]
+        delta_ranges = np.asarray([tau * c / fs for _, _, tau, _ in active_pairs], dtype=float)
+        weights = np.asarray([w for _, _, _, w in active_pairs], dtype=float)
+        weights = weights / (np.median(weights) + 1e-12)
+        sqrt_w = np.sqrt(np.clip(weights, 0.05, 20.0))
 
-    info = {
-        'success': best is not None,
-        'cost': best_cost,
-        'n_pairs': len(pairs),
-        'n_uavs': len(idx_used),
-    }
+        def raw_residual(p):
+            vals = []
+            for (i, j, _, _), dr in zip(active_pairs, delta_ranges):
+                vals.append(np.linalg.norm(p - uav_pos[i]) - np.linalg.norm(p - uav_pos[j]) - dr)
+            return np.asarray(vals, dtype=float)
+
+        def residual(p):
+            return sqrt_w * raw_residual(p)
+
+        starts = [
+            np.mean(selected, axis=0),
+            np.asarray([area_size[0] / 2.0, area_size[1] / 2.0], dtype=float),
+        ]
+        starts.extend(selected)
+        starts.extend([
+            np.asarray([0.15 * area_size[0], 0.15 * area_size[1]]),
+            np.asarray([0.85 * area_size[0], 0.15 * area_size[1]]),
+            np.asarray([0.15 * area_size[0], 0.85 * area_size[1]]),
+            np.asarray([0.85 * area_size[0], 0.85 * area_size[1]]),
+        ])
+        if "grid" in str(start_mode):
+            gx = np.linspace(0.1 * area_size[0], 0.9 * area_size[0], 5)
+            gy = np.linspace(0.1 * area_size[1], 0.9 * area_size[1], 5)
+            starts.extend(np.asarray([x, y], dtype=float) for x in gx for y in gy)
+
+        candidates = []
+        for x0 in starts:
+            x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
+            try:
+                res = optimize.least_squares(residual, x0=x0, bounds=bounds, loss='linear',
+                                             max_nfev=250)
+            except Exception:
+                continue
+            if res.success and np.all(np.isfinite(res.x)):
+                raw = raw_residual(res.x)
+                candidates.append({
+                    'x': np.asarray(res.x, dtype=float),
+                    'cost': float(res.cost),
+                    'normalized_cost': float(res.cost / max(len(active_pairs), 1)),
+                    'raw_residual': raw,
+                })
+        if not candidates:
+            return None, {
+                'success': False, 'cost': float('inf'), 'n_pairs': len(active_pairs),
+                'n_uavs': len(idx_used), 'candidate_count': 0,
+            }
+        candidates.sort(key=lambda d: d['cost'])
+        best_item = candidates[0]
+        raw = best_item['raw_residual']
+        cond, gdop = _pair_geometry_metrics(best_item['x'], active_pairs, uav_pos, sqrt_w)
+        tol = 1e-6
+        boundary_hit = bool(
+            np.any(best_item['x'] <= np.asarray(bounds[0]) + tol)
+            or np.any(best_item['x'] >= np.asarray(bounds[1]) - tol)
+        )
+        second = candidates[1] if len(candidates) > 1 else None
+        info = {
+            'success': True,
+            'cost': best_item['cost'],
+            'normalized_cost': best_item['normalized_cost'],
+            'n_pairs': len(active_pairs),
+            'n_uavs': len(idx_used),
+            'candidate_count': len(candidates),
+            'residual_rmse_m': float(np.sqrt(np.mean(raw ** 2))) if raw.size else float('nan'),
+            'mean_abs_residual_m': float(np.mean(np.abs(raw))) if raw.size else float('nan'),
+            'max_abs_residual_m': float(np.max(np.abs(raw))) if raw.size else float('nan'),
+            'geometry_condition': cond,
+            'geometry_gdop': gdop,
+            'boundary_hit': boundary_hit,
+            'second_best_cost': float(second['cost']) if second is not None else float('nan'),
+            'second_best_x': float(second['x'][0]) if second is not None else float('nan'),
+            'second_best_y': float(second['x'][1]) if second is not None else float('nan'),
+            'cost_gap': (
+                float(second['cost'] - best_item['cost'])
+                if second is not None else float('nan')
+            ),
+            'used_uav_indices': ";".join(str(i) for i in idx_used),
+        }
+        return best_item['x'], info
+
+    mode = str(robust_mode or "standard").lower()
+    best, info = solve(pairs, mode)
+    if best is not None and "pruned" in mode and len(pairs) > 4:
+        initial_info = dict(info)
+        delta_ranges = np.asarray([tau * c / fs for _, _, tau, _ in pairs], dtype=float)
+        raw_vals = []
+        for (i, j, _, _), dr in zip(pairs, delta_ranges):
+            raw_vals.append(np.linalg.norm(best - uav_pos[i]) - np.linalg.norm(best - uav_pos[j]) - dr)
+        raw_vals = np.asarray(raw_vals, dtype=float)
+        remove_n = min(max(1, int(np.ceil(0.15 * len(pairs)))), len(pairs) - 3)
+        keep_idx = np.argsort(np.abs(raw_vals))[:len(pairs) - remove_n]
+        pruned_pairs = [pairs[int(i)] for i in keep_idx]
+        pruned_best, pruned_info = solve(pruned_pairs, mode)
+        if pruned_best is not None:
+            best = pruned_best
+            info = dict(pruned_info)
+            info['pruned_pairs_removed'] = int(remove_n)
+            info['pre_prune_cost'] = float(initial_info.get('cost', float('nan')))
+            info['pre_prune_normalized_cost'] = float(
+                initial_info.get('normalized_cost', float('nan'))
+            )
+    else:
+        info['pruned_pairs_removed'] = 0
+
     return best, info
 
 
@@ -269,6 +365,7 @@ def _summarize_errors(errors, requested_count):
             'rmse': float('nan'), 'median': float('nan'), 'trimmed_rmse': float('nan'),
             'p90': float('nan'), 'p95': float('nan'), 'max': float('nan'),
             'valid_count': 0, 'requested_count': int(requested_count), 'failure_rate': 1.0,
+            'outlier_gt20_rate': float('nan'), 'outlier_gt50_rate': float('nan'),
             'se': [],
         }
     p95 = float(np.percentile(finite, 95))
@@ -283,16 +380,119 @@ def _summarize_errors(errors, requested_count):
         'valid_count': int(finite.size),
         'requested_count': int(requested_count),
         'failure_rate': float(1.0 - finite.size / max(int(requested_count), 1)),
+        'outlier_gt20_rate': float(np.mean(finite > 20.0)),
+        'outlier_gt50_rate': float(np.mean(finite > 50.0)),
         'se': [float(v) for v in finite ** 2],
     }
+
+
+def _pack_xy(points):
+    arr = np.asarray(points, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        return ""
+    return ";".join(f"{float(x):.3f},{float(y):.3f}" for x, y in arr)
+
+
+def _pack_pair_field(pair_details, key, fmt="{:.6g}"):
+    values = []
+    for item in pair_details or []:
+        value = item.get(key, "")
+        if isinstance(value, (float, np.floating)):
+            if np.isfinite(value):
+                values.append(fmt.format(float(value)))
+            else:
+                values.append("nan")
+        else:
+            values.append(str(value))
+    return ";".join(values)
+
+
+def _localization_detail(sample_index, error_m, est, meta, los_idx, pair_abs_errors,
+                         pair_sidelobe_ratios, loc_info, pair_details=None):
+    pair_abs_errors = np.asarray(pair_abs_errors, dtype=float)
+    pair_abs_errors = pair_abs_errors[np.isfinite(pair_abs_errors)]
+    pair_sidelobe_ratios = np.asarray(pair_sidelobe_ratios, dtype=float)
+    pair_sidelobe_ratios = pair_sidelobe_ratios[np.isfinite(pair_sidelobe_ratios)]
+    src = np.asarray(meta['source'][sample_index], dtype=float)
+    est = np.asarray(est, dtype=float)
+    loc_info = loc_info or {}
+
+    def _stat(values, fn):
+        return float(fn(values)) if values.size else float('nan')
+
+    return {
+        'sample_index': int(sample_index),
+        'error_m': float(error_m),
+        'source_x': float(src[0]),
+        'source_y': float(src[1]),
+        'estimated_x': float(est[0]),
+        'estimated_y': float(est[1]),
+        'los_count': int(len(los_idx)),
+        'los_uav_indices': ";".join(str(int(v)) for v in los_idx),
+        'los_uav_xy': _pack_xy(np.asarray(meta['uavs'][sample_index], dtype=float)[los_idx]),
+        'used_uav_indices': str(loc_info.get('used_uav_indices', "")),
+        'n_pairs': int(loc_info.get('n_pairs', len(pair_abs_errors))),
+        'n_uavs': int(loc_info.get('n_uavs', len(los_idx))),
+        'wls_cost': float(loc_info.get('cost', float('nan'))),
+        'wls_normalized_cost': float(loc_info.get('normalized_cost', float('nan'))),
+        'residual_rmse_m': float(loc_info.get('residual_rmse_m', float('nan'))),
+        'mean_abs_residual_m': float(loc_info.get('mean_abs_residual_m', float('nan'))),
+        'max_abs_residual_m': float(loc_info.get('max_abs_residual_m', float('nan'))),
+        'geometry_condition': float(loc_info.get('geometry_condition', float('nan'))),
+        'geometry_gdop': float(loc_info.get('geometry_gdop', float('nan'))),
+        'boundary_hit': int(bool(loc_info.get('boundary_hit', False))),
+        'candidate_count': int(loc_info.get('candidate_count', 0)),
+        'second_best_cost': float(loc_info.get('second_best_cost', float('nan'))),
+        'second_best_x': float(loc_info.get('second_best_x', float('nan'))),
+        'second_best_y': float(loc_info.get('second_best_y', float('nan'))),
+        'cost_gap': float(loc_info.get('cost_gap', float('nan'))),
+        'pruned_pairs_removed': int(loc_info.get('pruned_pairs_removed', 0)),
+        'pre_prune_cost': float(loc_info.get('pre_prune_cost', float('nan'))),
+        'pre_prune_normalized_cost': float(
+            loc_info.get('pre_prune_normalized_cost', float('nan'))
+        ),
+        'max_pair_abs_tdoa_error_samples': _stat(pair_abs_errors, np.max),
+        'mean_pair_abs_tdoa_error_samples': _stat(pair_abs_errors, np.mean),
+        'median_pair_abs_tdoa_error_samples': _stat(pair_abs_errors, np.median),
+        'mean_pair_sidelobe_ratio': _stat(pair_sidelobe_ratios, np.mean),
+        'pair_uav_indices': _pack_pair_field(pair_details, 'pair'),
+        'pair_true_tdoa_samples': _pack_pair_field(pair_details, 'true_tdoa'),
+        'pair_est_tdoa_samples': _pack_pair_field(pair_details, 'est_tdoa'),
+        'pair_tdoa_error_samples': _pack_pair_field(pair_details, 'tdoa_error'),
+        'pair_weight': _pack_pair_field(pair_details, 'weight'),
+        'pair_sidelobe_ratio': _pack_pair_field(pair_details, 'sidelobe_ratio'),
+    }
+
+
+def _top_worst_details(details, limit=10):
+    valid = [d for d in details if np.isfinite(d.get('error_m', float('nan')))]
+    valid.sort(key=lambda d: d.get('error_m', float('-inf')), reverse=True)
+    return valid[:int(limit)]
+
+
+def _all_pair_robust_mode(estimator):
+    if estimator == "all_pair_wls":
+        return "standard"
+    if estimator in {
+        "all_pair_wls_grid",
+        "all_pair_wls_pruned",
+        "all_pair_wls_grid_pruned",
+    }:
+        raise ValueError(
+            f"{estimator} was removed from the active evaluation path. "
+            "Fig10 showed it is not a generally valid replacement for all_pair_wls."
+        )
+    return None
 
 
 def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
                                     sub_sample=True, use_los_only=True,
                                     estimator="all_pair_wls", oracle_geometry=False,
-                                    tdoa_lag_limit_samples=None):
+                                    tdoa_lag_limit_samples=None,
+                                    return_details=False):
     errors = []
     failures = 0
+    details = []
     for bi in range(batch_np.shape[0]):
         los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
         if len(los_idx) < 4:
@@ -301,23 +501,40 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
         lags = signal.correlation_lags(batch_np.shape[-1], batch_np.shape[-1], mode='same')
         pair_measurements = []
         los_idx = [int(v) for v in los_idx]
+        pair_abs_errors = []
+        pair_sidelobe_ratios = []
+        pair_details = []
         for a in range(len(los_idx)):
             for b in range(a + 1, len(los_idx)):
                 ui, uj = los_idx[a], los_idx[b]
+                true_tau = (meta['distances'][bi, ui] - meta['distances'][bi, uj]) / (c / fs)
                 if oracle_geometry:
-                    tau = (meta['distances'][bi, ui] - meta['distances'][bi, uj]) / (c / fs)
+                    tau = true_tau
                     weight = 20.0
+                    sidelobe_ratio = float('nan')
                 else:
                     sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                     sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
-                    tau, weight, _, _ = _estimate_delay_from_corr(
+                    tau, weight, _, sidelobe_ratio = _estimate_delay_from_corr(
                         sig_i, sig_j, lags, gcc_func, sub_sample=sub_sample,
                         return_quality=True,
                         tdoa_lag_limit_samples=tdoa_lag_limit_samples
                     )
                 pair_measurements.append((ui, uj, tau, weight))
+                tdoa_error = float(tau - true_tau)
+                pair_abs_errors.append(float(abs(tdoa_error)))
+                pair_sidelobe_ratios.append(float(sidelobe_ratio))
+                pair_details.append({
+                    'pair': f"{ui}-{uj}",
+                    'true_tdoa': float(true_tau),
+                    'est_tdoa': float(tau),
+                    'tdoa_error': tdoa_error,
+                    'weight': float(weight),
+                    'sidelobe_ratio': float(sidelobe_ratio),
+                })
 
-        if estimator != "all_pair_wls":
+        robust_mode = _all_pair_robust_mode(estimator)
+        if robust_mode is None:
             ref_idx = int(los_idx[0])
             ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
             tdoa = {}
@@ -329,13 +546,24 @@ def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
                                                       sub_sample=sub_sample,
                                                       tdoa_lag_limit_samples=tdoa_lag_limit_samples)
             est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+            loc_info = {'success': est is not None, 'cost': float('nan'),
+                        'n_pairs': max(len(tdoa), 0), 'n_uavs': len(los_idx)}
         else:
-            est, _ = _localize_from_tdoa_pairs(meta['uavs'][bi], pair_measurements,
-                                               fs, c, area_size)
+            est, loc_info = _localize_from_tdoa_pairs(meta['uavs'][bi], pair_measurements,
+                                                      fs, c, area_size,
+                                                      robust_mode=robust_mode)
         if est is None:
             failures += 1
             continue
-        errors.append(float(np.linalg.norm(est - meta['source'][bi])))
+        err = float(np.linalg.norm(est - meta['source'][bi]))
+        errors.append(err)
+        if return_details:
+            details.append(_localization_detail(
+                bi, err, est, meta, los_idx, pair_abs_errors, pair_sidelobe_ratios,
+                loc_info, pair_details=pair_details
+            ))
+    if return_details:
+        return errors, details
     return errors
 
 
@@ -343,15 +571,23 @@ def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
                                                direct_estimator, sub_sample=True,
                                                use_los_only=True,
                                                estimator="all_pair_wls",
-                                               tdoa_lag_limit_samples=None):
+                                               tdoa_lag_limit_samples=None,
+                                               return_details=False):
     errors = []
+    details = []
     for bi in range(batch_np.shape[0]):
         los_idx = np.where(meta['los'][bi])[0] if use_los_only else np.arange(batch_np.shape[1])
         los_idx = [int(v) for v in los_idx]
         if len(los_idx) < 4:
             continue
 
-        if estimator != "all_pair_wls":
+        robust_mode = _all_pair_robust_mode(estimator)
+        pair_abs_errors = []
+        pair_sidelobe_ratios = []
+        pair_details = []
+        loc_info = {'success': False, 'cost': float('nan'),
+                    'n_pairs': 0, 'n_uavs': len(los_idx)}
+        if robust_mode is None:
             ref_idx = int(los_idx[0])
             ref_sig = batch_np[bi, ref_idx, 0, :] + 1j * batch_np[bi, ref_idx, 1, :]
             tdoa = {}
@@ -363,25 +599,60 @@ def _localization_errors_from_direct_estimator(batch_np, meta, fs, c, area_size,
                     sig_i, ref_sig, sub_sample=sub_sample, return_quality=False,
                     lag_limit_samples=tdoa_lag_limit_samples
                 )
+                true_tau = (meta['distances'][bi, ui] - meta['distances'][bi, ref_idx]) / (c / fs)
+                tau = float(tdoa[ui])
+                pair_abs_errors.append(float(abs(tau - true_tau)))
+                pair_sidelobe_ratios.append(float('nan'))
+                pair_details.append({
+                    'pair': f"{ui}-{ref_idx}",
+                    'true_tdoa': float(true_tau),
+                    'est_tdoa': tau,
+                    'tdoa_error': float(tau - true_tau),
+                    'weight': float('nan'),
+                    'sidelobe_ratio': float('nan'),
+                })
             est = _localize_from_tdoa(meta['uavs'][bi], ref_idx, tdoa, fs, c, area_size)
+            loc_info = {'success': est is not None, 'cost': float('nan'),
+                        'n_pairs': len(tdoa), 'n_uavs': len(los_idx)}
         else:
             pair_measurements = []
             for a in range(len(los_idx)):
                 for b in range(a + 1, len(los_idx)):
                     ui, uj = los_idx[a], los_idx[b]
+                    true_tau = (meta['distances'][bi, ui] - meta['distances'][bi, uj]) / (c / fs)
                     sig_i = batch_np[bi, ui, 0, :] + 1j * batch_np[bi, ui, 1, :]
                     sig_j = batch_np[bi, uj, 0, :] + 1j * batch_np[bi, uj, 1, :]
-                    tau, weight, _, _ = direct_estimator.estimate_pair(
+                    tau, weight, _, sidelobe_ratio = direct_estimator.estimate_pair(
                         sig_i, sig_j, sub_sample=sub_sample, return_quality=True,
                         lag_limit_samples=tdoa_lag_limit_samples
                     )
                     pair_measurements.append((ui, uj, tau, weight))
-            est, _ = _localize_from_tdoa_pairs(
-                meta['uavs'][bi], pair_measurements, fs, c, area_size
+                    tdoa_error = float(tau - true_tau)
+                    pair_abs_errors.append(float(abs(tdoa_error)))
+                    pair_sidelobe_ratios.append(float(sidelobe_ratio))
+                    pair_details.append({
+                        'pair': f"{ui}-{uj}",
+                        'true_tdoa': float(true_tau),
+                        'est_tdoa': float(tau),
+                        'tdoa_error': tdoa_error,
+                        'weight': float(weight),
+                        'sidelobe_ratio': float(sidelobe_ratio),
+                    })
+            est, loc_info = _localize_from_tdoa_pairs(
+                meta['uavs'][bi], pair_measurements, fs, c, area_size,
+                robust_mode=robust_mode
             )
         if est is None:
             continue
-        errors.append(float(np.linalg.norm(est - meta['source'][bi])))
+        err = float(np.linalg.norm(est - meta['source'][bi]))
+        errors.append(err)
+        if return_details:
+            details.append(_localization_detail(
+                bi, err, est, meta, los_idx, pair_abs_errors, pair_sidelobe_ratios,
+                loc_info, pair_details=pair_details
+            ))
+    if return_details:
+        return errors, details
     return errors
 
 
@@ -522,7 +793,8 @@ class UrbanLocalizationExperiment:
 
     def __init__(self, models_dict, simulator, device, seed=None, gcc_method='standard',
                  snr_range=None, num_trials=200, sub_sample=True, use_los_only=True,
-                 batch_size=64, fixed_eval_set=True, estimator="all_pair_wls"):
+                 batch_size=64, fixed_eval_set=True, estimator="all_pair_wls",
+                 tdoa_lag_limit_samples=None):
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
@@ -534,6 +806,10 @@ class UrbanLocalizationExperiment:
         self.batch_size = int(batch_size)
         self.fixed_eval_set = bool(fixed_eval_set)
         self.estimator = estimator
+        self.tdoa_lag_limit_samples = (
+            None if tdoa_lag_limit_samples is None
+            else float(tdoa_lag_limit_samples)
+        )
         self.gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
         self.gcc_method = gcc_method
 
@@ -552,7 +828,8 @@ class UrbanLocalizationExperiment:
 
     def run(self):
         print(f"Running Urban Localization Sweep (GCC method: {self.gcc_method}, "
-              f"sub_sample={self.sub_sample}, LOS-only={self.use_los_only})...")
+              f"sub_sample={self.sub_sample}, LOS-only={self.use_los_only}, "
+              f"lag_limit={self.tdoa_lag_limit_samples})...")
         if self.seed is not None:
             np.random.seed(self.seed)
             print(f"  Urban localization random seed set to: {self.seed}")
@@ -579,6 +856,7 @@ class UrbanLocalizationExperiment:
                 'area_size': self.sim.area_size,
                 'fixed_eval_set': self.fixed_eval_set,
                 'estimator': self.estimator,
+                'tdoa_lag_limit_samples': self.tdoa_lag_limit_samples,
             },
         }
         for cr in self.models_dict.keys():
@@ -603,17 +881,20 @@ class UrbanLocalizationExperiment:
             geom_err = _localization_errors_from_batch(
                 clean_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
                 sub_sample=self.sub_sample, use_los_only=self.use_los_only,
-                estimator=self.estimator, oracle_geometry=True
+                estimator=self.estimator, oracle_geometry=True,
+                tdoa_lag_limit_samples=self.tdoa_lag_limit_samples
             )
             raw_err = _localization_errors_from_batch(
                 raw_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
                 sub_sample=self.sub_sample, use_los_only=self.use_los_only,
-                estimator=self.estimator
+                estimator=self.estimator,
+                tdoa_lag_limit_samples=self.tdoa_lag_limit_samples
             )
             clean_err = _localization_errors_from_batch(
                 clean_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
                 sub_sample=self.sub_sample, use_los_only=self.use_los_only,
-                estimator=self.estimator
+                estimator=self.estimator,
+                tdoa_lag_limit_samples=self.tdoa_lag_limit_samples
             )
             geom_stats = _summarize_errors(geom_err, self.num_trials)
             raw_stats = _summarize_errors(raw_err, self.num_trials)
@@ -641,7 +922,8 @@ class UrbanLocalizationExperiment:
                 err = _localization_errors_from_batch(
                     y_np, meta, self.sim.fs, self.sim.c, self.sim.area_size, self.gcc_func,
                     sub_sample=self.sub_sample, use_los_only=self.use_los_only,
-                    estimator=self.estimator
+                    estimator=self.estimator,
+                    tdoa_lag_limit_samples=self.tdoa_lag_limit_samples
                 )
                 stats = _summarize_errors(err, self.num_trials)
                 results[f'dae_{cr}'].append(stats['rmse'])
@@ -707,10 +989,12 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
                 "rmse": [], "median": [], "trimmed_rmse": [],
                 "p90": [], "p95": [], "max": [],
                 "valid_count": [], "failure_rate": [],
+                "outlier_gt20_rate": [], "outlier_gt50_rate": [],
             }
             for label in method_order
         },
         "method_diagnostics": {label: {} for label in method_order},
+        "outlier_details": {label: [] for label in method_order},
         "config": {
             "gcc_method": gcc_method,
             "sub_sample": bool(sub_sample),
@@ -740,42 +1024,47 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
         raw_np = X_noisy.numpy()
         clean_np = X_clean.numpy()
 
-        base_inputs = {
-            "Geometry": _localization_errors_from_batch(
+        base_inputs = {}
+        base_details = {}
+        base_inputs["Geometry"], base_details["Geometry"] = _localization_errors_from_batch(
                 clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator, oracle_geometry=True,
-                tdoa_lag_limit_samples=tdoa_lag_limit_samples
-            ),
-            "Raw": _localization_errors_from_batch(
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples,
+                return_details=True
+            )
+        base_inputs["Raw"], base_details["Raw"] = _localization_errors_from_batch(
                 raw_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator,
-                tdoa_lag_limit_samples=tdoa_lag_limit_samples
-            ),
-            "Clean": _localization_errors_from_batch(
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples,
+                return_details=True
+            )
+        base_inputs["Clean"], base_details["Clean"] = _localization_errors_from_batch(
                 clean_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator,
-                tdoa_lag_limit_samples=tdoa_lag_limit_samples
-            ),
-        }
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples,
+                return_details=True
+            )
         model_outputs = _run_named_models(
             models_dict, X_noisy, simulator, device, batch_size=batch_size
         )
         for label, y_np in model_outputs.items():
-            base_inputs[label] = _localization_errors_from_batch(
+            base_inputs[label], base_details[label] = _localization_errors_from_batch(
                 y_np, meta, simulator.fs, simulator.c, simulator.area_size, gcc_func,
                 sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator,
-                tdoa_lag_limit_samples=tdoa_lag_limit_samples
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples,
+                return_details=True
             )
         for label, direct_estimator in direct_estimators.items():
-            base_inputs[label] = _localization_errors_from_direct_estimator(
+            base_inputs[label], base_details[label] = _localization_errors_from_direct_estimator(
                 raw_np, meta, simulator.fs, simulator.c, simulator.area_size,
                 direct_estimator, sub_sample=sub_sample, use_los_only=use_los_only,
                 estimator=estimator,
-                tdoa_lag_limit_samples=tdoa_lag_limit_samples
+                tdoa_lag_limit_samples=tdoa_lag_limit_samples,
+                return_details=True
             )
 
         diagnostic_inputs = {"Raw": raw_np, "Clean": clean_np}
@@ -806,6 +1095,11 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
             dst = results["methods"][label]
             for key in dst.keys():
                 dst[key].append(stats[key if key != "rmse" else "rmse"])
+            top_details = _top_worst_details(base_details.get(label, []), limit=10)
+            results["outlier_details"].setdefault(label, []).append({
+                "snr_db": float(snr),
+                "top": top_details,
+            })
             line.append(f"{label}={stats['rmse']:.2f}m")
         print("  " + " | ".join(line))
 
@@ -818,7 +1112,13 @@ def filter_method_comparison_data(method_data, method_order, config_updates=None
     config_updates = config_updates or {}
     methods = results.get("methods", {})
     diagnostics = results.get("method_diagnostics", {})
-    order = [label for label in method_order if label in methods]
+    outliers = results.get("outlier_details", {})
+    order = []
+    seen = set()
+    for label in method_order:
+        if label in methods and label not in seen:
+            order.append(label)
+            seen.add(label)
     filtered = {
         "metric": results.get("metric", "localization_m"),
         "title": config_updates.get("title", results.get("title", "")),
@@ -827,6 +1127,10 @@ def filter_method_comparison_data(method_data, method_order, config_updates=None
         "method_diagnostics": {
             label: diagnostics.get(label, {}) for label in order
             if label in diagnostics
+        },
+        "outlier_details": {
+            label: outliers.get(label, []) for label in order
+            if label in outliers
         },
         "config": dict(results.get("config", {})),
     }
@@ -1173,7 +1477,7 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
         ax_t = axes[i, 0]
         ax_t.plot(t_us, d['noisy_mag'], color='cornflowerblue', linewidth=0.5, label='Noisy')
         ax_t.plot(t_us, d['clean_mag'], 'k--', linewidth=0.8, label='Clean')
-        ax_t.plot(t_us, d['recon_mag'], 'r', alpha=0.8, linewidth=0.8, label='DAE')
+        ax_t.plot(t_us, d['recon_mag'], 'r', alpha=0.8, linewidth=0.7, label='Reconstructed')
         ax_t.set_ylabel(f"SNR={snr}dB\n|s(t)|", fontsize=9, fontweight='bold')
         ax_t.legend(loc='upper right', fontsize=7, framealpha=0.8)
         ax_t.set_xlim(0, t_us[min(299, d['n_samples'] - 1)])
@@ -1185,7 +1489,7 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
         ax_f = axes[i, 1]
         ax_f.plot(d['f_n'] / 1e6, d['P_n_db'], color='cornflowerblue', linewidth=0.5, label='Noisy')
         ax_f.plot(d['f_c'] / 1e6, d['P_c_db'], 'k--', linewidth=0.8, label='Clean')
-        ax_f.plot(d['f_r'] / 1e6, d['P_r_db'], 'r', linewidth=0.8, label='DAE')
+        ax_f.plot(d['f_r'] / 1e6, d['P_r_db'], 'r', linewidth=0.7, label='Reconstructed')
         ax_f.legend(loc='upper right', fontsize=6, framealpha=0.8, ncol=2)
         if i == num_rows - 1:
             ax_f.set_xlabel("Frequency [MHz]", fontsize=10)
@@ -1197,7 +1501,7 @@ def plot_snr_comparison(model=None, sim=None, device=None, snr_list=None, cr=Non
         ax_c = axes[i, 2]
         ax_c.plot(d['lags'], d['corr_n_norm'], color='cornflowerblue', linewidth=0.8, label='Noisy')
         ax_c.plot(d['lags'], d['corr_c_norm'], 'k--', linewidth=0.8, label='Clean')
-        ax_c.plot(d['lags'], d['corr_r_norm'], 'r', linewidth=1.2, label='DAE')
+        ax_c.plot(d['lags'], d['corr_r_norm'], 'r', linewidth=1.0, label='Reconstructed')
         ax_c.axvline(d['true_tdoa'], color='blue', linestyle='--', linewidth=0.8,
                      label=f"True TDOA={d['true_tdoa']}")
         ax_c.set_xlim(d['true_tdoa'] - 100, d['true_tdoa'] + 100)
@@ -1344,54 +1648,97 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
     snr_plot = snr_all[range_mask]
 
     styles = {
-        "Raw": dict(color="#1f77b4", marker="s", linestyle="-", linewidth=1.5,
+        "Raw": dict(color="#222222", marker="s", linestyle="-", linewidth=1.25,
                     label="Original data"),
-        "Clean": dict(color="black", marker=None, linestyle="--", linewidth=1.2,
+        "Clean": dict(color="black", marker=None, linestyle="--", linewidth=1.05,
                       label="Clean oracle"),
-        "Geometry": dict(color="0.45", marker=None, linestyle=":", linewidth=1.2,
+        "Geometry": dict(color="0.45", marker=None, linestyle=":", linewidth=1.05,
                          label="Geometry oracle"),
-        "DFT-Fisher": dict(color="#8c2d04", marker="X", linestyle=":", linewidth=1.5,
+        "DAE-CR4": dict(color="#08519c", marker="o", linestyle="-", linewidth=1.35,
+                        label="Chen DAE CR=4"),
+        "DAE-CR8": dict(color="#3182bd", marker="s", linestyle="--", linewidth=1.30,
+                        label="Chen DAE CR=8"),
+        "DAE-CR16": dict(color="#6baed6", marker="^", linestyle="-.", linewidth=1.30,
+                         label="Chen DAE CR=16"),
+        "DFT-Fisher": dict(color="#8c2d04", marker="X", linestyle=":", linewidth=1.25,
                            label="DFT Fisher recon"),
-        "DFT-SCS-lite": dict(color="#bcbddc", marker="v", linestyle="--", linewidth=1.5,
+        "DFT-SCS-lite": dict(color="#bcbddc", marker="v", linestyle="--", linewidth=1.20,
                              label="DFT recon"),
-        "DFT-SCS-lite-Direct": dict(color="#756bb1", marker=">", linestyle="-", linewidth=1.6,
+        "DFT-SCS-lite-Direct": dict(color="#756bb1", marker=">", linestyle="-", linewidth=1.30,
                                     label="DFT SCS-lite direct"),
-        "DFT-Fisher-Direct": dict(color="#762a83", marker="X", linestyle="-", linewidth=1.7,
+        "DFT-Fisher-Direct": dict(color="#762a83", marker="X", linestyle="-", linewidth=1.35,
                                   label="Balanced Fisher direct"),
-        "DFT-train-power-Direct": dict(color="#01665e", marker="P", linestyle="-", linewidth=1.8,
+        "DFT-train-power-Direct": dict(color="#01665e", marker="P", linestyle="-", linewidth=1.35,
                                        label="DFT train-power direct"),
-        "Cao2017-DFT-AML": dict(color="#005ab5", marker="h", linestyle="-", linewidth=1.7,
+        "DFT-GeoAmbi": dict(color="#1b9e77", marker="H", linestyle=":", linewidth=1.20,
+                            label="GeoAmbi DFT recon"),
+        "GeoAmbi-DFT-Direct": dict(color="#009e73", marker="H", linestyle="--", linewidth=1.35,
+                                   label="GeoAmbi DFT direct"),
+        "GeoAmbi-DFT-AML": dict(color="#00441b", marker="H", linestyle="-", linewidth=1.45,
+                                label="GeoAmbi DFT-AML"),
+        "GeoAmbi-DFT-PHAT": dict(color="#41ab5d", marker="h", linestyle="-.", linewidth=1.30,
+                                 label="GeoAmbi DFT-PHAT"),
+        "GeoHybrid-DFT": dict(color="#e6550d", marker="D", linestyle="-", linewidth=1.45,
+                              label="GeoHybrid DFT v2"),
+        "GeoHybrid-DFT-PHAT-gated": dict(color="#fdae6b", marker="d", linestyle="--", linewidth=1.30,
+                                         label="GeoHybrid PHAT-gated"),
+        "Cao2017-DFT-AML": dict(color="#007c91", marker="h", linestyle="-", linewidth=1.35,
                                 label="Cao2017 DFT-AML"),
-        "Cao2020-HighFC": dict(color="#56b4e9", marker=">", linestyle=(0, (5, 1)), linewidth=1.6,
+        "Cao2020-HighFC": dict(color="#56b4e9", marker=">", linestyle=(0, (5, 1)), linewidth=1.25,
                                label="Cao2020 segmented FC"),
-        "Zhai-CRLB-Decimation": dict(color="#cc79a7", marker="8", linestyle="-", linewidth=1.7,
+        "Zhai-CRLB-Decimation": dict(color="#cc79a7", marker="8", linestyle="-", linewidth=1.35,
                                      label="Zhai CRLB decimation"),
-        "Zhai-Phase-Superposition": dict(color="#d55e00", marker="P", linestyle="-.", linewidth=1.7,
+        "Zhai-Phase-Superposition": dict(color="#d55e00", marker="P", linestyle="-.", linewidth=1.30,
                                          label="Zhai weighted phase"),
-        "DFT-Zhai-CRLB": dict(color="#cc79a7", marker="8", linestyle=":", linewidth=1.4,
+        "FreqDAE-CR4": dict(color="#b2182b", marker="*", linestyle="-", linewidth=1.45,
+                            label="FreqDAE CR=4"),
+        "FreqDAE-CR8": dict(color="#d6604d", marker="P", linestyle="--", linewidth=1.40,
+                            label="FreqDAE CR=8"),
+        "FreqDAE-CR16": dict(color="#f46d43", marker="X", linestyle="-.", linewidth=1.35,
+                             label="FreqDAE CR=16"),
+        "FreqDAE-v2-CR4": dict(color="#7a0177", marker="*", linestyle="-", linewidth=1.45,
+                               label="FreqDAE v2 CR=4"),
+        "FreqDAE-v2-CR8": dict(color="#c51b8a", marker="P", linestyle="--", linewidth=1.40,
+                               label="FreqDAE v2 CR=8"),
+        "FreqDAE-v2-CR16": dict(color="#f768a1", marker="X", linestyle="-.", linewidth=1.35,
+                                label="FreqDAE v2 CR=16"),
+        "FreqDAE-v3-CR4": dict(color="#006d2c", marker="*", linestyle="-", linewidth=1.45,
+                               label="FreqDAE v3 CR=4"),
+        "FreqDAE-v3-CR8": dict(color="#31a354", marker="P", linestyle="--", linewidth=1.40,
+                               label="FreqDAE v3 CR=8"),
+        "FreqDAE-v3-CR16": dict(color="#74c476", marker="X", linestyle="-.", linewidth=1.35,
+                                label="FreqDAE v3 CR=16"),
+        "DFT-Zhai-CRLB": dict(color="#cc79a7", marker="8", linestyle=":", linewidth=1.15,
                               label="DFT Zhai-CRLB recon"),
-        "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.5,
+        "DFT-train-band": dict(color="#6a51a3", marker="^", linestyle="-.", linewidth=1.20,
                                label="DFT train-band"),
-        "DFT-train-power": dict(color="#80cdc1", marker="D", linestyle="--", linewidth=1.4,
+        "DFT-train-power": dict(color="#80cdc1", marker="D", linestyle="--", linewidth=1.15,
                                 label="DFT train-power"),
-        "DFT": dict(color="#4b0082", marker="^", linestyle="-", linewidth=1.9,
+        "DFT": dict(color="#4b0082", marker="^", linestyle="-", linewidth=1.35,
                     label="DFT direct"),
-        "DFT-uniform": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
+        "DFT-uniform": dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.15,
                             label="DFT-uniform"),
-        "DFT-bandlimited": dict(color="#8c6bb1", marker="v", linestyle=":", linewidth=1.3,
+        "DFT-bandlimited": dict(color="#8c6bb1", marker="v", linestyle=":", linewidth=1.10,
                                 label="DFT known-band"),
-        "DFT-random": dict(color="#bcbddc", marker="^", linestyle="--", linewidth=1.3,
+        "DFT-random": dict(color="#bcbddc", marker="^", linestyle="--", linewidth=1.10,
                            label="DFT-random mean"),
-        "Hadamard": dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.4,
+        "Hadamard": dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.20,
                          label="Hadamard Salari"),
-        "Hadamard-random": dict(color="#fdae6b", marker="D", linestyle="--", linewidth=1.3,
+        "Hadamard-random": dict(color="#fdae6b", marker="D", linestyle="--", linewidth=1.10,
                                 label="Hadamard-random mean"),
-        "Hadamard-sequency": dict(color="#e6550d", marker="d", linestyle=":", linewidth=1.3,
+        "Hadamard-sequency": dict(color="#e6550d", marker="d", linestyle=":", linewidth=1.10,
                                   label="Hadamard-sequency"),
         "Hadamard-block-2": dict(color="#a63603", marker="p", linestyle=(0, (3, 1, 1, 1)),
-                                 linewidth=1.3, label="Hadamard block-2"),
-        "PCA": dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.4,
+                                 linewidth=1.10, label="Hadamard block-2"),
+        "PCA": dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.20,
                     label="PCA"),
+    }
+    locator_suffix_styles = {
+        "WLS": dict(linestyle="-", marker="o", suffix_label="WLS"),
+        "Grid": dict(linestyle="--", marker="s", suffix_label="grid WLS"),
+        "Pruned": dict(linestyle="-.", marker="^", suffix_label="pruned WLS"),
+        "Grid+Pruned": dict(linestyle=(0, (3, 1, 1, 1)), marker="D",
+                             suffix_label="grid+pruned WLS"),
     }
 
     baseline_cr = config.get("baseline_cr", 16)
@@ -1419,11 +1766,11 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
             hi_y = np.nanmax(stack, axis=0)
             base_label = prefix[:-1] if prefix.endswith("-") else prefix
             style = dict(styles.get(base_label, dict(marker="*", linestyle="--",
-                                                     linewidth=1.4, label=base_label)))
+                                                     linewidth=1.15, label=base_label)))
             marker = style.pop("marker", None)
             color = style.get("color", None)
             ax.plot(snr_plot, mean_y[range_mask], marker=marker,
-                    markersize=5 if marker else 0, **style)
+                    markersize=4.5 if marker else 0, **style)
             plotted_for_zoom.append((mean_y, marker, dict(style)))
             if stack.shape[0] > 1 and color is not None:
                 ax.fill_between(snr_plot, lo_y[range_mask], hi_y[range_mask],
@@ -1434,30 +1781,47 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
         y = np.asarray(methods[label].get(metric_key, []), dtype=float)
         if y.size == 0:
             continue
-        style = dict(styles.get(label, dict(marker="*", linestyle="-", linewidth=1.6, label=label)))
-        if label.startswith("DFT") and label not in styles:
-            style = dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.4,
+        base_label = label
+        locator_label = None
+        if isinstance(label, str) and "|" in label:
+            base_label, locator_label = label.split("|", 1)
+        style = dict(styles.get(base_label, styles.get(label, dict(
+            marker="*", linestyle="-", linewidth=1.20, label=label
+        ))))
+        if locator_label is not None:
+            suffix_style = locator_suffix_styles.get(locator_label, {})
+            style.update({k: v for k, v in suffix_style.items() if k != "suffix_label"})
+            base_display = styles.get(base_label, {}).get("label", base_label)
+            suffix_display = suffix_style.get("suffix_label", locator_label)
+            style["label"] = f"{base_display} | {suffix_display}"
+            style["linewidth"] = min(float(style.get("linewidth", 1.2)), 1.15)
+        if base_label.startswith("DFT") and base_label not in styles and label not in styles:
+            style = dict(color="#9467bd", marker="^", linestyle="-.", linewidth=1.15,
                          label=label)
-        elif (label.startswith("Hadamard-offset") or label.startswith("Hadamard-block")) and label not in styles:
+        elif ((base_label.startswith("Hadamard-offset") or base_label.startswith("Hadamard-block"))
+              and base_label not in styles and label not in styles):
             style = dict(color="#a63603", marker="p", linestyle=(0, (3, 1, 1, 1)),
-                         linewidth=1.3, label=label)
-        elif label.startswith("Hadamard") and label not in styles:
-            style = dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.4,
+                         linewidth=1.10, label=label)
+        elif base_label.startswith("Hadamard") and base_label not in styles and label not in styles:
+            style = dict(color="#ff7f0e", marker="d", linestyle="-.", linewidth=1.15,
                          label=label)
-        elif label.startswith("PCA") and label not in styles:
-            style = dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.4,
+        elif base_label.startswith("PCA") and base_label not in styles and label not in styles:
+            style = dict(color="#2ca02c", marker="o", linestyle="-.", linewidth=1.15,
                          label=label)
-        if label.startswith("DAE"):
-            style = dict(color="#d62728", marker="*", linestyle="-", linewidth=1.7,
+        if base_label.startswith("DAE") and base_label not in styles and label not in styles:
+            style = dict(color="#3182bd", marker="*", linestyle="-", linewidth=1.25,
                          label=label)
-        if label == "DFT":
+        elif base_label.startswith("FreqDAE") and base_label not in styles and label not in styles:
+            style = dict(color="#b2182b", marker="*", linestyle="-", linewidth=1.30,
+                         label=label)
+        if base_label == "DFT" and locator_label is None:
             source = config.get("chen_fig6_dft_direct_source")
             if source:
                 short_source = str(source).replace("DFT-", "")
                 style["label"] = f"DFT direct ({short_source} bins)"
         marker = style.pop("marker", None)
         ax.plot(snr_plot, y[range_mask], marker=marker,
-                markersize=5 if marker else 0, **style)
+                markersize=4.5 if marker else 0, **style)
         plotted_for_zoom.append((y, marker, dict(style)))
 
     ax.set_xlabel("SNR [dB]", fontsize=12)
@@ -1530,8 +1894,9 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
                 except Exception:
                     pass
     if legend:
-        legend_cols = 4 if plot_kind == "strong" else 3
-        ax.legend(fontsize=9, ncol=legend_cols, framealpha=0.95, loc="upper center",
+        legend_cols = 5 if plot_kind == "strong" else 3
+        ax.legend(fontsize=8.2 if plot_kind == "strong" else 8.8,
+                  ncol=legend_cols, framealpha=0.95, loc="upper center",
                   bbox_to_anchor=(0.5, -0.16), borderaxespad=0.0)
     if created_fig:
         fig.subplots_adjust(bottom=0.27, left=0.11, right=0.98, top=0.90)
@@ -1585,8 +1950,9 @@ def plot_method_zoom_pair(method_data, metric_key="rmse", plot_kind="supplement"
             if label not in labels:
                 handles.append(handle)
                 labels.append(label)
-    ncol = 4 if plot_kind == "strong" else 3
-    fig.legend(handles, labels, fontsize=8.5, ncol=ncol, framealpha=0.95,
+    ncol = 5 if plot_kind == "strong" else 3
+    fig.legend(handles, labels, fontsize=8.0 if plot_kind == "strong" else 8.5,
+               ncol=ncol, framealpha=0.95,
                loc="lower center", bbox_to_anchor=(0.5, 0.01))
     fig.suptitle(f"{title_map.get(plot_kind, 'Method comparison')} - SNR Zooms",
                  fontsize=12)
@@ -1608,7 +1974,7 @@ def plot_snr_comparison_multi(cr_list, data_dict, title_suffix=""):
     """
     snr_list = sorted(data_dict.keys())
     num_rows = len(snr_list)
-    cr_colors = {4: '#E74C3C', 8: '#2ECC71', 16: '#F39C12'}
+    cr_colors = {4: '#08519c', 8: '#d6604d', 16: '#4b0082'}
     cr_styles = {4: '-', 8: '--', 16: '-.'}
 
     fig, axes = plt.subplots(num_rows, 3, figsize=(14, 2.1 * num_rows + 0.4))
@@ -1629,11 +1995,11 @@ def plot_snr_comparison_multi(cr_list, data_dict, title_suffix=""):
 
         # --- 时域 ---
         ax_t = axes[i, 0]
-        ax_t.plot(t_us, d['noisy_mag'], color='cornflowerblue', linewidth=0.4, label='Noisy', alpha=0.7)
-        ax_t.plot(t_us, d['clean_mag'], 'k--', linewidth=0.6, label='Clean')
+        ax_t.plot(t_us, d['noisy_mag'], color='#7aa6dc', linewidth=0.35, label='Noisy', alpha=0.7)
+        ax_t.plot(t_us, d['clean_mag'], 'k--', linewidth=0.55, label='Clean')
         for cr in cr_list:
             ax_t.plot(t_us, d['recon_mag'][cr], color=cr_colors.get(cr, 'r'),
-                      linewidth=0.6, linestyle=cr_styles.get(cr, '-'),
+                      linewidth=0.55, linestyle=cr_styles.get(cr, '-'),
                       label=f'DAE CR={cr}')
         ax_t.set_ylabel(f"SNR={snr}dB\n|s(t)|", fontsize=9, fontweight='bold')
         ax_t.legend(loc='upper right', fontsize=6, framealpha=0.8, ncol=2)
@@ -1644,12 +2010,12 @@ def plot_snr_comparison_multi(cr_list, data_dict, title_suffix=""):
 
         # --- 频域 (所有CR的PSD叠加) ---
         ax_f = axes[i, 1]
-        ax_f.plot(d['f_n'] / 1e6, d['P_n_db'], color='cornflowerblue', linewidth=0.4, label='Noisy', alpha=0.7)
-        ax_f.plot(d['f_c'] / 1e6, d['P_c_db'], 'k--', linewidth=0.6, label='Clean')
+        ax_f.plot(d['f_n'] / 1e6, d['P_n_db'], color='#7aa6dc', linewidth=0.35, label='Noisy', alpha=0.7)
+        ax_f.plot(d['f_c'] / 1e6, d['P_c_db'], 'k--', linewidth=0.55, label='Clean')
         for cr in cr_list:
             if 'P_r_db' in d and cr in d['P_r_db']:
                 ax_f.plot(d['f_n'] / 1e6, d['P_r_db'][cr], color=cr_colors.get(cr, 'r'),
-                          linewidth=0.6, linestyle=cr_styles.get(cr, '-'),
+                          linewidth=0.55, linestyle=cr_styles.get(cr, '-'),
                           alpha=0.9, label=f'DAE CR={cr}')
         ax_f.legend(loc='upper right', fontsize=6, framealpha=0.8, ncol=2)
         ax_f.grid(alpha=0.3)
@@ -1660,11 +2026,11 @@ def plot_snr_comparison_multi(cr_list, data_dict, title_suffix=""):
 
         # --- 互相关 ---
         ax_c = axes[i, 2]
-        ax_c.plot(d['lags'], d['corr_n_norm'], color='cornflowerblue', linewidth=0.5, label='Noisy')
-        ax_c.plot(d['lags'], d['corr_c_norm'], 'k--', linewidth=0.6, label='Clean')
+        ax_c.plot(d['lags'], d['corr_n_norm'], color='#7aa6dc', linewidth=0.45, label='Noisy')
+        ax_c.plot(d['lags'], d['corr_c_norm'], 'k--', linewidth=0.55, label='Clean')
         for cr in cr_list:
             ax_c.plot(d['lags'], d['corr_r_norm'][cr], color=cr_colors.get(cr, 'r'),
-                      linewidth=1.0, linestyle=cr_styles.get(cr, '-'),
+                      linewidth=0.9, linestyle=cr_styles.get(cr, '-'),
                       label=f'DAE CR={cr}')
         ax_c.axvline(d['true_tdoa'], color='blue', linestyle=':', linewidth=0.6,
                      label=f"True TDOA={d['true_tdoa']}")
