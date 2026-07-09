@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from evaluate import (filter_method_comparison_data, plot_method_comparison,
-                      plot_method_zoom_pair)
+                      plot_method_zoom_pair,
+                      build_tdoa_metrics_from_method_comparison)
 
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -409,6 +410,109 @@ def export_method_outlier_details(method_results, out_dir, table_prefix="fig6"):
                          rows, fields)
 
 
+def make_tdoa_results(data, key="tdoa_results", fallback_keys=None):
+    tdoa_results = data.get(key)
+    if tdoa_results is not None:
+        return tdoa_results
+    fallback_keys = fallback_keys or [
+        "fig9_results", "fig8_results", "fig7_results", "fig6_results",
+    ]
+    for fallback_key in fallback_keys:
+        method_results = data.get(fallback_key)
+        if method_results is None:
+            continue
+        results, _ = method_results
+        config = results.get("config", {})
+        order = (
+            config.get("strong_method_order")
+            or config.get("taskaware_method_order")
+            or config.get("main_method_order")
+            or results.get("method_order", [])
+        )
+        keep = []
+        seen = set()
+        for label in ["Raw", "Clean", "Geometry"] + list(order):
+            if label not in seen:
+                keep.append(label)
+                seen.add(label)
+        built = build_tdoa_metrics_from_method_comparison(
+            method_results, method_order=keep, prefer_direct=True
+        )
+        if built is not None:
+            baseline_cr = config.get("baseline_cr", 16)
+            built[0].setdefault("config", {}).update({
+                "table_prefix": "tdoa",
+                "strong_figure_filename": f"Fig_TDOA_MAE_CR{baseline_cr}",
+                "tdoa_within1_figure_filename": f"Fig_TDOA_Within1_CR{baseline_cr}",
+                "tdoa_source_view": fallback_key,
+            })
+            return built
+    return None
+
+
+def export_tdoa_metrics(tdoa_results, out_dir, table_prefix="tdoa",
+                        export_figures=True):
+    if not tdoa_results:
+        print(f"[Skip] No {table_prefix}_results found in plot_data.pkl")
+        return
+    results, snr_range = tdoa_results
+    methods = results.get("methods", {})
+    order = results.get("method_order", list(methods.keys()))
+    rows = []
+    metric_keys = [
+        "tdoa_mae_samples",
+        "tdoa_weighted_abs_samples",
+        "tdoa_median_abs_samples",
+        "tdoa_within_1_sample_rate",
+        "tdoa_within_2_sample_rate",
+        "tdoa_sidelobe_ratio",
+    ]
+    for i, snr in enumerate(snr_range):
+        for label in order:
+            vals = methods.get(label, {})
+            if not vals:
+                continue
+            row = {
+                "SNR_dB": float(snr),
+                "method": label,
+                "tdoa_source": (
+                    vals.get("tdoa_source", [""] * len(snr_range))[i]
+                    if i < len(vals.get("tdoa_source", [])) else ""
+                ),
+            }
+            has_value = False
+            for key in metric_keys:
+                series = vals.get(key, [])
+                value = series[i] if i < len(series) else ""
+                row[key] = value
+                if value != "":
+                    has_value = True
+            if has_value:
+                rows.append(row)
+    fields = ["SNR_dB", "method", "tdoa_source"] + metric_keys
+    write_csv(os.path.join(out_dir, f"{table_prefix}_method_tdoa_metrics.csv"),
+              rows, fields)
+    write_markdown_table(os.path.join(out_dir, f"{table_prefix}_method_tdoa_metrics.md"),
+                         rows, fields)
+
+    if export_figures:
+        config = results.get("config", {})
+        for metric_key, filename in [
+            ("tdoa_mae_samples", config.get("strong_figure_filename", "Fig_TDOA_MAE_CR16")),
+            ("tdoa_within_1_sample_rate",
+             config.get("tdoa_within1_figure_filename", "Fig_TDOA_Within1_CR16")),
+        ]:
+            fig = plot_method_comparison(
+                tdoa_results, metric_key=metric_key, plot_kind="strong"
+            )
+            path = os.path.join(out_dir, f"{filename}.svg")
+            fig.savefig(path, format="svg", bbox_inches="tight")
+            plt.close(fig)
+            print(f"[Saved] {path}")
+    else:
+        print(f"[Skip] {table_prefix} TDOA SVG export disabled.")
+
+
 def export_fig6_baselines(fig6_results, out_dir, export_figures=True):
     export_method_baselines(
         fig6_results, out_dir, table_prefix="fig6",
@@ -560,9 +664,17 @@ def make_fig9_focus_results(data):
         ]
         if label in methods
     ]
+    compressed_order = [
+        label for label in [
+            "V5A-CR16",
+            "V5A1-Uniform64", "V5A1-Power64", "V5A1-Cao64", "V5A1-GeoHybrid64",
+            "V5B-Expert64",
+        ]
+        if label in methods
+    ]
     focus_order = [
         "Raw", "DAE-CR4", "DAE-CR8", "DAE-CR16",
-    ] + innovation_order
+    ] + innovation_order + compressed_order
     focus_keep = ["Raw", "Clean", "Geometry"] + focus_order
     return filter_method_comparison_data(
         fig9_results, focus_keep,
@@ -701,6 +813,11 @@ def export_summary_md(data, result_dir, out_dir):
             f.write("- Fig9 focused DAE comparison: available; this view removes "
                     "traditional/strong baselines and keeps Raw plus Chen-DAE/FreqDAE "
                     "CR4/CR8/CR16 for direct new-vs-old CR readability.\n\n")
+        if make_tdoa_results(data, key="tdoa_results") is not None:
+            f.write("- TDOA-only comparison: available; this view promotes existing "
+                    "GCC/direct TDOA diagnostics before WLS localization, so it can "
+                    "separate pairwise delay-estimation quality from geometry/localizer "
+                    "error amplification.\n\n")
         if data.get("fig10_localizer_results") is not None:
             f.write("- Fig10 localizer robustness ablation: available; this is a "
                     "supplement-only high-SNR check that compares default all-pair WLS "
@@ -761,6 +878,19 @@ def export(result_dir, export_fig6_figures=True, export_markdown_tables=True,
                            export_figures=bool(export_fig6_figures))
     export_fig9_focus(make_fig9_focus_results(data), out_dir,
                       export_figures=bool(export_fig6_figures))
+    export_tdoa_metrics(
+        make_tdoa_results(data, key="tdoa_results"),
+        out_dir, table_prefix="tdoa",
+        export_figures=bool(export_fig6_figures),
+    )
+    export_tdoa_metrics(
+        make_tdoa_results(
+            data, key="tdoa_focus_results",
+            fallback_keys=["fig9_focus_results", "fig9_results"],
+        ),
+        out_dir, table_prefix="tdoa_focus",
+        export_figures=False,
+    )
     export_fig10_localizer(data.get("fig10_localizer_results"), out_dir,
                            export_figures=bool(export_fig6_figures))
     export_summary_md(data, result_dir, out_dir)

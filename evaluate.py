@@ -1138,6 +1138,175 @@ def filter_method_comparison_data(method_data, method_order, config_updates=None
     return filtered, snr_range
 
 
+def _series_value(series, index):
+    """Read a numeric diagnostic series value with NaN fallback."""
+    if series is None or index >= len(series):
+        return float("nan")
+    try:
+        return float(series[index])
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _finite(value):
+    try:
+        return bool(np.isfinite(float(value)))
+    except (TypeError, ValueError):
+        return False
+
+
+def build_tdoa_metrics_from_method_comparison(method_data, method_order=None,
+                                              prefer_direct=True,
+                                              title=None):
+    """
+    Build a TDOA-first view from method-comparison diagnostics.
+
+    The localization figures remain downstream validation. This converter
+    promotes the existing per-method GCC/direct TDOA diagnostics into a normal
+    method-comparison object so plotting/export can compare compression methods
+    before WLS geometry amplifies pair errors.
+    """
+    if not method_data:
+        return None
+    results, snr_range = method_data
+    diagnostics = results.get("method_diagnostics", {})
+    base_methods = results.get("methods", {})
+    source_order = method_order or results.get("method_order", list(base_methods.keys()))
+    snr_len = len(snr_range)
+    config = dict(results.get("config", {}))
+    baseline_cr = config.get("baseline_cr", 16)
+    title = title or config.get(
+        "tdoa_title",
+        f"Figure TDOA: Pairwise TDOA Error Before Localization (CR={baseline_cr})",
+    )
+
+    methods = {}
+    order = []
+    direct_prefix = "direct"
+    gcc_prefix = "gcc"
+    metric_map = {
+        "mean_abs": "mean_abs_tdoa_error_samples",
+        "weighted_abs": "weighted_abs_tdoa_error_samples",
+        "median_abs": "median_abs_tdoa_error_samples",
+        "within_1": "within_1_sample_rate",
+        "within_2": "within_2_sample_rate",
+        "sidelobe": "mean_sidelobe_ratio",
+    }
+
+    for label in source_order:
+        if label == "Geometry":
+            methods[label] = {
+                "tdoa_mae_samples": [0.0] * snr_len,
+                "tdoa_weighted_abs_samples": [0.0] * snr_len,
+                "tdoa_median_abs_samples": [0.0] * snr_len,
+                "tdoa_within_1_sample_rate": [1.0] * snr_len,
+                "tdoa_within_2_sample_rate": [1.0] * snr_len,
+                "tdoa_sidelobe_ratio": [0.0] * snr_len,
+                "tdoa_source": ["geometry_oracle"] * snr_len,
+                "rmse": [0.0] * snr_len,
+            }
+            order.append(label)
+            continue
+
+        diag = diagnostics.get(label, {})
+        if not diag:
+            continue
+
+        method_values = {
+            "tdoa_mae_samples": [],
+            "tdoa_weighted_abs_samples": [],
+            "tdoa_median_abs_samples": [],
+            "tdoa_within_1_sample_rate": [],
+            "tdoa_within_2_sample_rate": [],
+            "tdoa_sidelobe_ratio": [],
+            "tdoa_source": [],
+            "rmse": [],
+        }
+        has_any = False
+        for i in range(snr_len):
+            direct_mae = _series_value(
+                diag.get(f"{direct_prefix}_{metric_map['mean_abs']}"), i
+            )
+            gcc_mae = _series_value(
+                diag.get(f"{gcc_prefix}_{metric_map['mean_abs']}"), i
+            )
+            if prefer_direct and _finite(direct_mae):
+                prefix = direct_prefix
+                mae = direct_mae
+            elif _finite(gcc_mae):
+                prefix = gcc_prefix
+                mae = gcc_mae
+            elif _finite(direct_mae):
+                prefix = direct_prefix
+                mae = direct_mae
+            else:
+                prefix = None
+                mae = float("nan")
+
+            if prefix is None:
+                method_values["tdoa_mae_samples"].append(float("nan"))
+                method_values["tdoa_weighted_abs_samples"].append(float("nan"))
+                method_values["tdoa_median_abs_samples"].append(float("nan"))
+                method_values["tdoa_within_1_sample_rate"].append(float("nan"))
+                method_values["tdoa_within_2_sample_rate"].append(float("nan"))
+                method_values["tdoa_sidelobe_ratio"].append(float("nan"))
+                method_values["tdoa_source"].append("")
+                method_values["rmse"].append(float("nan"))
+                continue
+
+            has_any = True
+            method_values["tdoa_mae_samples"].append(mae)
+            method_values["tdoa_weighted_abs_samples"].append(_series_value(
+                diag.get(f"{prefix}_{metric_map['weighted_abs']}"), i
+            ))
+            method_values["tdoa_median_abs_samples"].append(_series_value(
+                diag.get(f"{prefix}_{metric_map['median_abs']}"), i
+            ))
+            method_values["tdoa_within_1_sample_rate"].append(_series_value(
+                diag.get(f"{prefix}_{metric_map['within_1']}"), i
+            ))
+            method_values["tdoa_within_2_sample_rate"].append(_series_value(
+                diag.get(f"{prefix}_{metric_map['within_2']}"), i
+            ))
+            method_values["tdoa_sidelobe_ratio"].append(_series_value(
+                diag.get(f"{prefix}_{metric_map['sidelobe']}"), i
+            ))
+            method_values["tdoa_source"].append(prefix)
+            method_values["rmse"].append(mae)
+
+        if has_any:
+            methods[label] = method_values
+            order.append(label)
+
+    if not methods:
+        return None
+
+    tdoa_config = dict(config)
+    tdoa_config.update({
+        "main_title": title,
+        "strong_title": title,
+        "taskaware_title": title,
+        "supplement_title": title,
+        "main_method_order": order,
+        "strong_method_order": order,
+        "taskaware_method_order": order,
+        "supplement_method_order": order,
+        "table_prefix": tdoa_config.get("tdoa_table_prefix", "tdoa"),
+        "tdoa_metric_source_preference": (
+            "direct_then_gcc" if prefer_direct else "gcc_then_direct"
+        ),
+    })
+    return {
+        "metric": "tdoa_samples",
+        "title": title,
+        "method_order": order,
+        "methods": methods,
+        "method_diagnostics": diagnostics,
+        "outlier_details": results.get("outlier_details", {}),
+        "config": tdoa_config,
+    }, snr_range
+
+
 class MonteCarloExperiment:
     """
     蒙特卡洛实验类
@@ -1636,7 +1805,20 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
     else:
         order = config.get("main_method_order", results.get("method_order", list(methods.keys())))
     metric = results.get("metric", "localization_m")
-    y_label = "Localization RMSE [m]" if metric == "localization_m" else "TDOA RMSE [samples]"
+    if metric == "localization_m":
+        y_label = "Localization RMSE [m]"
+    elif metric_key == "tdoa_mae_samples":
+        y_label = "TDOA MAE [samples]"
+    elif metric_key == "tdoa_median_abs_samples":
+        y_label = "TDOA Median Abs. Error [samples]"
+    elif metric_key == "tdoa_weighted_abs_samples":
+        y_label = "Weighted TDOA Abs. Error [samples]"
+    elif metric_key in ("tdoa_within_1_sample_rate", "tdoa_within_2_sample_rate"):
+        y_label = "TDOA Success Rate"
+    elif metric_key == "tdoa_sidelobe_ratio":
+        y_label = "Mean Sidelobe Ratio"
+    else:
+        y_label = "TDOA Error [samples]"
     snr_all = np.asarray(snr_range, dtype=float)
     range_mask = np.ones_like(snr_all, dtype=bool)
     if snr_min is not None:
@@ -1704,6 +1886,16 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
                                          label="Zhai weighted phase"),
         "V5A-CR16": dict(color="#111111", marker="*", linestyle="-", linewidth=1.55,
                          label="V5-A learned compressed TDOA CR=16"),
+        "V5A1-Uniform64": dict(color="#252525", marker="*", linestyle="--", linewidth=1.30,
+                               label="V5-A.1 hard-bin uniform"),
+        "V5A1-Power64": dict(color="#006d2c", marker="P", linestyle="-", linewidth=1.35,
+                             label="V5-A.1 hard-bin power"),
+        "V5A1-Cao64": dict(color="#238b45", marker="X", linestyle="-.", linewidth=1.30,
+                           label="V5-A.1 hard-bin Cao"),
+        "V5A1-GeoHybrid64": dict(color="#41ab5d", marker="*", linestyle=":", linewidth=1.35,
+                                 label="V5-A.1 hard-bin GeoHybrid"),
+        "V5B-Expert64": dict(color="#b30000", marker="*", linestyle="-", linewidth=1.55,
+                             label="V5-B expert mixture CR=16"),
         "FreqDAE-CR4": dict(color="#b2182b", marker="*", linestyle="-", linewidth=1.45,
                             label="FreqDAE CR=4"),
         "FreqDAE-CR8": dict(color="#d6604d", marker="P", linestyle="--", linewidth=1.40,
@@ -1846,6 +2038,8 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
 
     ax.set_xlabel("SNR [dB]", fontsize=12)
     ax.set_ylabel(y_label, fontsize=12)
+    if metric_key in ("tdoa_within_1_sample_rate", "tdoa_within_2_sample_rate"):
+        ax.set_ylim(-0.03, 1.03)
     if plot_kind == "strong":
         title = config.get(
             "strong_title",

@@ -17,7 +17,8 @@ from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_mo
                       plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
                       clean_peak_consistency, run_urban_method_comparison,
                       plot_method_comparison, plot_method_zoom_pair,
-                      filter_method_comparison_data)
+                      filter_method_comparison_data,
+                      build_tdoa_metrics_from_method_comparison)
 from model import (
     DAE,
     FrequencyPairwiseDAE,
@@ -36,8 +37,13 @@ from task_baselines import (
 )
 from compressed_tdoa import (
     LearnedCompressedTDOAEstimator,
+    LearnedHardBinCompressedTDOAEstimator,
     V5ATrainConfig,
+    V5A1TrainConfig,
+    V5BExpertGatedTDOAEstimator,
+    prepare_v5a1_hardbin_dataset,
     train_v5a_compressed_tdoa,
+    train_v5a1_hardbin_tdoa,
 )
 from experiment_cache import (
     load_static_baseline_cache,
@@ -69,6 +75,19 @@ INNOVATION_MODES = (
     FREQ_TASK_MODES + FREQ_TASK_V2_MODES + FREQ_TASK_V3_MODES + FREQ_TASK_V4_MODES
 )
 COMPRESSED_TDOA_V5A_MODES = ("compressed_tdoa_v5a_fast",)
+COMPRESSED_TDOA_V5A1_MODES = ("compressed_tdoa_v5a1_hardbin_fast",)
+COMPRESSED_TDOA_V5B_MODES = ("compressed_tdoa_v5b_fast",)
+COMPRESSED_TDOA_MODES = (
+    COMPRESSED_TDOA_V5A_MODES + COMPRESSED_TDOA_V5A1_MODES
+    + COMPRESSED_TDOA_V5B_MODES
+)
+V5A1_METHOD_LABELS = [
+    "V5A1-Uniform64",
+    "V5A1-Power64",
+    "V5A1-Cao64",
+    "V5A1-GeoHybrid64",
+]
+V5B_METHOD_LABELS = ["V5B-Expert64"]
 BASELINE_RESULT_ID = "20260702_000925"
 BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "运行结果", BASELINE_RESULT_ID)
@@ -81,7 +100,8 @@ FREQ_TASK_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # 环境变量覆盖默认关闭，避免外部 shell/PyCharm 配置不一致导致误运行。
 ALLOW_ENV_OVERRIDES = False
 
-# 可选: "compressed_tdoa_v5a_fast"、"freq_task_v4_min_fast"、
+# 可选: "compressed_tdoa_v5a1_hardbin_fast"、"compressed_tdoa_v5a_fast"、
+#       "freq_task_v4_min_fast"、
 #       "geohybrid_direct_only_eval"、"geohybrid_v2_eval"、
 #       "freq_task_v3_fast_final"、"freq_task_v3_200_final"、"freq_task_v3_eval_only"、
 #       "freq_task_v2_200_final"、"freq_task_v2_fast_final"、"freq_task_v2_eval_only"、
@@ -89,8 +109,8 @@ ALLOW_ENV_OVERRIDES = False
 #       "freq_task"、"freq_task_fast_final"、"freq_task_200_final"、
 #       "paper_repro_eval_only"、"paper_repro"、"paper_repro_fast_final"、"r20_1"
 # 若 USER_EXPERIMENT_PROFILE 不为 None，会覆盖下方相关 USER_* 变量。
-USER_EXPERIMENT_PROFILE = "compressed_tdoa_v5a_fast"
-USER_EXPERIMENT_MODE = "compressed_tdoa_v5a_fast"
+USER_EXPERIMENT_PROFILE = "compressed_tdoa_v5b_fast"
+USER_EXPERIMENT_MODE = "compressed_tdoa_v5b_fast"
 USER_MODEL_SOURCE_DIR = BASELINE_RESULT_DIR
 USER_FREQ_TASK_MODEL_SOURCE_DIR = FREQ_TASK_RESULT_DIR
 USER_FREQ_TASK_V2_MODEL_SOURCE_DIR = None
@@ -159,6 +179,20 @@ USER_V5A_UNCERTAINTY_WEIGHT = 0.01
 USER_V5A_FILTER_REG_WEIGHT = 0.005
 USER_V5A_RESAMPLE_INTERVAL = 2
 USER_V5A_INIT_MODE = "wide"
+USER_V5A1_N_PAIRS = 6000
+USER_V5A1_EPOCHS = 20
+USER_V5A1_BATCH_SIZE = 256
+USER_V5A1_LR = 1e-3
+USER_V5A1_WEIGHT_DECAY = 1e-4
+USER_V5A1_SOFT_LABEL_SIGMA = 1.0
+USER_V5A1_POINT_WEIGHT = 0.05
+USER_V5A1_AMBIGUITY_WEIGHT = 0.10
+USER_V5A1_WIDTH_WEIGHT = 0.05
+USER_V5A1_UNCERTAINTY_WEIGHT = 0.01
+USER_V5A1_AMP_POWER = 1.0
+USER_V5A1_SCORE_TEMPERATURE = 0.35
+USER_V5A1_BIN_SOURCES = ("uniform", "power", "cao", "geohybrid")
+USER_V5A1_WEIGHT_MODE = "combined"
 USER_INCLUDE_REPRO_REFERENCE = True
 
 # Fig6 传统 baseline 配置。
@@ -243,6 +277,11 @@ EXPERIMENT_MODE_SOURCE = (
     else "main.py:USER_EXPERIMENT_MODE"
 )
 RUN_COMPRESSED_TDOA_V5A = EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES
+RUN_COMPRESSED_TDOA_V5B = EXPERIMENT_MODE in COMPRESSED_TDOA_V5B_MODES
+RUN_COMPRESSED_TDOA_V5A1 = (
+    EXPERIMENT_MODE in COMPRESSED_TDOA_V5A1_MODES or RUN_COMPRESSED_TDOA_V5B
+)
+RUN_COMPRESSED_TDOA = EXPERIMENT_MODE in COMPRESSED_TDOA_MODES
 CR_LIST = [4, 8, 16]
 FAST_FINAL_EPOCHS_BY_CR = {4: 197, 8: 197, 16: 197}
 BATCH_SIZE = 128
@@ -633,10 +672,10 @@ elif EXPERIMENT_MODE in FREQ_TASK_V4_MODES:
     URBAN_TRAIN_LOS_ONLY = True
     FIXED_EVAL_SET = True
     LOCALIZATION_ESTIMATOR = "all_pair_wls"
-elif EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES:
-    # V5-A：CR16-only learnable compressed-domain TDOA likelihood.
-    # 不训练 waveform decoder；加载冻结 Chen DAE 作为参照，并训练一个
-    # 64-complex-feature direct TDOA estimator 进入同一 all-pair WLS 链路。
+elif EXPERIMENT_MODE in COMPRESSED_TDOA_MODES:
+    # V5 compressed-domain direct TDOA routes.
+    # 不训练 waveform decoder；加载冻结 Chen DAE 作为参照，并训练 CR16
+    # direct TDOA estimator 进入同一 all-pair WLS 链路。
     N_SAMPLES = 10000
     K_FOLDS = 0
     MAX_EPOCHS = 0
@@ -644,7 +683,12 @@ elif EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES:
     RESTORE_BEST = False
     FINAL_RETRAIN = False
     FINAL_RETRAIN_EPOCHS = None
-    TRAINING_PROTOCOL = "compressed_tdoa_v5a_direct_likelihood"
+    if RUN_COMPRESSED_TDOA_V5B:
+        TRAINING_PROTOCOL = "compressed_tdoa_v5b_expert_gated_hardbin"
+    elif RUN_COMPRESSED_TDOA_V5A1:
+        TRAINING_PROTOCOL = "compressed_tdoa_v5a1_hardbin_exact_likelihood"
+    else:
+        TRAINING_PROTOCOL = "compressed_tdoa_v5a_direct_likelihood"
     RESAMPLE_TRAIN_EACH_EPOCH = False
     RESAMPLE_INTERVAL = 1
     RUN_TRAINING = False
@@ -653,13 +697,27 @@ elif EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES:
     LAMBDA_PEAK = 0.0
     BETA_FI = 0.0
     LOSS_CONFIG = PAPER_REPRO_LOSS_CONFIG
-    LOSS_MODE = "compressed_tdoa_v5a"
+    LOSS_MODE = (
+        "compressed_tdoa_v5b_expert_gated"
+        if RUN_COMPRESSED_TDOA_V5B else (
+            "compressed_tdoa_v5a1_hardbin"
+            if RUN_COMPRESSED_TDOA_V5A1
+            else "compressed_tdoa_v5a"
+        )
+    )
     USE_ADAPTIVE_PEAK = False
     TRAIN_SNR_RANGE = (-10, 20)
     EVAL_SNR_RANGE = np.arange(-10, 21, 2)
     MONTE_CARLO_TRIALS = 200
     FIG2_SNR_LIST = [-10, 0, 10, 20]
-    DIAGNOSTICS_VERSION = "compressed_tdoa_v5a_cr16_fast"
+    DIAGNOSTICS_VERSION = (
+        "compressed_tdoa_v5b_expert_gated_fast"
+        if RUN_COMPRESSED_TDOA_V5B else (
+            "compressed_tdoa_v5a1_hardbin_fast"
+            if RUN_COMPRESSED_TDOA_V5A1
+            else "compressed_tdoa_v5a_cr16_fast"
+        )
+    )
     CHANNEL_MODE = "fixed"
     N_FIXED_CHANNELS = 50
     NLOS_PROB = 0.0
@@ -728,6 +786,7 @@ else:
                      "'freq_task_v4_min_fast', 'freq_task_v4_min_200', "
                      "'freq_task_v4_min_eval_only', "
                      "'compressed_tdoa_v5a_fast', "
+                     "'compressed_tdoa_v5a1_hardbin_fast', "
                      "or 'r20_1'")
 
 REFERENCE_MODEL_DIR = _cfg(
@@ -882,6 +941,40 @@ V5A_RESAMPLE_INTERVAL = _cfg(
     "DAE_V5A_RESAMPLE_INTERVAL", USER_V5A_RESAMPLE_INTERVAL, 2, int
 )
 V5A_INIT_MODE = _cfg("DAE_V5A_INIT_MODE", USER_V5A_INIT_MODE, "wide", str)
+V5A1_N_PAIRS = _cfg(
+    "DAE_V5A1_N_PAIRS", USER_V5A1_N_PAIRS, N_SAMPLES, int
+)
+V5A1_EPOCHS = _cfg("DAE_V5A1_EPOCHS", USER_V5A1_EPOCHS, 20, int)
+V5A1_BATCH_SIZE = _cfg(
+    "DAE_V5A1_BATCH_SIZE", USER_V5A1_BATCH_SIZE, BATCH_SIZE, int
+)
+V5A1_LR = _cfg("DAE_V5A1_LR", USER_V5A1_LR, 1e-3, float)
+V5A1_WEIGHT_DECAY = _cfg(
+    "DAE_V5A1_WEIGHT_DECAY", USER_V5A1_WEIGHT_DECAY, WEIGHT_DECAY, float
+)
+V5A1_SOFT_LABEL_SIGMA = _cfg(
+    "DAE_V5A1_SOFT_LABEL_SIGMA", USER_V5A1_SOFT_LABEL_SIGMA, 1.0, float
+)
+V5A1_POINT_WEIGHT = _cfg(
+    "DAE_V5A1_POINT_WEIGHT", USER_V5A1_POINT_WEIGHT, 0.05, float
+)
+V5A1_AMBIGUITY_WEIGHT = _cfg(
+    "DAE_V5A1_AMBIGUITY_WEIGHT", USER_V5A1_AMBIGUITY_WEIGHT, 0.10, float
+)
+V5A1_WIDTH_WEIGHT = _cfg(
+    "DAE_V5A1_WIDTH_WEIGHT", USER_V5A1_WIDTH_WEIGHT, 0.05, float
+)
+V5A1_UNCERTAINTY_WEIGHT = _cfg(
+    "DAE_V5A1_UNCERTAINTY_WEIGHT", USER_V5A1_UNCERTAINTY_WEIGHT, 0.01, float
+)
+V5A1_AMP_POWER = _cfg("DAE_V5A1_AMP_POWER", USER_V5A1_AMP_POWER, 1.0, float)
+V5A1_SCORE_TEMPERATURE = _cfg(
+    "DAE_V5A1_SCORE_TEMPERATURE", USER_V5A1_SCORE_TEMPERATURE, 0.35, float
+)
+V5A1_BIN_SOURCES = tuple(str(v).lower() for v in USER_V5A1_BIN_SOURCES)
+V5A1_WEIGHT_MODE = _cfg(
+    "DAE_V5A1_WEIGHT_MODE", USER_V5A1_WEIGHT_MODE, "combined", str
+)
 RUN_LOCALIZER_ABLATION = _cfg_bool(
     "DAE_RUN_LOCALIZER_ABLATION", USER_RUN_LOCALIZER_ABLATION, False
 )
@@ -1039,6 +1132,16 @@ if RUN_COMPRESSED_TDOA_V5A:
           f"init={V5A_INIT_MODE} | sigma={V5A_SOFT_LABEL_SIGMA} | "
           f"amb={V5A_AMBIGUITY_WEIGHT} | width={V5A_WIDTH_WEIGHT} | "
           f"unc={V5A_UNCERTAINTY_WEIGHT} | filt_reg={V5A_FILTER_REG_WEIGHT}")
+if RUN_COMPRESSED_TDOA_V5A1:
+    print(f"[Config] V5-A.1 hard-bin TDOA: pairs={V5A1_N_PAIRS} | "
+          f"epochs={V5A1_EPOCHS} | batch={V5A1_BATCH_SIZE} | lr={V5A1_LR:g} | "
+          f"sources={V5A1_BIN_SOURCES} | weight_mode={V5A1_WEIGHT_MODE} | "
+          f"sigma={V5A1_SOFT_LABEL_SIGMA} | point={V5A1_POINT_WEIGHT} | "
+          f"amb={V5A1_AMBIGUITY_WEIGHT} | width={V5A1_WIDTH_WEIGHT} | "
+          f"unc={V5A1_UNCERTAINTY_WEIGHT}")
+if RUN_COMPRESSED_TDOA_V5B:
+    print("[Config] V5-B expert gating enabled: Power64 + GeoHybrid64 "
+          "non-oracle posterior mixture; hard-bin experts restore best ValMAE.")
 if SCENARIO_MODE == "urban8":
     print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
           f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
@@ -1132,6 +1235,94 @@ def make_budget64_hybrid_bins(coarse_ranked, fine_ranked, coarse_count, fine_cou
             f"Budget split is not strict: union={union_count}, expected={expected}."
         )
     return coarse, fine
+
+
+def slugify_method_label(label):
+    return (
+        str(label).lower()
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace("-", "_")
+        .replace("=", "")
+    )
+
+
+def _selected_bins_from_model(model):
+    if model is None or not hasattr(model, "selected_bins"):
+        return None
+    return model.selected_bins.detach().cpu().numpy().astype(int)
+
+
+def build_v5a1_hardbin_sets(simulator, seed, lag_limit_samples):
+    """
+    Build fixed exact-bin sets for V5-A.1 diagnostics.
+
+    The same baseline selectors are used later for Fig7/Fig8/Fig9, so these
+    hard-bin variants test the likelihood/calibration layer rather than a
+    separate, hidden frequency-selection implementation.
+    """
+    models, meta = build_traditional_baselines(
+        simulator, cr=BASELINE_CR, device=DEVICE, seed=int(seed) + 202,
+        n_pca_samples=BASELINE_PCA_SAMPLES,
+        dft_mode=BASELINE_DFT_MODE,
+        hadamard_mode=BASELINE_HADAMARD_MODE,
+        pca_train_source=BASELINE_PCA_TRAIN_SOURCE,
+        pca_fixed_snr_db=BASELINE_PCA_FIXED_SNR_DB,
+        include_diagnostic_variants=True,
+        random_variant_seeds=BASELINE_RANDOM_VARIANT_SEEDS,
+        include_legacy_variants=False,
+        dft_lag_limit_samples=lag_limit_samples,
+        include_strong_variants=True,
+    )
+    uniform_bins = _selected_bins_from_model(models.get("DFT-SCS-lite"))
+    power_bins = _selected_bins_from_model(models.get("DFT-train-power"))
+    cao_bins = _selected_bins_from_model(models.get("DFT-Cao2020-CRB"))
+    geoambi_bins = _selected_bins_from_model(models.get("DFT-GeoAmbi"))
+    if uniform_bins is None:
+        dft_main = meta.get("dft_main_label", "DFT-SCS-lite")
+        uniform_bins = _selected_bins_from_model(models.get(dft_main))
+    if power_bins is None:
+        power_bins = uniform_bins
+    if cao_bins is None:
+        cao_bins = power_bins
+    if geoambi_bins is None:
+        geoambi_bins = cao_bins
+    coarse, fine = make_budget64_hybrid_bins(power_bins, geoambi_bins, 40, 24)
+    geohybrid_bins = np.union1d(coarse, fine)
+    if geohybrid_bins.size != simulator.signal_len // BASELINE_CR:
+        raise RuntimeError(
+            f"V5-A.1 GeoHybrid hard-bin set has {geohybrid_bins.size} bins, "
+            f"expected {simulator.signal_len // BASELINE_CR}."
+        )
+    all_sets = {
+        "uniform": ("V5A1-Uniform64", uniform_bins),
+        "power": ("V5A1-Power64", power_bins),
+        "cao": ("V5A1-Cao64", cao_bins),
+        "geohybrid": ("V5A1-GeoHybrid64", geohybrid_bins),
+    }
+    selected = {}
+    for source in V5A1_BIN_SOURCES:
+        if source not in all_sets:
+            raise ValueError(
+                f"Unknown V5-A.1 bin source '{source}'. "
+                f"Valid: {tuple(all_sets.keys())}"
+            )
+        label, bins = all_sets[source]
+        selected[label] = np.asarray(bins, dtype=int)
+    meta.update({
+        "v5a1_bin_sources": list(V5A1_BIN_SOURCES),
+        "v5a1_method_labels": list(selected.keys()),
+        "v5a1_selected_bins_by_method": {
+            label: [int(v) for v in bins.tolist()]
+            for label, bins in selected.items()
+        },
+        "v5a1_geohybrid_split": {
+            "coarse_count": int(coarse.size),
+            "fine_count": int(fine.size),
+            "union_count": int(geohybrid_bins.size),
+        },
+    })
+    return selected, meta
 
 
 def compute_physical_tdoa_lag_limit(simulator):
@@ -1260,6 +1451,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
     reference_models_dict = {}
     v5a_estimator = None
     v5a_training_result = None
+    v5a1_estimators = {}
+    v5b_estimators = {}
+    v5a1_training_results = {}
+    v5a1_bin_meta = None
     source_plot_data = None
     source_cv_results_dict = {}
     static_baseline_cache = None
@@ -1347,6 +1542,69 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             v5a_model, DEVICE, label="V5A-CR16"
         )
         print(f"[V5-A][Saved] {v5a_model_path}")
+
+    if RUN_COMPRESSED_TDOA_V5A1:
+        v5a1_cfg = V5A1TrainConfig(
+            n_pairs=int(V5A1_N_PAIRS),
+            epochs=int(V5A1_EPOCHS),
+            batch_size=int(V5A1_BATCH_SIZE),
+            lr=float(V5A1_LR),
+            weight_decay=float(V5A1_WEIGHT_DECAY),
+            sigma=float(V5A1_SOFT_LABEL_SIGMA),
+            point_weight=float(V5A1_POINT_WEIGHT),
+            ambiguity_weight=float(V5A1_AMBIGUITY_WEIGHT),
+            width_weight=float(V5A1_WIDTH_WEIGHT),
+            uncertainty_weight=float(V5A1_UNCERTAINTY_WEIGHT),
+            amp_power=float(V5A1_AMP_POWER),
+            score_temperature=float(V5A1_SCORE_TEMPERATURE),
+            restore_best_by_val_mae=True,
+            best_low_snr_weight=0.50,
+            best_mid_snr_weight=0.25,
+            best_high_snr_weight=0.25,
+        )
+        v5a1_bin_sets, v5a1_bin_meta = build_v5a1_hardbin_sets(
+            sim, current_seed, method_tdoa_lag_limit
+        )
+        print(f"[V5-A.1] Hard-bin methods: {list(v5a1_bin_sets.keys())}")
+        v5a1_dataset = prepare_v5a1_hardbin_dataset(
+            sim, v5a1_cfg, seed=current_seed + 9100
+        )
+        for method_idx, (label, bins) in enumerate(v5a1_bin_sets.items()):
+            model, history = train_v5a1_hardbin_tdoa(
+                sim, DEVICE, bins, label=label,
+                seed=current_seed + 9200 + method_idx,
+                lag_limit_samples=method_tdoa_lag_limit,
+                config=v5a1_cfg,
+                dataset_bundle=v5a1_dataset,
+            )
+            model_path = os.path.join(
+                RESULT_DIR, f"model_{slugify_method_label(label)}.pt"
+            )
+            torch.save(model.state_dict(), model_path)
+            history["model_path"] = model_path
+            history["model_class"] = "HardBinCompressedTDOALikelihood"
+            history["weight_mode"] = str(V5A1_WEIGHT_MODE)
+            v5a1_training_results[label] = history
+            v5a1_estimators[label] = LearnedHardBinCompressedTDOAEstimator(
+                model, DEVICE, label=label, weight_mode=V5A1_WEIGHT_MODE
+            )
+            print(f"[V5-A.1][Saved] {label}: {model_path}")
+        if RUN_COMPRESSED_TDOA_V5B:
+            if ("V5A1-Power64" in v5a1_estimators
+                    and "V5A1-GeoHybrid64" in v5a1_estimators):
+                v5b_estimators["V5B-Expert64"] = V5BExpertGatedTDOAEstimator(
+                    {
+                        "power": v5a1_estimators["V5A1-Power64"],
+                        "geohybrid": v5a1_estimators["V5A1-GeoHybrid64"],
+                    },
+                    label="V5B-Expert64",
+                    low_confidence_power_prior=0.65,
+                )
+                print("[V5-B] Added V5B-Expert64: Power64/GeoHybrid64 "
+                      "non-oracle posterior mixture.")
+            else:
+                print("[V5-B][Warn] Power64 or GeoHybrid64 missing; "
+                      "V5B-Expert64 will be skipped.")
 
     # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
     shared_v3_state = None
@@ -1665,6 +1923,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         fig8_supp_results = None
         fig9_results = None
         fig9_focus_results = None
+        tdoa_results = None
+        tdoa_focus_results = None
         fig10_localizer_results = None
         baseline_all_results = None
         traditional_baseline_meta = None
@@ -1838,6 +2098,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     )
                 if v5a_estimator is not None:
                     direct_estimators["V5A-CR16"] = v5a_estimator
+                for label, estimator_obj in v5a1_estimators.items():
+                    direct_estimators[label] = estimator_obj
+                for label, estimator_obj in v5b_estimators.items():
+                    direct_estimators[label] = estimator_obj
                 if RUN_TASK_AWARE_BASELINES:
                     for src_label, dst_label in [
                         ("DFT-Fisher", "DFT-Fisher-Direct"),
@@ -2028,6 +2292,14 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     ),
                     "v5a_compressed_tdoa": bool(RUN_COMPRESSED_TDOA_V5A),
                     "v5a_training": v5a_training_result,
+                    "v5a1_hardbin_tdoa": bool(RUN_COMPRESSED_TDOA_V5A1),
+                    "v5a1_training": v5a1_training_results,
+                    "v5a1_bin_meta": v5a1_bin_meta,
+                    "v5a1_weight_mode": str(V5A1_WEIGHT_MODE) if RUN_COMPRESSED_TDOA_V5A1 else None,
+                    "v5b_expert_gated_tdoa": bool(RUN_COMPRESSED_TDOA_V5B),
+                    "v5b_method_labels": list(V5B_METHOD_LABELS) if RUN_COMPRESSED_TDOA_V5B else [],
+                    "v5b_experts": ["V5A1-Power64", "V5A1-GeoHybrid64"] if RUN_COMPRESSED_TDOA_V5B else [],
+                    "v5b_low_confidence_power_prior": 0.65 if RUN_COMPRESSED_TDOA_V5B else None,
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
                     "method_zoom_high_snr_min": METHOD_ZOOM_HIGH_SNR_MIN,
@@ -2036,7 +2308,9 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 baseline_all_results[0]["config"]["direct_methods"] = list(direct_estimators.keys())
                 baseline_all_results[0]["config"]["task_aware_direct_methods"] = [
                     name for name in [
-                        "DFT", "V5A-CR16", "DFT-Fisher-Direct",
+                        "DFT", "V5A-CR16", *V5A1_METHOD_LABELS,
+                        *V5B_METHOD_LABELS,
+                        "DFT-Fisher-Direct",
                         "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
                         "GeoHybrid-B64-C32F32", "GeoAmbi-DFT-Direct"
                     ]
@@ -2044,7 +2318,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 ]
                 baseline_all_results[0]["config"]["strong_direct_methods"] = [
                     name for name in [
-                        "V5A-CR16",
+                        "V5A-CR16", *V5A1_METHOD_LABELS,
+                        *V5B_METHOD_LABELS,
                         "Cao2017-DFT-AML",
                         "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
                         "GeoHybrid-B64-C32F32",
@@ -2093,7 +2368,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
 
                 if RUN_TASK_AWARE_BASELINES and direct_estimators:
                     fig7_order = unique_order([
-                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        *V5A1_METHOD_LABELS, *V5B_METHOD_LABELS, "DFT",
                         "DFT-SCS-lite", "DFT-Fisher-Direct",
                         "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
                         "GeoHybrid-B64-C32F32", "GeoAmbi-DFT-Direct",
@@ -2118,7 +2394,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     # strong baselines. Proxy/diagnostic variants remain computed
                     # in baseline_all_results and are plotted in Fig8 supplement.
                     fig8_order = unique_order([
-                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
+                        "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        *V5A1_METHOD_LABELS, *V5B_METHOD_LABELS, "DFT",
                         "DFT-Fisher-Direct", "Cao2017-DFT-AML",
                         "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
                         "GeoHybrid-B64-C32F32",
@@ -2139,7 +2416,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     )
                     if RUN_STRONG_DIAGNOSTIC_SUPPLEMENT:
                         fig8_supp_order = unique_order([
-                            "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16", "DFT",
+                            "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                            *V5A1_METHOD_LABELS, *V5B_METHOD_LABELS, "DFT",
                             "DFT-Fisher-Direct", "Cao2017-DFT-AML",
                             "GeoHybrid-B64-C48F16", "GeoHybrid-B64-C40F24",
                             "GeoHybrid-B64-C32F32",
@@ -2233,9 +2511,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "reference_model_dir": REFERENCE_MODEL_DIR,
                         },
                     )
-                elif RUN_COMPRESSED_TDOA_V5A:
+                elif RUN_COMPRESSED_TDOA:
                     fig9_order = unique_order([
                         "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        *V5A1_METHOD_LABELS, *V5B_METHOD_LABELS,
                         "DFT", "DFT-Fisher-Direct",
                         "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24",
                         "GeoAmbi-DFT-AML", "Zhai-CRLB-Decimation",
@@ -2248,23 +2527,51 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             **common_config,
                             "strong_method_order": fig9_order,
                             "strong_title": (
+                                (
+                                    "Figure 9: V5-B Expert-Gated Compressed TDOA "
+                                    "vs Frozen Chen-DAE and Strong Baselines"
+                                )
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                (
+                                    "Figure 9: V5-A.1 Hard-Bin Compressed TDOA "
+                                    "Diagnostics vs Frozen Chen-DAE and Strong Baselines"
+                                )
+                                if RUN_COMPRESSED_TDOA_V5A1 else
                                 "Figure 9: V5-A Compressed-Domain TDOA Likelihood "
                                 "vs Frozen Chen-DAE and Strong Baselines"
                             ),
                             "strong_figure_filename": (
+                                f"Fig9_V5B_ExpertGated_TDOA_CR{BASELINE_CR}"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
                                 f"Fig9_V5A_Compressed_TDOA_CR{BASELINE_CR}"
                             ),
                             "strong_zoom_method_order": fig9_order,
                             "strong_zoom_figure_filename": (
+                                f"Fig9_V5B_ExpertGated_TDOA_CR{BASELINE_CR}_SNR_Zooms"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}_SNR_Zooms"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
                                 f"Fig9_V5A_Compressed_TDOA_CR{BASELINE_CR}_SNR_Zooms"
                             ),
-                            "table_prefix": "fig9_v5a",
-                            "innovation_model": "LearnableCompressedTDOALikelihood",
+                            "table_prefix": (
+                                "fig9_v5b" if RUN_COMPRESSED_TDOA_V5B else
+                                "fig9_v5a1" if RUN_COMPRESSED_TDOA_V5A1 else "fig9_v5a"
+                            ),
+                            "innovation_model": (
+                                "V5BExpertGatedTDOAEstimator"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "HardBinCompressedTDOALikelihood"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
+                                "LearnableCompressedTDOALikelihood"
+                            ),
                             "reference_model_dir": MODEL_SOURCE_DIR,
                         },
                     )
                     fig9_focus_order = unique_order([
                         "Raw", f"DAE-CR{BASELINE_CR}", "V5A-CR16",
+                        *V5A1_METHOD_LABELS, *V5B_METHOD_LABELS,
                         "DFT", "DFT-Fisher-Direct",
                         "Cao2017-DFT-AML", "GeoHybrid-B64-C40F24",
                         "Zhai-CRLB-Decimation",
@@ -2275,14 +2582,42 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         {
                             **common_config,
                             "strong_method_order": fig9_focus_order,
-                            "strong_title": "Figure 9 Focus: V5-A vs Compressed TDOA Baselines",
-                            "strong_figure_filename": "Fig9_Focused_V5A_CR16_Comparison",
+                            "strong_title": (
+                                "Figure 9 Focus: V5-B Expert-Gated Diagnostics"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "Figure 9 Focus: V5-A.1 Hard-Bin Diagnostics"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
+                                "Figure 9 Focus: V5-A vs Compressed TDOA Baselines"
+                            ),
+                            "strong_figure_filename": (
+                                "Fig9_Focused_V5B_ExpertGated_CR16_Comparison"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "Fig9_Focused_V5A1_HardBin_CR16_Comparison"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
+                                "Fig9_Focused_V5A_CR16_Comparison"
+                            ),
                             "strong_zoom_method_order": fig9_focus_order,
                             "strong_zoom_figure_filename": (
+                                "Fig9_Focused_V5B_ExpertGated_CR16_Comparison_SNR_Zooms"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "Fig9_Focused_V5A1_HardBin_CR16_Comparison_SNR_Zooms"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
                                 "Fig9_Focused_V5A_CR16_Comparison_SNR_Zooms"
                             ),
-                            "table_prefix": "fig9_v5a_focus",
-                            "innovation_model": "LearnableCompressedTDOALikelihood",
+                            "table_prefix": (
+                                "fig9_v5b_focus"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "fig9_v5a1_focus"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
+                                "fig9_v5a_focus"
+                            ),
+                            "innovation_model": (
+                                "V5BExpertGatedTDOAEstimator"
+                                if RUN_COMPRESSED_TDOA_V5B else
+                                "HardBinCompressedTDOALikelihood"
+                                if RUN_COMPRESSED_TDOA_V5A1 else
+                                "LearnableCompressedTDOALikelihood"
+                            ),
                             "reference_model_dir": MODEL_SOURCE_DIR,
                         },
                     )
@@ -2356,6 +2691,67 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         )
 
         # 保存绘图数据（含运行配置，供 replot.py / 离线分析）
+        tdoa_source_results = (
+            fig9_results or fig8_results or fig7_results or fig6_results
+        )
+        if tdoa_source_results is not None:
+            tdoa_source_config = tdoa_source_results[0].get("config", {})
+            tdoa_order = (
+                tdoa_source_config.get("strong_method_order")
+                or tdoa_source_config.get("taskaware_method_order")
+                or tdoa_source_config.get("main_method_order")
+                or tdoa_source_results[0].get("method_order", [])
+            )
+            tdoa_keep = unique_order(["Raw", "Clean", "Geometry"] + list(tdoa_order))
+            tdoa_results = build_tdoa_metrics_from_method_comparison(
+                tdoa_source_results,
+                method_order=tdoa_keep,
+                prefer_direct=True,
+                title=(
+                    f"Figure TDOA: Pairwise TDOA Error Before WLS "
+                    f"(CR={BASELINE_CR})"
+                ),
+            )
+            if tdoa_results is not None:
+                tdoa_results[0]["config"].update({
+                    "strong_method_order": tdoa_results[0]["method_order"],
+                    "strong_figure_filename": f"Fig_TDOA_MAE_CR{BASELINE_CR}",
+                    "tdoa_within1_figure_filename": (
+                        f"Fig_TDOA_Within1_CR{BASELINE_CR}"
+                    ),
+                    "table_prefix": "tdoa",
+                    "tdoa_source_view": tdoa_source_config.get(
+                        "table_prefix", tdoa_source_results[0].get("title", "")
+                    ),
+                })
+        if fig9_focus_results is not None:
+            focus_config = fig9_focus_results[0].get("config", {})
+            focus_order = (
+                focus_config.get("strong_method_order")
+                or fig9_focus_results[0].get("method_order", [])
+            )
+            tdoa_focus_results = build_tdoa_metrics_from_method_comparison(
+                fig9_focus_results,
+                method_order=unique_order(["Raw", "Clean", "Geometry"] + list(focus_order)),
+                prefer_direct=True,
+                title=(
+                    f"Figure TDOA Focus: Pairwise TDOA Error Before WLS "
+                    f"(CR={BASELINE_CR})"
+                ),
+            )
+            if tdoa_focus_results is not None:
+                tdoa_focus_results[0]["config"].update({
+                    "strong_method_order": tdoa_focus_results[0]["method_order"],
+                    "strong_figure_filename": f"Fig_TDOA_Focus_MAE_CR{BASELINE_CR}",
+                    "tdoa_within1_figure_filename": (
+                        f"Fig_TDOA_Focus_Within1_CR{BASELINE_CR}"
+                    ),
+                    "table_prefix": "tdoa_focus",
+                    "tdoa_source_view": focus_config.get(
+                        "table_prefix", fig9_focus_results[0].get("title", "")
+                    ),
+                })
+
         plot_data = {
             'cv_results_dict': cv_results_dict,
             'snr_data': snr_data_all,
@@ -2367,8 +2763,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             'fig8_supp_results': fig8_supp_results,
             'fig9_results': fig9_results,
             'fig9_focus_results': fig9_focus_results,
+            'tdoa_results': tdoa_results,
+            'tdoa_focus_results': tdoa_focus_results,
             'fig10_localizer_results': fig10_localizer_results,
             'v5a_training': v5a_training_result,
+            'v5a1_training': v5a1_training_results,
+            'v5a1_bin_meta': v5a1_bin_meta,
             'baseline_all_results': baseline_all_results,
             'traditional_baseline_meta': traditional_baseline_meta,
             'config': {
@@ -2583,6 +2983,60 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'v5a_filter_reg_weight': (
                     float(V5A_FILTER_REG_WEIGHT) if RUN_COMPRESSED_TDOA_V5A else None
                 ),
+                'v5a1_enabled': bool(RUN_COMPRESSED_TDOA_V5A1),
+                'v5a1_n_pairs': (
+                    int(V5A1_N_PAIRS) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_epochs': (
+                    int(V5A1_EPOCHS) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_batch_size': (
+                    int(V5A1_BATCH_SIZE) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_lr': (
+                    float(V5A1_LR) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_weight_decay': (
+                    float(V5A1_WEIGHT_DECAY) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_soft_label_sigma': (
+                    float(V5A1_SOFT_LABEL_SIGMA) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_point_weight': (
+                    float(V5A1_POINT_WEIGHT) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_ambiguity_weight': (
+                    float(V5A1_AMBIGUITY_WEIGHT) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_width_weight': (
+                    float(V5A1_WIDTH_WEIGHT) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_uncertainty_weight': (
+                    float(V5A1_UNCERTAINTY_WEIGHT) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_amp_power': (
+                    float(V5A1_AMP_POWER) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_score_temperature': (
+                    float(V5A1_SCORE_TEMPERATURE) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_bin_sources': (
+                    list(V5A1_BIN_SOURCES) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_weight_mode': (
+                    str(V5A1_WEIGHT_MODE) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5b_enabled': bool(RUN_COMPRESSED_TDOA_V5B),
+                'v5b_method_labels': (
+                    list(V5B_METHOD_LABELS) if RUN_COMPRESSED_TDOA_V5B else None
+                ),
+                'v5b_experts': (
+                    ["V5A1-Power64", "V5A1-GeoHybrid64"]
+                    if RUN_COMPRESSED_TDOA_V5B else None
+                ),
+                'v5b_low_confidence_power_prior': (
+                    0.65 if RUN_COMPRESSED_TDOA_V5B else None
+                ),
             },
         }
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
@@ -2745,6 +3199,40 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         "Fig9_Focused_DAE_CR_Comparison_SNR_Zooms",
                     ),
                 )
+
+        if tdoa_results is not None:
+            tdoa_config = tdoa_results[0].get("config", {})
+            fig_tdoa_mae = plot_method_comparison(
+                tdoa_results, metric_key="tdoa_mae_samples", plot_kind="strong"
+            )
+            save_figure(
+                fig_tdoa_mae,
+                tdoa_config.get("strong_figure_filename", f"Fig_TDOA_MAE_CR{BASELINE_CR}"),
+            )
+            fig_tdoa_within1 = plot_method_comparison(
+                tdoa_results, metric_key="tdoa_within_1_sample_rate",
+                plot_kind="strong"
+            )
+            save_figure(
+                fig_tdoa_within1,
+                tdoa_config.get(
+                    "tdoa_within1_figure_filename",
+                    f"Fig_TDOA_Within1_CR{BASELINE_CR}",
+                ),
+            )
+
+        if tdoa_focus_results is not None:
+            tdoa_focus_config = tdoa_focus_results[0].get("config", {})
+            fig_tdoa_focus = plot_method_comparison(
+                tdoa_focus_results, metric_key="tdoa_mae_samples",
+                plot_kind="strong"
+            )
+            save_figure(
+                fig_tdoa_focus,
+                tdoa_focus_config.get(
+                    "strong_figure_filename", f"Fig_TDOA_Focus_MAE_CR{BASELINE_CR}"
+                ),
+            )
 
         if fig10_localizer_results is not None:
             fig_localizer = plot_method_comparison(

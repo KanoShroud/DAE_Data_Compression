@@ -20,11 +20,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from scipy import signal
 from torch.utils.data import DataLoader, Dataset, Subset, TensorDataset
 
 from task_baselines import (
     _diagnostics_from_estimator,
+    _diagnostics_from_quality_estimator,
     _lag_mask,
     _peak_from_score,
     _quality_from_score,
@@ -501,3 +503,816 @@ class LearnedCompressedTDOAEstimator:
             float(lag_limit_samples) if lag_limit_samples is not None else float("nan")
         )
         return summary
+
+
+class HardBinCompressedTDOALikelihood(nn.Module):
+    """
+    V5-A.1 exact-bin compressed-domain likelihood.
+
+    Unlike V5-A, every transmitted feature is exactly one selected FFT bin.  The
+    delay steering therefore uses the true bin frequency, avoiding the
+    soft-filter/effective-frequency approximation that made V5-A hard to
+    interpret.
+    """
+
+    def __init__(
+        self,
+        selected_bins,
+        signal_len: int = 1024,
+        lag_limit_samples: int = 48,
+        score_temperature: float = 0.35,
+        amp_power: float = 1.0,
+    ):
+        super().__init__()
+        selected = np.asarray(selected_bins, dtype=int)
+        if selected.ndim != 1 or selected.size < 1:
+            raise ValueError("HardBinCompressedTDOALikelihood needs selected bins")
+        if np.any(selected < 0) or np.any(selected >= int(signal_len)):
+            raise ValueError("selected bins out of FFT range")
+        self.signal_len = int(signal_len)
+        self.num_features = int(selected.size)
+        self.lag_limit_samples = int(lag_limit_samples)
+        self.score_temperature = float(score_temperature)
+        self.amp_power = float(amp_power)
+
+        freqs = torch.tensor(_shifted_freq_grid(self.signal_len), dtype=torch.float32)
+        lags = torch.arange(
+            -self.lag_limit_samples, self.lag_limit_samples + 1,
+            dtype=torch.float32,
+        )
+        self.register_buffer("freq_grid", freqs)
+        self.register_buffer("lag_grid", lags)
+        self.register_buffer(
+            "selected_bins", torch.as_tensor(selected, dtype=torch.long)
+        )
+        self.log_alpha = nn.Parameter(torch.zeros(self.num_features))
+        self.logit_scale = nn.Parameter(torch.tensor(0.0))
+
+    def selected_freqs(self) -> torch.Tensor:
+        return self.freq_grid[self.selected_bins]
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        xc = _to_complex(x)
+        spec = torch.fft.fftshift(torch.fft.fft(xc, norm="ortho"), dim=-1)
+        return spec[:, self.selected_bins.to(spec.device)]
+
+    def pair_logits(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
+        z_i = self.encode(x_i)
+        z_j = self.encode(x_j)
+        return self.pair_logits_from_encoded(z_i, z_j)
+
+    def pair_logits_from_encoded(self, z_i: torch.Tensor,
+                                 z_j: torch.Tensor) -> torch.Tensor:
+        cross = z_i * torch.conj(z_j)
+        phase = cross / (torch.abs(cross) + 1e-8)
+        amp = torch.abs(cross)
+        amp = amp / (torch.median(amp, dim=-1, keepdim=True).values + 1e-8)
+        amp = torch.clamp(amp, 0.05, 12.0).pow(float(self.amp_power))
+        alpha = F.softplus(self.log_alpha).to(amp.device) + 1e-4
+        weighted_phase = phase * amp * alpha[None, :]
+
+        freqs = self.selected_freqs().to(z_i.device)
+        steering = torch.exp(
+            2j * np.pi * self.lag_grid[:, None].to(z_i.device) * freqs[None, :]
+        )
+        logits = torch.real(torch.einsum("lk,bk->bl", steering, weighted_phase))
+        logits = logits / np.sqrt(float(self.num_features))
+        scale = torch.exp(torch.clamp(self.logit_scale, -3.0, 3.0))
+        return logits * scale / max(float(self.score_temperature), 1e-3)
+
+    def forward(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
+        return self.pair_logits(x_i, x_j)
+
+    def posterior_stats(self, logits: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        prob = torch.softmax(logits, dim=-1)
+        lags = self.lag_grid.to(logits.device, dtype=logits.dtype)
+        mean = torch.sum(prob * lags[None, :], dim=-1)
+        var = torch.sum(prob * (lags[None, :] - mean[:, None]).pow(2), dim=-1)
+        return mean, torch.clamp(var, min=0.25)
+
+    def selected_bin_summary(self) -> Dict[str, object]:
+        bins = self.selected_bins.detach().cpu().numpy().astype(int)
+        freqs = self.selected_freqs().detach().cpu().numpy().astype(float)
+        alpha = F.softplus(self.log_alpha).detach().cpu().numpy().astype(float)
+        return {
+            "num_features_complex": int(self.num_features),
+            "selected_bins": [int(v) for v in bins.tolist()],
+            "selected_bin_min": int(np.min(bins)),
+            "selected_bin_max": int(np.max(bins)),
+            "selected_freq_min": float(np.min(freqs)),
+            "selected_freq_max": float(np.max(freqs)),
+            "alpha_min": float(np.min(alpha)),
+            "alpha_max": float(np.max(alpha)),
+            "alpha_mean": float(np.mean(alpha)),
+            "score_temperature": float(self.score_temperature),
+            "amp_power": float(self.amp_power),
+        }
+
+
+def _snr_bucket_name(snr_value: float) -> str:
+    value = float(snr_value)
+    if value <= 0.0:
+        return "low"
+    if 2.0 <= value <= 6.0:
+        return "mid"
+    if value >= 8.0:
+        return "high"
+    return "other"
+
+
+def _generate_urban_pair_dataset_from_plan_with_snr(
+    simulator,
+    snapshot_indices,
+    uav_i_indices,
+    uav_j_indices,
+    snr_values,
+    seed: int = 42,
+    return_groups: bool = False,
+):
+    """Generate pair data with explicit per-sample SNR values."""
+    if simulator.scenario_mode != "urban8":
+        raise RuntimeError("V5-A.1 hard-bin training requires scenario_mode='urban8'")
+    snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+    uav_i_indices = np.asarray(uav_i_indices, dtype=int)
+    uav_j_indices = np.asarray(uav_j_indices, dtype=int)
+    snr_values = np.asarray(snr_values, dtype=float)
+    if not (
+        len(snapshot_indices) == len(uav_i_indices)
+        == len(uav_j_indices) == len(snr_values)
+    ):
+        raise ValueError("pair plan arrays and snr_values must have the same length")
+
+    rng_state = np.random.get_state()
+    np.random.seed(int(seed))
+    n_items = int(len(snapshot_indices))
+    x1n = torch.empty((n_items, 2, simulator.signal_len), dtype=torch.float32)
+    x2n = torch.empty_like(x1n)
+    tdoa = torch.empty((n_items,), dtype=torch.float32)
+
+    for snr in np.unique(snr_values):
+        group_idx = np.where(np.isclose(snr_values, snr))[0]
+        for start in range(0, len(group_idx), 500):
+            idx = group_idx[start:start + 500]
+            snap_chunk = snapshot_indices[idx]
+            ui_chunk = uav_i_indices[idx]
+            uj_chunk = uav_j_indices[idx]
+            Xn, _, meta = simulator.generate_urban_batch(
+                len(idx), snr_db=float(snr), snapshot_indices=snap_chunk
+            )
+            row_idx = torch.arange(len(idx), dtype=torch.long)
+            ui_idx = torch.tensor(ui_chunk, dtype=torch.long)
+            uj_idx = torch.tensor(uj_chunk, dtype=torch.long)
+            x1n[idx] = Xn[row_idx, ui_idx]
+            x2n[idx] = Xn[row_idx, uj_idx]
+            distances = np.asarray(meta["distances"], dtype=float)
+            rows = np.arange(len(idx))
+            tau = (
+                distances[rows, ui_chunk] - distances[rows, uj_chunk]
+            ) / (simulator.c / simulator.fs)
+            tdoa[idx] = torch.tensor(tau, dtype=torch.float32)
+
+    np.random.set_state(rng_state)
+    snr_tensor = torch.tensor(snr_values, dtype=torch.float32)
+    groups = torch.tensor(snapshot_indices, dtype=torch.long)
+    if return_groups:
+        return x1n, x2n, tdoa, snr_tensor, groups
+    return x1n, x2n, tdoa, snr_tensor
+
+
+def prepare_v5a1_hardbin_dataset(simulator, config, seed: int = 42):
+    """Build one reusable explicit-SNR pair dataset for all V5-A.1 bin sets."""
+    cfg = config or V5A1TrainConfig()
+    rng = np.random.default_rng(int(seed))
+    snapshot_idx, uav_i_idx, uav_j_idx = simulator.build_urban_pair_training_plan(
+        int(cfg.n_pairs), seed=int(seed)
+    )
+    snr_grid = np.asarray(cfg.snr_grid, dtype=float)
+    if snr_grid.ndim != 1 or snr_grid.size < 1:
+        raise ValueError("V5-A.1 snr_grid must contain at least one SNR value")
+    snr_values = rng.choice(snr_grid, size=int(cfg.n_pairs), replace=True)
+    X1_n, X2_n, tdoa, snr_tensor, groups = (
+        _generate_urban_pair_dataset_from_plan_with_snr(
+            simulator, snapshot_idx, uav_i_idx, uav_j_idx, snr_values,
+            seed=int(seed), return_groups=True,
+        )
+    )
+    dataset = TensorDataset(X1_n, X2_n, tdoa, snr_tensor)
+    groups_np = np.asarray(groups, dtype=int)
+    unique_groups = np.unique(groups_np)
+    rng.shuffle(unique_groups)
+    val_group_count = max(1, int(round(unique_groups.size * float(cfg.val_fraction))))
+    val_groups = set(int(v) for v in unique_groups[:val_group_count].tolist())
+    val_mask = np.asarray([int(g) in val_groups for g in groups_np], dtype=bool)
+    val_idx = np.where(val_mask)[0]
+    train_idx = np.where(~val_mask)[0]
+    if train_idx.size == 0 or val_idx.size == 0:
+        val_count = max(1, int(round(len(dataset) * float(cfg.val_fraction))))
+        perm = torch.randperm(len(dataset), generator=torch.Generator().manual_seed(int(seed)))
+        val_idx = perm[:val_count].numpy()
+        train_idx = perm[val_count:].numpy()
+    return {
+        "dataset": dataset,
+        "train_idx": train_idx,
+        "val_idx": val_idx,
+        "groups": groups_np,
+        "val_groups": sorted(val_groups),
+        "snr_values": snr_values,
+        "snapshot_indices": snapshot_idx,
+        "uav_i_indices": uav_i_idx,
+        "uav_j_indices": uav_j_idx,
+    }
+
+
+@dataclass
+class V5A1TrainConfig:
+    n_pairs: int = 6000
+    epochs: int = 20
+    batch_size: int = 256
+    lr: float = 1e-3
+    weight_decay: float = 1e-4
+    val_fraction: float = 0.2
+    sigma: float = 1.0
+    point_weight: float = 0.05
+    ambiguity_weight: float = 0.10
+    width_weight: float = 0.05
+    uncertainty_weight: float = 0.01
+    amp_power: float = 1.0
+    score_temperature: float = 0.35
+    restore_best_by_val_mae: bool = True
+    best_low_snr_weight: float = 0.50
+    best_mid_snr_weight: float = 0.25
+    best_high_snr_weight: float = 0.25
+    snr_grid: Tuple[float, ...] = (
+        -10.0, -8.0, -6.0, -4.0, -2.0, 0.0,
+        2.0, 4.0, 6.0, 8.0, 10.0, 12.0,
+        14.0, 16.0, 18.0, 20.0,
+    )
+
+
+def _empty_bucket_totals():
+    return {
+        "loss": 0.0, "ce": 0.0, "point": 0.0, "mae": 0.0,
+        "within1": 0.0, "within2": 0.0, "width": 0.0,
+        "ambiguity": 0.0, "entropy": 0.0, "count": 0,
+    }
+
+
+def _bucket_finalize(totals):
+    count = max(int(totals.get("count", 0)), 1)
+    return {
+        key: (value / count)
+        for key, value in totals.items()
+        if key != "count"
+    }
+
+
+def train_v5a1_hardbin_tdoa(
+    simulator,
+    device,
+    selected_bins,
+    label: str,
+    seed: int = 42,
+    lag_limit_samples: Optional[int] = None,
+    config: Optional[V5A1TrainConfig] = None,
+    dataset_bundle: Optional[Dict[str, object]] = None,
+):
+    """Train a V5-A.1 exact-bin likelihood for one fixed bin set."""
+    cfg = config or V5A1TrainConfig()
+    torch.manual_seed(int(seed))
+    np.random.seed(int(seed))
+    lag_limit = int(lag_limit_samples) if lag_limit_samples is not None else 48
+    model = HardBinCompressedTDOALikelihood(
+        selected_bins=selected_bins,
+        signal_len=simulator.signal_len,
+        lag_limit_samples=lag_limit,
+        score_temperature=float(cfg.score_temperature),
+        amp_power=float(cfg.amp_power),
+    ).to(device)
+
+    bundle = dataset_bundle or prepare_v5a1_hardbin_dataset(
+        simulator, cfg, seed=int(seed)
+    )
+    train_dataset = Subset(bundle["dataset"], bundle["train_idx"])
+    val_dataset = Subset(bundle["dataset"], bundle["val_idx"])
+    train_loader = DataLoader(
+        train_dataset, batch_size=int(cfg.batch_size), shuffle=True, drop_last=False
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=int(cfg.batch_size), shuffle=False, drop_last=False
+    )
+
+    opt = optim.AdamW(
+        model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
+    )
+    history = {
+        "label": str(label),
+        "train_loss": [], "val_loss": [],
+        "train_ce": [], "val_ce": [],
+        "train_point": [], "val_point": [],
+        "train_mae": [], "val_mae": [],
+        "train_within1": [], "val_within1": [],
+        "train_within2": [], "val_within2": [],
+        "train_width": [], "val_width": [],
+        "train_ambiguity": [], "val_ambiguity": [],
+        "train_entropy": [], "val_entropy": [],
+        "train_buckets": [], "val_buckets": [],
+    }
+
+    def run_epoch(loader, train: bool):
+        model.train(train)
+        totals = _empty_bucket_totals()
+        buckets = {name: _empty_bucket_totals() for name in ("low", "mid", "high", "other")}
+        for x1, x2, target, snr_batch in loader:
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            target = target.to(device).float()
+            snr_batch = snr_batch.float()
+            if train:
+                opt.zero_grad(set_to_none=True)
+            logits = model(x1, x2)
+            ce = soft_lag_ce(logits, model.lag_grid, target, sigma=cfg.sigma)
+            amb, width, unc = posterior_aux_losses(model, logits, target)
+            mean, _ = model.posterior_stats(logits)
+            point = F.smooth_l1_loss(mean, target, beta=1.0)
+            loss = (
+                ce
+                + float(cfg.point_weight) * point
+                + float(cfg.ambiguity_weight) * amb
+                + float(cfg.width_weight) * width
+                + float(cfg.uncertainty_weight) * unc
+            )
+            if train:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                opt.step()
+
+            with torch.no_grad():
+                prob = torch.softmax(logits, dim=-1)
+                entropy = -torch.sum(prob * torch.log(prob + 1e-9), dim=-1)
+                entropy = entropy / np.log(float(prob.shape[-1]))
+                pred = model.lag_grid.to(device)[torch.argmax(logits, dim=-1)]
+                abs_err = torch.abs(pred.float() - target)
+                bs = int(target.numel())
+                batch_stats = {
+                    "loss": float(loss.item()),
+                    "ce": float(ce.item()),
+                    "point": float(point.item()),
+                    "mae": float(torch.mean(abs_err).item()),
+                    "within1": float(torch.mean((abs_err <= 1.0).float()).item()),
+                    "within2": float(torch.mean((abs_err <= 2.0).float()).item()),
+                    "width": float(width.item()),
+                    "ambiguity": float(amb.item()),
+                    "entropy": float(torch.mean(entropy).item()),
+                }
+                for key, value in batch_stats.items():
+                    totals[key] += value * bs
+                totals["count"] += bs
+
+                snr_np = snr_batch.detach().cpu().numpy()
+                abs_np = abs_err.detach().cpu().numpy()
+                entropy_np = entropy.detach().cpu().numpy()
+                for bucket_name in buckets:
+                    mask = np.asarray([
+                        _snr_bucket_name(v) == bucket_name for v in snr_np
+                    ], dtype=bool)
+                    if not np.any(mask):
+                        continue
+                    count = int(np.sum(mask))
+                    b = buckets[bucket_name]
+                    b["loss"] += batch_stats["loss"] * count
+                    b["ce"] += batch_stats["ce"] * count
+                    b["point"] += batch_stats["point"] * count
+                    b["mae"] += float(np.mean(abs_np[mask])) * count
+                    b["within1"] += float(np.mean(abs_np[mask] <= 1.0)) * count
+                    b["within2"] += float(np.mean(abs_np[mask] <= 2.0)) * count
+                    b["width"] += batch_stats["width"] * count
+                    b["ambiguity"] += batch_stats["ambiguity"] * count
+                    b["entropy"] += float(np.mean(entropy_np[mask])) * count
+                    b["count"] += count
+        stats = _bucket_finalize(totals)
+        bucket_stats = {
+            key: _bucket_finalize(value) | {"count": int(value["count"])}
+            for key, value in buckets.items()
+        }
+        return stats, bucket_stats
+
+    def bucket_weighted_val_mae(stats, bucket_stats):
+        low = bucket_stats.get("low", {})
+        mid = bucket_stats.get("mid", {})
+        high = bucket_stats.get("high", {})
+        weights = [
+            (float(cfg.best_low_snr_weight), low),
+            (float(cfg.best_mid_snr_weight), mid),
+            (float(cfg.best_high_snr_weight), high),
+        ]
+        total_weight = 0.0
+        value = 0.0
+        for weight, bucket in weights:
+            count = int(bucket.get("count", 0))
+            mae = bucket.get("mae", float("nan"))
+            if count <= 0 or not np.isfinite(mae) or weight <= 0:
+                continue
+            total_weight += weight
+            value += weight * float(mae)
+        if total_weight <= 0:
+            return float(stats.get("mae", float("inf")))
+        return float(value / total_weight)
+
+    print("\n" + "=" * 40)
+    print(f"[V5-A.1] Training hard-bin exact likelihood: {label}")
+    print(
+        f"[V5-A.1] pairs={cfg.n_pairs} | epochs={cfg.epochs} | "
+        f"batch={cfg.batch_size} | lag_limit={lag_limit} | "
+        f"features={model.num_features} complex"
+    )
+    best_state = None
+    best_epoch = -1
+    best_val_mae = float("inf")
+    best_val_weighted_mae = float("inf")
+    best_val_loss = float("inf")
+    for ep in range(int(cfg.epochs)):
+        tr, tr_buckets = run_epoch(train_loader, train=True)
+        va, va_buckets = run_epoch(val_loader, train=False)
+        weighted_mae = bucket_weighted_val_mae(va, va_buckets)
+        for split, stats, bucket_stats in [
+            ("train", tr, tr_buckets), ("val", va, va_buckets)
+        ]:
+            for key in ("loss", "ce", "point", "mae", "within1",
+                        "within2", "width", "ambiguity", "entropy"):
+                history[f"{split}_{key}"].append(stats[key])
+            history[f"{split}_buckets"].append(bucket_stats)
+        history.setdefault("val_weighted_mae", []).append(weighted_mae)
+        selection_value = weighted_mae if bool(cfg.restore_best_by_val_mae) else va["loss"]
+        best_value = (
+            best_val_weighted_mae if bool(cfg.restore_best_by_val_mae)
+            else best_val_loss
+        )
+        if selection_value < best_value:
+            best_epoch = int(ep)
+            best_val_mae = float(va["mae"])
+            best_val_weighted_mae = float(weighted_mae)
+            best_val_loss = float(va["loss"])
+            best_state = {
+                key: value.detach().cpu().clone()
+                for key, value in model.state_dict().items()
+            }
+        if ep == 0 or (ep + 1) % max(1, min(5, int(cfg.epochs))) == 0 or ep + 1 == int(cfg.epochs):
+            low = va_buckets["low"]
+            high = va_buckets["high"]
+            print(
+                f"[V5-A.1][{label}][Epoch {ep + 1:03d}/{cfg.epochs}] "
+                f"ValLoss={va['loss']:.4f} ValMAE={va['mae']:.3f} | "
+                f"ValWMAE={weighted_mae:.3f} | "
+                f"lowMAE={low.get('mae', float('nan')):.3f} "
+                f"highMAE={high.get('mae', float('nan')):.3f}"
+            )
+
+    if best_state is not None:
+        model.load_state_dict({
+            key: value.to(device) for key, value in best_state.items()
+        })
+        print(
+            f"[V5-A.1][{label}] Restored best "
+            f"{'weighted-ValMAE' if cfg.restore_best_by_val_mae else 'ValLoss'} "
+            f"epoch={best_epoch + 1} | ValMAE={best_val_mae:.3f} | "
+            f"ValWMAE={best_val_weighted_mae:.3f} | ValLoss={best_val_loss:.4f}"
+        )
+
+    history["config"] = {
+        "label": str(label),
+        "n_pairs": int(cfg.n_pairs),
+        "epochs": int(cfg.epochs),
+        "batch_size": int(cfg.batch_size),
+        "lr": float(cfg.lr),
+        "weight_decay": float(cfg.weight_decay),
+        "val_fraction": float(cfg.val_fraction),
+        "sigma": float(cfg.sigma),
+        "point_weight": float(cfg.point_weight),
+        "ambiguity_weight": float(cfg.ambiguity_weight),
+        "width_weight": float(cfg.width_weight),
+        "uncertainty_weight": float(cfg.uncertainty_weight),
+        "amp_power": float(cfg.amp_power),
+        "score_temperature": float(cfg.score_temperature),
+        "restore_best_by_val_mae": bool(cfg.restore_best_by_val_mae),
+        "best_low_snr_weight": float(cfg.best_low_snr_weight),
+        "best_mid_snr_weight": float(cfg.best_mid_snr_weight),
+        "best_high_snr_weight": float(cfg.best_high_snr_weight),
+        "lag_limit_samples": int(lag_limit),
+        "cr": 16,
+        "snr_grid": [float(v) for v in cfg.snr_grid],
+        "train_pair_count": int(len(bundle["train_idx"])),
+        "val_pair_count": int(len(bundle["val_idx"])),
+        "val_groups": [int(v) for v in bundle["val_groups"]],
+    }
+    history["best_epoch"] = int(best_epoch + 1) if best_epoch >= 0 else None
+    history["best_val_mae"] = float(best_val_mae)
+    history["best_val_weighted_mae"] = float(best_val_weighted_mae)
+    history["best_val_loss"] = float(best_val_loss)
+    history["restored_best_state"] = bool(best_state is not None)
+    history["bin_summary"] = model.selected_bin_summary()
+    return model, history
+
+
+class LearnedHardBinCompressedTDOAEstimator:
+    """Adapter for V5-A.1 hard-bin likelihood estimators."""
+
+    def __init__(self, model: HardBinCompressedTDOALikelihood, device,
+                 label: str = "V5A1-HardBin64",
+                 weight_mode: str = "combined"):
+        self.model = model.to(device).eval()
+        self.device = device
+        self.label = str(label)
+        self.weight_mode = str(weight_mode).lower()
+        self.lags = model.lag_grid.detach().cpu().numpy().astype(float)
+        self.last_quality = {}
+
+    def _tensor_from_sig(self, sig: np.ndarray) -> torch.Tensor:
+        sig = np.asarray(sig)
+        arr = np.stack((sig.real, sig.imag), axis=0).astype(np.float32)
+        return torch.from_numpy(arr[None, :, :]).to(self.device)
+
+    def score_pair(self, sig_i, sig_j):
+        x_i = self._tensor_from_sig(sig_i)
+        x_j = self._tensor_from_sig(sig_j)
+        with torch.no_grad():
+            logits = self.model(x_i, x_j)[0]
+            prob = torch.softmax(logits, dim=-1).detach().cpu().numpy().astype(float)
+        return prob
+
+    @staticmethod
+    def _posterior_quality(prob, lags):
+        prob = np.asarray(prob, dtype=float)
+        lags = np.asarray(lags, dtype=float)
+        order = np.argsort(prob)
+        top1 = float(prob[order[-1]])
+        top2 = float(prob[order[-2]]) if prob.size > 1 else 0.0
+        margin = max(0.0, top1 - top2)
+        mean = float(np.sum(prob * lags))
+        var = float(np.sum(prob * (lags - mean) ** 2))
+        entropy = float(-np.sum(prob * np.log(prob + 1e-12)) / np.log(prob.size))
+        return top1, top2, margin, mean, max(var, 0.25), entropy
+
+    def _calibrated_weight(self, prob, idx, search_mask):
+        sidelobe_weight, peak, sidelobe_ratio = _quality_from_score(
+            prob, idx, search_mask
+        )
+        top1, top2, margin, post_mean, post_var, entropy = self._posterior_quality(
+            prob, self.lags
+        )
+        entropy_conf = float(np.clip(1.0 - entropy, 0.0, 1.0))
+        var_scale = np.sqrt(post_var) + 0.5
+        margin_weight = float(np.clip(12.0 * margin, 0.02, 10.0))
+        variance_weight = float(np.clip(8.0 / var_scale, 0.02, 10.0))
+        entropy_weight = float(np.clip(10.0 * entropy_conf, 0.02, 10.0))
+        if self.weight_mode in ("sidelobe", "score"):
+            weight = sidelobe_weight
+        elif self.weight_mode in ("variance", "var"):
+            weight = variance_weight
+        elif self.weight_mode in ("entropy",):
+            weight = entropy_weight
+        else:
+            weight = float(np.clip(
+                0.5 * sidelobe_weight
+                + 0.3 * variance_weight
+                + 0.2 * margin_weight,
+                0.02, 10.0,
+            ))
+            weight *= float(np.clip(0.25 + 0.75 * entropy_conf, 0.02, 1.0))
+            weight = float(np.clip(weight, 0.02, 10.0))
+        self.last_quality = {
+            "top1_prob": top1,
+            "top2_prob": top2,
+            "peak_margin": margin,
+            "posterior_mean": post_mean,
+            "posterior_var": post_var,
+            "posterior_std": float(np.sqrt(post_var)),
+            "posterior_entropy": entropy,
+            "entropy_confidence": entropy_conf,
+            "sidelobe_weight": float(sidelobe_weight),
+            "variance_weight": variance_weight,
+            "margin_weight": margin_weight,
+            "pair_weight": float(weight),
+        }
+        return weight, peak, sidelobe_ratio
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        score = self.score_pair(sig_i, sig_j)
+        search_mask = _lag_mask(self.lags, lag_limit_samples)
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, score, search_mask, sub_sample=sub_sample
+        )
+        if not return_quality:
+            return lag
+        weight, peak, sidelobe_ratio = self._calibrated_weight(
+            score, idx, search_mask
+        )
+        return lag, weight, peak, sidelobe_ratio
+
+    def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
+                    sub_sample=True, lag_limit_samples=None):
+        return _diagnostics_from_quality_estimator(
+            self, batch_np, meta, fs, c, use_los_only=use_los_only,
+            sub_sample=sub_sample, lag_limit_samples=lag_limit_samples,
+        )
+
+    def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
+        selected = self.model.selected_bins.detach().cpu().numpy().astype(int)
+        freqs = np.fft.fftshift(np.fft.fftfreq(self.model.signal_len))[selected]
+        lags = self.lags
+        response = np.abs(
+            np.exp(2j * np.pi * np.outer(lags, freqs))
+            @ np.ones(selected.size, dtype=np.complex64)
+        )
+        response = response / (np.max(response) + 1e-12)
+        physical = _lag_mask(lags, lag_limit_samples)
+        side = physical & (np.abs(lags) > 2)
+        peaks, props = signal.find_peaks(response, height=float(threshold))
+        summary = self.model.selected_bin_summary()
+        summary.update({
+            "hardbin_estimator": True,
+            "weight_mode": self.weight_mode,
+            "direct_lag_min": float(np.min(lags)),
+            "direct_lag_max": float(np.max(lags)),
+            "direct_lag_limit_samples": (
+                float(lag_limit_samples) if lag_limit_samples is not None else float("nan")
+            ),
+            "alias_threshold": float(threshold),
+            "alias_peak_lags": [int(v) for v in lags[peaks].astype(int).tolist()],
+            "alias_peak_values": [
+                float(v) for v in props.get("peak_heights", np.asarray([])).tolist()
+            ],
+            "max_sidelobe_inside_physical_lag": (
+                float(np.max(response[side])) if np.any(side) else None
+            ),
+        })
+        return summary
+
+
+class V5BExpertGatedTDOAEstimator:
+    """
+    V5-B lightweight expert mixture for hard-bin compressed-domain TDOA.
+
+    This is not a waveform-denoising neural network. It combines two trained
+    hard-bin likelihood experts with non-oracle posterior-quality gates:
+    Power64 is the low-confidence/low-SNR-safe expert, while GeoHybrid64 is the
+    higher-resolution expert used when its posterior is sufficiently reliable.
+    """
+
+    def __init__(self, experts: Dict[str, LearnedHardBinCompressedTDOAEstimator],
+                 label: str = "V5B-Expert64",
+                 low_confidence_power_prior: float = 0.65):
+        if "power" not in experts or "geohybrid" not in experts:
+            raise ValueError("V5BExpertGatedTDOAEstimator requires power and geohybrid experts")
+        self.experts = dict(experts)
+        self.label = str(label)
+        self.low_confidence_power_prior = float(low_confidence_power_prior)
+        self.lags = self.experts["power"].lags.astype(float)
+        self.last_quality = {}
+
+    @staticmethod
+    def _expert_quality(prob, lags):
+        top1, top2, margin, mean, var, entropy = (
+            LearnedHardBinCompressedTDOAEstimator._posterior_quality(prob, lags)
+        )
+        entropy_conf = float(np.clip(1.0 - entropy, 0.0, 1.0))
+        quality = (0.05 + 10.0 * margin) * (0.10 + entropy_conf)
+        quality = quality / (np.sqrt(max(var, 0.25)) + 0.5)
+        return {
+            "top1": top1,
+            "top2": top2,
+            "margin": margin,
+            "mean": mean,
+            "var": var,
+            "entropy": entropy,
+            "entropy_conf": entropy_conf,
+            "quality": float(max(quality, 1e-6)),
+        }
+
+    def _mixture_weights(self, power_q, geo_q):
+        q_power = float(power_q["quality"])
+        q_geo = float(geo_q["quality"])
+        max_q = max(q_power, q_geo)
+        if max_q < 0.08:
+            wp = float(np.clip(self.low_confidence_power_prior, 0.05, 0.95))
+            return wp, 1.0 - wp, True
+        # GeoHybrid is allowed to take over only when its posterior quality is
+        # clearly competitive; otherwise the more robust power bins keep weight.
+        q_geo *= float(np.clip(0.75 + geo_q["entropy_conf"], 0.35, 1.25))
+        q_power *= float(np.clip(1.10 - 0.35 * power_q["entropy"], 0.50, 1.20))
+        total = q_power + q_geo + 1e-12
+        wp = q_power / total
+        wg = q_geo / total
+        return float(wp), float(wg), False
+
+    def score_pair(self, sig_i, sig_j):
+        power_prob = self.experts["power"].score_pair(sig_i, sig_j)
+        geo_prob = self.experts["geohybrid"].score_pair(sig_i, sig_j)
+        power_q = self._expert_quality(power_prob, self.lags)
+        geo_q = self._expert_quality(geo_prob, self.lags)
+        wp, wg, low_conf_prior = self._mixture_weights(power_q, geo_q)
+        prob = wp * power_prob + wg * geo_prob
+        prob = prob / (np.sum(prob) + 1e-12)
+        self.last_quality = {
+            "expert_power_weight": float(wp),
+            "expert_geohybrid_weight": float(wg),
+            "expert_low_confidence_prior": float(1.0 if low_conf_prior else 0.0),
+            "power_quality": float(power_q["quality"]),
+            "geohybrid_quality": float(geo_q["quality"]),
+            "power_entropy": float(power_q["entropy"]),
+            "geohybrid_entropy": float(geo_q["entropy"]),
+            "power_margin": float(power_q["margin"]),
+            "geohybrid_margin": float(geo_q["margin"]),
+        }
+        return prob
+
+    def _topk_from_prob(self, prob, top_k: int = 3, lag_limit_samples=None):
+        search_mask = _lag_mask(self.lags, lag_limit_samples)
+        search_idx = np.where(search_mask)[0]
+        if search_idx.size == 0:
+            search_idx = np.arange(prob.size)
+        top_k = max(1, int(top_k))
+        ranked = search_idx[np.argsort(prob[search_idx])[-top_k:]][::-1]
+        hypotheses = []
+        for idx in ranked:
+            hypotheses.append({
+                "lag": float(self.lags[int(idx)]),
+                "prob": float(prob[int(idx)]),
+            })
+        if hypotheses:
+            self.last_quality["topk_lag_spread"] = float(
+                max(h["lag"] for h in hypotheses) - min(h["lag"] for h in hypotheses)
+            )
+            self.last_quality["topk_prob_mass"] = float(
+                sum(h["prob"] for h in hypotheses)
+            )
+        return hypotheses
+
+    def estimate_pair_hypotheses(self, sig_i, sig_j, top_k: int = 3,
+                                 lag_limit_samples=None):
+        prob = self.score_pair(sig_i, sig_j)
+        return self._topk_from_prob(
+            prob, top_k=top_k, lag_limit_samples=lag_limit_samples
+        )
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        prob = self.score_pair(sig_i, sig_j)
+        search_mask = _lag_mask(self.lags, lag_limit_samples)
+        idx, lag, search_mask = _peak_from_score(
+            self.lags, prob, search_mask, sub_sample=sub_sample
+        )
+        if not return_quality:
+            return lag
+        weight, peak, sidelobe_ratio = _quality_from_score(prob, idx, search_mask)
+        top1, top2, margin, post_mean, post_var, entropy = (
+            LearnedHardBinCompressedTDOAEstimator._posterior_quality(prob, self.lags)
+        )
+        entropy_conf = float(np.clip(1.0 - entropy, 0.0, 1.0))
+        calibrated = float(np.clip(
+            (0.45 * weight)
+            + (0.35 * np.clip(10.0 * margin, 0.02, 10.0))
+            + (0.20 * np.clip(8.0 / (np.sqrt(post_var) + 0.5), 0.02, 10.0)),
+            0.02, 10.0,
+        ))
+        calibrated *= float(np.clip(0.25 + 0.75 * entropy_conf, 0.02, 1.0))
+        calibrated = float(np.clip(calibrated, 0.02, 10.0))
+        self.last_quality.update({
+            "top1_prob": top1,
+            "top2_prob": top2,
+            "peak_margin": margin,
+            "posterior_mean": post_mean,
+            "posterior_var": post_var,
+            "posterior_std": float(np.sqrt(post_var)),
+            "posterior_entropy": entropy,
+            "entropy_confidence": entropy_conf,
+            "sidelobe_weight": float(weight),
+            "pair_weight": calibrated,
+        })
+        # Populate top-K diagnostics for later pair-level debugging. The current
+        # all-pair WLS still consumes the top-1 lag, keeping localization chain
+        # comparable with existing direct baselines.
+        self._topk_from_prob(prob, top_k=3, lag_limit_samples=lag_limit_samples)
+        return lag, calibrated, peak, sidelobe_ratio
+
+    def diagnostics(self, batch_np, meta, fs, c, use_los_only=True,
+                    sub_sample=True, lag_limit_samples=None):
+        return _diagnostics_from_quality_estimator(
+            self, batch_np, meta, fs, c, use_los_only=use_los_only,
+            sub_sample=sub_sample, lag_limit_samples=lag_limit_samples,
+        )
+
+    def alias_diagnostics(self, lag_limit_samples=None, threshold=0.8):
+        diag = {
+            "v5b_expert_gated": True,
+            "low_confidence_power_prior": float(self.low_confidence_power_prior),
+        }
+        for key, est in self.experts.items():
+            if hasattr(est, "alias_diagnostics"):
+                sub = est.alias_diagnostics(
+                    lag_limit_samples=lag_limit_samples, threshold=threshold
+                )
+                for sub_key, value in sub.items():
+                    if isinstance(value, (int, float, np.integer, np.floating)):
+                        diag[f"{key}_{sub_key}"] = float(value)
+        return diag

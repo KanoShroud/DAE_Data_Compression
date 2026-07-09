@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 
 from evaluate import (plot_snr_comparison, plot_snr_comparison_multi,
                       plot_monte_carlo, plot_method_comparison,
-                      plot_method_zoom_pair, filter_method_comparison_data)
+                      plot_method_zoom_pair, filter_method_comparison_data,
+                      build_tdoa_metrics_from_method_comparison)
 
 # ========== 在此修改结果目录路径 ==========
 RESULT_DIR = "运行结果/20260601_145854"
@@ -50,6 +51,11 @@ def apply_current_method_view_config(method_results, view):
     meta = config.get('traditional_baseline_meta', {})
     had_main = meta.get('hadamard_main_label', 'Hadamard')
     dae_label = f'DAE-CR{baseline_cr}'
+    v5_labels = [
+        'V5A-CR16',
+        'V5A1-Uniform64', 'V5A1-Power64', 'V5A1-Cao64', 'V5A1-GeoHybrid64',
+        'V5B-Expert64',
+    ]
 
     if view == 'fig6':
         main_order = unique_order(['Raw', dae_label, 'DFT', had_main, 'PCA'])
@@ -65,8 +71,12 @@ def apply_current_method_view_config(method_results, view):
             f'Fig6_Supp_Chen_Baseline_Ablation_CR{baseline_cr}_SNR_Zooms'
         )
     elif view == 'fig7':
+        methods = results.get('methods', {})
+        v5_order = [label for label in v5_labels if label in methods]
         task_order = unique_order([
-            'Raw', dae_label, 'DFT', 'DFT-SCS-lite',
+            'Raw', dae_label,
+        ] + v5_order + [
+            'DFT', 'DFT-SCS-lite',
             'DFT-Fisher-Direct',
             'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
             'GeoHybrid-B64-C32F32',
@@ -79,8 +89,12 @@ def apply_current_method_view_config(method_results, view):
             f'Fig7_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
         )
     elif view == 'fig8':
+        methods = results.get('methods', {})
+        v5_order = [label for label in v5_labels if label in methods]
         strong_order = unique_order([
-            'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
+            'Raw', dae_label,
+        ] + v5_order + [
+            'DFT', 'DFT-Fisher-Direct',
             'Cao2017-DFT-AML',
             'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
             'GeoHybrid-B64-C32F32',
@@ -92,8 +106,12 @@ def apply_current_method_view_config(method_results, view):
             f'Fig8_Strong_TaskAware_Baselines_CR{baseline_cr}_SNR_Zooms'
         )
     elif view == 'fig8_supp':
+        methods = results.get('methods', {})
+        v5_order = [label for label in v5_labels if label in methods]
         strong_order = unique_order([
-            'Raw', dae_label, 'DFT', 'DFT-Fisher-Direct',
+            'Raw', dae_label,
+        ] + v5_order + [
+            'DFT', 'DFT-Fisher-Direct',
             'Cao2017-DFT-AML',
             'GeoHybrid-B64-C48F16', 'GeoHybrid-B64-C40F24',
             'GeoHybrid-B64-C32F32', 'GeoHybrid-OverBudget-C64F64',
@@ -125,9 +143,10 @@ def apply_current_method_view_config(method_results, view):
             ]
             if label in methods
         ]
+        compressed_order = [label for label in v5_labels if label in methods]
         strong_order = unique_order([
             'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
-        ] + innovation_order + [
+        ] + innovation_order + compressed_order + [
             'DFT', 'DFT-Fisher-Direct',
             'Cao2017-DFT-AML', 'GeoHybrid-B64-C40F24', 'GeoAmbi-DFT-AML',
             'Zhai-CRLB-Decimation', had_main, 'PCA'
@@ -151,9 +170,10 @@ def apply_current_method_view_config(method_results, view):
             ]
             if label in methods
         ]
+        compressed_order = [label for label in v5_labels if label in methods]
         strong_order = unique_order([
             'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
-        ] + innovation_order)
+        ] + innovation_order + compressed_order)
         config['strong_method_order'] = strong_order
         config['strong_zoom_method_order'] = strong_order
         config['strong_title'] = (
@@ -200,9 +220,17 @@ def make_fig9_focus_results(data):
         ]
         if label in methods
     ]
+    compressed_order = [
+        label for label in [
+            'V5A-CR16',
+            'V5A1-Uniform64', 'V5A1-Power64', 'V5A1-Cao64', 'V5A1-GeoHybrid64',
+            'V5B-Expert64',
+        ]
+        if label in methods
+    ]
     focus_order = unique_order([
         'Raw', 'DAE-CR4', 'DAE-CR8', 'DAE-CR16',
-    ] + innovation_order)
+    ] + innovation_order + compressed_order)
     focus_keep = unique_order(['Raw', 'Clean', 'Geometry'] + focus_order)
     return filter_method_comparison_data(
         fig9_results, focus_keep,
@@ -216,6 +244,46 @@ def make_fig9_focus_results(data):
             'table_prefix': 'fig9_focus',
         },
     )
+
+
+def make_tdoa_results(data, key='tdoa_results', fallback_keys=None):
+    tdoa_results = data.get(key)
+    if tdoa_results is not None:
+        return tdoa_results
+    fallback_keys = fallback_keys or [
+        'fig9_results', 'fig8_results', 'fig7_results', 'fig6_results'
+    ]
+    for fallback_key in fallback_keys:
+        method_results = data.get(fallback_key)
+        if method_results is None:
+            continue
+        method_results = apply_current_method_view_config(
+            method_results,
+            fallback_key.replace('_results', '')
+        )
+        results, _ = method_results
+        config = results.get('config', {})
+        order = (
+            config.get('strong_method_order')
+            or config.get('taskaware_method_order')
+            or config.get('main_method_order')
+            or results.get('method_order', [])
+        )
+        keep = unique_order(['Raw', 'Clean', 'Geometry'] + list(order))
+        built = build_tdoa_metrics_from_method_comparison(
+            method_results, method_order=keep, prefer_direct=True
+        )
+        if built is not None:
+            baseline_cr = config.get('baseline_cr', 16)
+            built[0].setdefault('config', {}).update({
+                'strong_method_order': built[0]['method_order'],
+                'strong_figure_filename': f'Fig_TDOA_MAE_CR{baseline_cr}',
+                'tdoa_within1_figure_filename': f'Fig_TDOA_Within1_CR{baseline_cr}',
+                'table_prefix': 'tdoa',
+                'tdoa_source_view': fallback_key,
+            })
+            return built
+    return None
 
 
 def replot(result_dir):
@@ -459,6 +527,40 @@ def replot(result_dir):
                 result_dir,
                 f"{fig9_focus_config.get('strong_zoom_figure_filename', 'Fig9_Focused_DAE_CR_Comparison_SNR_Zooms')}.svg"
             ))
+
+    tdoa_results = make_tdoa_results(data, key='tdoa_results')
+    if tdoa_results is not None:
+        tdoa_config = tdoa_results[0].get('config', {})
+        fig_tdoa = plot_method_comparison(
+            tdoa_results, metric_key='tdoa_mae_samples', plot_kind='strong'
+        )
+        save_figure(fig_tdoa, os.path.join(
+            result_dir,
+            f"{tdoa_config.get('strong_figure_filename', 'Fig_TDOA_MAE_CR16')}.svg"
+        ))
+        fig_tdoa_within1 = plot_method_comparison(
+            tdoa_results, metric_key='tdoa_within_1_sample_rate',
+            plot_kind='strong'
+        )
+        save_figure(fig_tdoa_within1, os.path.join(
+            result_dir,
+            f"{tdoa_config.get('tdoa_within1_figure_filename', 'Fig_TDOA_Within1_CR16')}.svg"
+        ))
+
+    tdoa_focus_results = make_tdoa_results(
+        data, key='tdoa_focus_results',
+        fallback_keys=['fig9_focus_results', 'fig9_results']
+    )
+    if tdoa_focus_results is not None:
+        tdoa_focus_config = tdoa_focus_results[0].get('config', {})
+        fig_tdoa_focus = plot_method_comparison(
+            tdoa_focus_results, metric_key='tdoa_mae_samples',
+            plot_kind='strong'
+        )
+        save_figure(fig_tdoa_focus, os.path.join(
+            result_dir,
+            f"{tdoa_focus_config.get('strong_figure_filename', 'Fig_TDOA_Focus_MAE_CR16')}.svg"
+        ))
 
     fig10_localizer_results = apply_current_method_view_config(
         data.get('fig10_localizer_results'), 'fig10_localizer'
