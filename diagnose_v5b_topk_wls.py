@@ -2,7 +2,7 @@
 
 import os, sys, pickle, argparse, time
 import numpy as np, pandas as pd
-from scipy.optimize import least_squares
+from evaluate import _localize_from_tdoa_pairs
 from signal_gen import SignalSimulator
 
 
@@ -28,38 +28,24 @@ def _localize_wls(uav_pos, pairs, lags, fs, c, area_size, weights=None,
     if len(pairs) < 3:
         return None, float("inf")
 
-    bounds = ([0.0, 0.0], [float(area_size[0]), float(area_size[1])])
-    delta_ranges = lags * c / fs
-    pw = pw / (np.median(pw) + 1e-12)
-    sqrt_w = np.sqrt(np.clip(pw, 0.05, 20.0))
-
-    def residual(p):
-        vals = []
-        for (i,j), dr in zip(pairs, delta_ranges):
-            vals.append(np.linalg.norm(p - uav_pos[i]) - np.linalg.norm(p - uav_pos[j]) - dr)
-        return sqrt_w * np.array(vals, dtype=float)
-
-    used = sorted(set([i for i,_ in pairs] + [j for _,j in pairs]))
-    gs = max(2, int(grid_size))
-    x0_list = [np.mean(uav_pos[used], axis=0),
-               np.array([area_size[0]/2, area_size[1]/2])]
-    for x in np.linspace(0.1*bounds[1][0], 0.9*bounds[1][0], gs):
-        for y in np.linspace(0.1*bounds[1][1], 0.9*bounds[1][1], gs):
-            x0_list.append(np.array([x, y]))
-
-    best_pos, best_cost = None, float("inf")
-    for x0 in x0_list:
-        x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
-        try:
-            res = least_squares(residual, x0=x0, bounds=bounds, loss="linear", max_nfev=250)
-        except Exception:
-            continue
-        if res.success and np.all(np.isfinite(res.x)):
-            c = float(np.sum(res.fun ** 2))
-            if c < best_cost:
-                best_cost = c
-                best_pos = res.x
-    return best_pos, best_cost
+    measurements = [
+        (int(i), int(j), float(tau), float(w))
+        for (i, j), tau, w in zip(pairs, lags, pw)
+    ]
+    try:
+        pos, info = _localize_from_tdoa_pairs(
+            uav_pos,
+            measurements,
+            fs=float(fs),
+            c=float(c),
+            area_size=area_size,
+            robust_mode="standard",
+        )
+    except Exception:
+        return None, float("inf")
+    if pos is None or not np.all(np.isfinite(pos)):
+        return None, float("inf")
+    return pos, _compute_cost(pos, uav_pos, pairs, lags, fs, c, pw)
 
 
 def _conf(entropy, margin, variance, eps=1e-9):
@@ -256,6 +242,12 @@ def main():
     tables_dir = os.path.join(result_dir, "tables")
     os.makedirs(tables_dir, exist_ok=True)
     prefix = "v5b_topk_wls_smoke" if args.smoke else "v5b_topk_wls"
+    top1_lag_col = "estimate_lag" if "estimate_lag" in diag_df.columns else "top1_lag"
+    print(
+        f"[Config] localizer=evaluate._localize_from_tdoa_pairs(standard), "
+        f"top1_lag_col={top1_lag_col}",
+        flush=True,
+    )
 
     for snr_idx, snr_db in enumerate(eval_snr):
         t_snr_start = time.time()
@@ -286,7 +278,8 @@ def main():
                 true_meta = float(dfloat[i] - dfloat[j])
                 if abs(true_csv - true_meta) > 1e-4:
                     tdoa_assert_fails += 1
-                l1 = float(r["top1_lag"])
+                l1_raw = r.get(top1_lag_col, np.nan)
+                l1 = float(l1_raw) if pd.notna(l1_raw) else float(r["top1_lag"])
                 l2 = float(r["top2_lag"]) if not pd.isna(r["top2_lag"]) else l1
                 l3 = float(r["top3_lag"]) if not pd.isna(r["top3_lag"]) else l1
                 pairs.append((i, j))

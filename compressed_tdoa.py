@@ -1394,7 +1394,7 @@ class V5BExpertGatedTDOAEstimator:
 
         # Compute pair_weight the same way as estimate_pair()
         search_mask = _lag_mask(self.lags, None)
-        idx, _, search_mask = _peak_from_score(
+        idx, estimate_lag, search_mask = _peak_from_score(
             self.lags, fused_prob, search_mask, sub_sample=True
         )
         sidelobe_weight, peak, sidelobe_ratio = _quality_from_score(
@@ -1413,6 +1413,9 @@ class V5BExpertGatedTDOAEstimator:
         return {
             "true_tdoa": float(true_tdoa),
             "top1_lag": topk_lags[0] if topk_lags else np.nan,
+            "estimate_lag": float(estimate_lag),
+            "estimate_hit1": bool(_hit(estimate_lag, 1.0)),
+            "estimate_hit2": bool(_hit(estimate_lag, 2.0)),
             "top1_prob": topk_probs[0] if topk_probs else np.nan,
             "top2_lag": topk_lags[1] if len(topk_lags) > 1 else np.nan,
             "top2_prob": topk_probs[1] if len(topk_probs) > 1 else np.nan,
