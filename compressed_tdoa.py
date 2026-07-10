@@ -463,8 +463,17 @@ class LearnedCompressedTDOAEstimator:
         self.lags = model.lag_grid.detach().cpu().numpy().astype(float)
 
     def _tensor_from_sig(self, sig: np.ndarray) -> torch.Tensor:
+        """Convert complex [N] or two-channel [2,N] to batched float [1,2,N]."""
         sig = np.asarray(sig)
-        arr = np.stack((sig.real, sig.imag), axis=0).astype(np.float32)
+        if np.iscomplexobj(sig):
+            arr = np.stack((sig.real, sig.imag), axis=0).astype(np.float32)
+        elif sig.ndim == 2 and sig.shape[0] == 2 and sig.dtype in (np.float32, np.float64):
+            arr = sig.astype(np.float32)
+        else:
+            raise ValueError(
+                f"_tensor_from_sig expects complex [N] or two-channel [2,N], "
+                f"got shape={sig.shape} dtype={sig.dtype}"
+            )
         return torch.from_numpy(arr[None, :, :]).to(self.device)
 
     def score_pair(self, sig_i, sig_j):
@@ -552,9 +561,25 @@ class HardBinCompressedTDOALikelihood(nn.Module):
         return self.freq_grid[self.selected_bins]
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim != 3 or x.shape[1] != 2:
+            raise ValueError(
+                f"encode expects [B,2,N], got shape={tuple(x.shape)}"
+            )
+        if x.shape[-1] != self.signal_len:
+            raise ValueError(
+                f"encode: signal length mismatch, "
+                f"expected {self.signal_len} got {x.shape[-1]}"
+            )
+        if self.selected_bins.min() < 0 or self.selected_bins.max() >= self.signal_len:
+            raise IndexError(
+                f"encode: selected_bins out of [0, {self.signal_len}), "
+                f"range=[{self.selected_bins.min()}, {self.selected_bins.max()}]"
+            )
         xc = _to_complex(x)
         spec = torch.fft.fftshift(torch.fft.fft(xc, norm="ortho"), dim=-1)
-        return spec[:, self.selected_bins.to(spec.device)]
+        return spec.index_select(
+            dim=-1, index=self.selected_bins.to(spec.device)
+        )
 
     def pair_logits(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
         z_i = self.encode(x_i)
@@ -1027,8 +1052,17 @@ class LearnedHardBinCompressedTDOAEstimator:
         self.last_quality = {}
 
     def _tensor_from_sig(self, sig: np.ndarray) -> torch.Tensor:
+        """Convert complex [N] or two-channel [2,N] to batched float [1,2,N]."""
         sig = np.asarray(sig)
-        arr = np.stack((sig.real, sig.imag), axis=0).astype(np.float32)
+        if np.iscomplexobj(sig):
+            arr = np.stack((sig.real, sig.imag), axis=0).astype(np.float32)
+        elif sig.ndim == 2 and sig.shape[0] == 2 and sig.dtype in (np.float32, np.float64):
+            arr = sig.astype(np.float32)
+        else:
+            raise ValueError(
+                f"_tensor_from_sig expects complex [N] or two-channel [2,N], "
+                f"got shape={sig.shape} dtype={sig.dtype}"
+            )
         return torch.from_numpy(arr[None, :, :]).to(self.device)
 
     def score_pair(self, sig_i, sig_j):
@@ -1316,3 +1350,161 @@ class V5BExpertGatedTDOAEstimator:
                     if isinstance(value, (int, float, np.integer, np.floating)):
                         diag[f"{key}_{sub_key}"] = float(value)
         return diag
+
+    def pair_diagnostic(self, sig_i, sig_j, true_tdoa, top_k=5):
+        """Comprehensive per-pair diagnostic for top-K oracle analysis.
+
+        Returns a dict with fused and individual expert top-K lags/probs,
+        hit/miss flags, expert quality metrics, and gating weights.
+        This is eval-only and does not modify any model state.
+        """
+        power_est = self.experts["power"]
+        geo_est = self.experts["geohybrid"]
+        power_prob = power_est.score_pair(sig_i, sig_j)
+        geo_prob = geo_est.score_pair(sig_i, sig_j)
+        power_q = self._expert_quality(power_prob, self.lags)
+        geo_q = self._expert_quality(geo_prob, self.lags)
+        wp, wg, low_conf = self._mixture_weights(power_q, geo_q)
+        fused_prob = wp * power_prob + wg * geo_prob
+        fused_prob = fused_prob / (np.sum(fused_prob) + 1e-12)
+
+        ranked = np.argsort(fused_prob)[::-1]
+        topk_lags = [float(self.lags[int(idx)]) for idx in ranked[:top_k]]
+        topk_probs = [float(fused_prob[int(idx)]) for idx in ranked[:top_k]]
+
+        def _hit(lag, tol):
+            return abs(lag - float(true_tdoa)) <= float(tol)
+
+        topk_hit1 = [_hit(l, 1.0) for l in topk_lags]
+        topk_hit2 = [_hit(l, 2.0) for l in topk_lags]
+
+        power_ranked = np.argsort(power_prob)[::-1]
+        p_top1_lag = float(self.lags[int(power_ranked[0])])
+        p_top1_hit1 = _hit(p_top1_lag, 1.0)
+
+        geo_ranked = np.argsort(geo_prob)[::-1]
+        g_top1_lag = float(self.lags[int(geo_ranked[0])])
+        g_top1_hit1 = _hit(g_top1_lag, 1.0)
+
+        fused_top1, fused_top2, fused_margin, fused_mean, fused_var, fused_entropy = (
+            LearnedHardBinCompressedTDOAEstimator._posterior_quality(fused_prob, self.lags)
+        )
+
+        oracle_hit1 = bool(p_top1_hit1 or g_top1_hit1)
+
+        # Compute pair_weight the same way as estimate_pair()
+        search_mask = _lag_mask(self.lags, None)
+        idx, _, search_mask = _peak_from_score(
+            self.lags, fused_prob, search_mask, sub_sample=True
+        )
+        sidelobe_weight, peak, sidelobe_ratio = _quality_from_score(
+            fused_prob, idx, search_mask
+        )
+        entropy_conf = float(np.clip(1.0 - fused_entropy, 0.0, 1.0))
+        pair_weight = float(np.clip(
+            (0.45 * sidelobe_weight)
+            + (0.35 * np.clip(10.0 * fused_margin, 0.02, 10.0))
+            + (0.20 * np.clip(8.0 / (np.sqrt(fused_var) + 0.5), 0.02, 10.0)),
+            0.02, 10.0,
+        ))
+        pair_weight *= float(np.clip(0.25 + 0.75 * entropy_conf, 0.02, 1.0))
+        pair_weight = float(np.clip(pair_weight, 0.02, 10.0))
+
+        return {
+            "true_tdoa": float(true_tdoa),
+            "top1_lag": topk_lags[0] if topk_lags else np.nan,
+            "top1_prob": topk_probs[0] if topk_probs else np.nan,
+            "top2_lag": topk_lags[1] if len(topk_lags) > 1 else np.nan,
+            "top2_prob": topk_probs[1] if len(topk_probs) > 1 else np.nan,
+            "top3_lag": topk_lags[2] if len(topk_lags) > 2 else np.nan,
+            "top3_prob": topk_probs[2] if len(topk_probs) > 2 else np.nan,
+            "top4_lag": topk_lags[3] if len(topk_lags) > 3 else np.nan,
+            "top4_prob": topk_probs[3] if len(topk_probs) > 3 else np.nan,
+            "top5_lag": topk_lags[4] if len(topk_lags) > 4 else np.nan,
+            "top5_prob": topk_probs[4] if len(topk_probs) > 4 else np.nan,
+            "top1_hit1": bool(topk_hit1[0]) if topk_hit1 else False,
+            "top1_hit2": bool(topk_hit2[0]) if topk_hit2 else False,
+            "top3_hit1": any(topk_hit1[:3]) if len(topk_hit1) >= 3 else any(topk_hit1),
+            "top3_hit2": any(topk_hit2[:3]) if len(topk_hit2) >= 3 else any(topk_hit2),
+            "top5_hit1": any(topk_hit1[:5]) if len(topk_hit1) >= 5 else any(topk_hit1),
+            "top5_hit2": any(topk_hit2[:5]) if len(topk_hit2) >= 5 else any(topk_hit2),
+            "power_top1_lag": p_top1_lag,
+            "power_top1_prob": float(power_prob[int(power_ranked[0])]),
+            "power_top1_hit1": bool(p_top1_hit1),
+            "power_entropy": float(power_q["entropy"]),
+            "power_margin": float(power_q["margin"]),
+            "power_quality": float(power_q["quality"]),
+            "geo_top1_lag": g_top1_lag,
+            "geo_top1_prob": float(geo_prob[int(geo_ranked[0])]),
+            "geo_top1_hit1": bool(g_top1_hit1),
+            "geo_entropy": float(geo_q["entropy"]),
+            "geo_margin": float(geo_q["margin"]),
+            "geo_quality": float(geo_q["quality"]),
+            "oracle_expert_hit1": oracle_hit1,
+            "expert_power_weight": float(wp),
+            "expert_geohybrid_weight": float(wg),
+            "low_confidence_prior": bool(low_conf),
+            "posterior_entropy": float(fused_entropy),
+            "posterior_variance": float(fused_var),
+            "peak_margin": float(fused_margin),
+            "pair_weight": pair_weight,
+        }
+
+
+def run_v5b_topk_diagnostics(simulator, device, v5b_estimator, snr_range,
+                              num_trials=200, snapshot_indices=None, seed=42):
+    """Run pair-level top-K diagnostics across the eval SNR range.
+
+    Returns a pandas DataFrame with per-pair top-K hit/miss, expert
+    posteriors, gating weights, and oracle upper bounds.  Requires
+    ``pandas`` (already available in the project environment).
+    """
+    import pandas as pd
+
+    # Expand snapshot_indices to match num_trials if necessary
+    if snapshot_indices is not None:
+        snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+        if len(snapshot_indices) < num_trials:
+            rng = np.random.RandomState(seed + 10000)
+            snapshot_indices = rng.choice(snapshot_indices, size=num_trials, replace=True)
+
+    rows = []
+    for snr_db in snr_range:
+        snr_db = float(snr_db)
+        X_noisy, X_clean, meta = simulator.generate_urban_batch(
+            num_trials, snr_db=snr_db, snapshot_indices=snapshot_indices, seed=seed
+        )
+        for trial_idx in range(num_trials):
+            los_arr = meta["los"][trial_idx]
+            los_indices = np.where(los_arr)[0]
+            if len(los_indices) < 2:
+                continue
+            delays_float = meta["delay_float"][trial_idx]
+            for pi, i in enumerate(los_indices):
+                for pj, j in enumerate(los_indices):
+                    if i >= j:
+                        continue
+                    sig_i_ch = X_noisy[trial_idx, i]
+                    sig_j_ch = X_noisy[trial_idx, j]
+                    sig_i = sig_i_ch[0, :] + 1j * sig_i_ch[1, :]
+                    sig_j = sig_j_ch[0, :] + 1j * sig_j_ch[1, :]
+                    true_tdoa = float(delays_float[i] - delays_float[j])
+                    diag = v5b_estimator.pair_diagnostic(sig_i, sig_j, true_tdoa)
+                    diag["SNR_dB"] = snr_db
+                    diag["trial_idx"] = int(trial_idx)
+                    if "snapshot_id" in meta:
+                        diag["snapshot_id"] = int(meta["snapshot_id"][trial_idx])
+                    diag["uav_i"] = int(i)
+                    diag["uav_j"] = int(j)
+                    diag["pair_id"] = f"t{trial_idx}_u{i}_u{j}"
+                    rows.append(diag)
+
+    df = pd.DataFrame(rows)
+    # Add SNR bucket labels for convenient grouping
+    snr_arr = df["SNR_dB"].values
+    buckets = np.full(len(df), "other", dtype=object)
+    buckets[snr_arr <= 0.0] = "low"
+    buckets[(snr_arr >= 2.0) & (snr_arr <= 6.0)] = "mid"
+    buckets[snr_arr >= 8.0] = "high"
+    df["snr_bucket"] = buckets
+    return df

@@ -46,10 +46,12 @@
 - 若涉及主流程、训练、评估、绘图、baseline 或结果导出，优先执行：
   - `python -m py_compile main.py train.py signal_gen.py model.py evaluate.py replot.py baselines.py export_results.py task_baselines.py`
   - 必要时追加本轮新增或修改的 Python 文件，例如阶段性脚本 `update_dft_fisher_direct.py`。
-  - 必要时用 `D:\Software\anaconda3\envs\PyTorch\python.exe` 做 PyTorch 冒烟测试。
+  - 必要时用 `D:\Software\anaconda3\envs\PyTorch\python.exe` 做 PyTorch 冒烟测试，但全量、长耗时脚本必须交给用户通过 PyCharm 执行。
 - 涉及损失函数时必须同步检查训练集与验证集目标是否一致。
 - 涉及 GCC/TDOA 时必须检查训练、验证、评估使用的 lag window 和相关定义是否一致。
 - 涉及图片生成时必须检查图例、坐标轴、曲线含义和 pkl 字段是否一致。
+- 修改代码尽量保持与当前代码风格、结构一致，用尽量小的改动实现修改目标。
+- 如有需要，同步修改相关注释和日志打印内容，不要出现错配。
 
 ## Git 与分支规则
 
@@ -66,7 +68,6 @@
 ## 忽略规则
 
 当前 `.gitignore` 已忽略：
-
 - `运行结果/`
 - `__pycache__/`
 - `参考文献/`
@@ -75,8 +76,7 @@
 - `*.pyd`
 - `*.xml`
 
-建议继续忽略但未必已写入 `.gitignore` 的内容：
-
+- 建议继续忽略但未必已写入 `.gitignore` 的内容：
 - 模型权重：`*.pt`、`*.pth`
 - 大型绘图/中间数据：`*.pkl`，但历史 `plot_data.pkl` 若作为本地实验证据，保留在被忽略的 `运行结果/` 下即可。
 - 临时文件：`.pytest_cache/`、`.mypy_cache/`、`*.tmp`
@@ -94,7 +94,6 @@ rg --files
 python -m py_compile main.py train.py signal_gen.py model.py evaluate.py replot.py baselines.py export_results.py task_baselines.py
 D:\Software\anaconda3\envs\PyTorch\python.exe -m py_compile main.py train.py signal_gen.py model.py evaluate.py replot.py baselines.py export_results.py task_baselines.py
 ```
-
 完整训练、完整 `paper_repro_eval_only` 和正式结果生成默认由用户在 PyCharm 中运行。当前常用配置集中在 `main.py` 顶部 `USER_*` 普通变量；默认 `ALLOW_ENV_OVERRIDES=False`，PyCharm Run Configuration 或 PowerShell 中的 `DAE_*` 环境变量通常不会生效。
 
 ## 项目文档职责与更新规则
@@ -112,7 +111,7 @@ D:\Software\anaconda3\envs\PyTorch\python.exe -m py_compile main.py train.py sig
 ### 更新触发规则
 
 - 只分析或讨论、不修改文件：通常不更新 `修改记录.md`；若读取了新实验结果，应更新 `实验结果记录.md`；若形成新的下一步任务，应更新 `当前任务.md`。
-- 提出修改方案但等待用户审批：更新 `当前任务.md` 为“方案待审批”；不更新 `修改记录.md`。
+- 提出修改方案但等待用户审批：更新 `当前任务.md` 为“方案待审批”，并更新与修改方案有关内容；不更新 `修改记录.md`。
 - 用户批准方案后：更新 `当前任务.md` 为“已批准待执行”，再开始修改。
 - 执行代码或文档修改后：更新 `修改记录.md`；若研究状态或下一步发生变化，同步更新 `对话上下文.md` 和 `当前任务.md`。
 - 运行 `py_compile`、冒烟测试、评估脚本或完整训练后：更新 `实验结果记录.md`；如果这些验证属于某次代码修改，也在 `修改记录.md` 中简要引用。
