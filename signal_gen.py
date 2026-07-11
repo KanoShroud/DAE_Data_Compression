@@ -28,7 +28,6 @@ def rrc_filter(beta, span, sps):
     mask_edge = np.abs(np.abs(4.0 * beta * t) - 1.0) < 1e-10
     mask_edge &= ~mask_zero
     if np.any(mask_edge):
-        t_edge = np.abs(t[mask_edge])
         h[mask_edge] = (beta / np.sqrt(2.0)
                         * ((1.0 + 2.0 / np.pi) * np.sin(np.pi / (4.0 * beta))
                            + (1.0 - 2.0 / np.pi) * np.cos(np.pi / (4.0 * beta))))
@@ -106,6 +105,9 @@ class SignalSimulator:
         self.n_uavs = int(n_uavs)
         self.area_size = tuple(float(v) for v in area_size)
         self.normalization_mode = normalization_mode
+        self.normalization_uses_clean_target = normalization_mode in (
+            "per_sample_rms", "per_observation_rms"
+        )
         self.urban_base_delay = float(urban_base_delay)
         self.urban_min_los = int(urban_min_los)
         self.urban_train_los_only = bool(urban_train_los_only)
@@ -281,7 +283,6 @@ class SignalSimulator:
 
     def _urban_channel(self, distance_m, is_los, rng=None):
         rng_uniform = rng.uniform if rng is not None else np.random.uniform
-        rng_random = rng.random if rng is not None else np.random.random
         rng_integers = rng.integers if rng is not None else np.random.randint
         h = np.zeros(self.signal_len, dtype=complex)
         los_delay_float = self.urban_base_delay + distance_m / self.sample_distance_m
@@ -327,6 +328,11 @@ class SignalSimulator:
     def generate_urban_batch(self, batch_size, snr_db=None, seed=None, snapshot_indices=None):
         if self.scenario_mode != "urban8":
             raise RuntimeError("generate_urban_batch requires scenario_mode='urban8'")
+        batch_size = int(batch_size)
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        if snr_db is not None and np.asarray(snr_db).ndim != 0:
+            raise ValueError("snr_db must be a scalar or None")
         if seed is not None:
             rng_state = np.random.get_state()
             np.random.seed(seed)
@@ -342,6 +348,14 @@ class SignalSimulator:
             snapshot_indices = np.random.randint(0, len(self._urban_snapshots), size=batch_size)
         else:
             snapshot_indices = np.asarray(snapshot_indices, dtype=int)
+            if snapshot_indices.shape != (batch_size,):
+                raise ValueError(
+                    "snapshot_indices must contain exactly batch_size entries"
+                )
+            if np.any(snapshot_indices < 0) or np.any(
+                snapshot_indices >= len(self._urban_snapshots)
+            ):
+                raise IndexError("snapshot_indices contains an out-of-range snapshot")
 
         u_batch = self._make_base_signal(batch_size)
         noisy = np.zeros((batch_size, self.n_uavs, 2, self.signal_len), dtype=np.float32)
@@ -484,6 +498,12 @@ class SignalSimulator:
         uav_indices = np.asarray(uav_indices, dtype=int)
         if len(snapshot_indices) != len(uav_indices):
             raise ValueError("snapshot_indices and uav_indices must have the same length")
+        if np.any(snapshot_indices < 0) or np.any(
+            snapshot_indices >= len(self._urban_snapshots)
+        ):
+            raise IndexError("training snapshot index out of range")
+        if np.any(uav_indices < 0) or np.any(uav_indices >= self.n_uavs):
+            raise IndexError("training UAV index out of range")
 
         rng_state = np.random.get_state()
         np.random.seed(seed)
@@ -528,6 +548,15 @@ class SignalSimulator:
             raise ValueError(
                 "snapshot_indices, uav_i_indices and uav_j_indices must have the same length"
             )
+        if np.any(snapshot_indices < 0) or np.any(
+            snapshot_indices >= len(self._urban_snapshots)
+        ):
+            raise IndexError("pair-training snapshot index out of range")
+        if (np.any(uav_i_indices < 0) or np.any(uav_i_indices >= self.n_uavs)
+                or np.any(uav_j_indices < 0) or np.any(uav_j_indices >= self.n_uavs)):
+            raise IndexError("pair-training UAV index out of range")
+        if np.any(uav_i_indices == uav_j_indices):
+            raise ValueError("pair-training UAV indices must be distinct")
 
         rng_state = np.random.get_state()
         np.random.seed(seed)
@@ -663,20 +692,25 @@ class SignalSimulator:
         if self.scenario_mode == "urban8":
             X_noisy, X_clean, meta = self.generate_urban_batch(batch_size, snr_db=snr_db,
                                                                seed=seed)
+            pair_rng = (
+                np.random if seed is None
+                else np.random.default_rng(int(seed) + 7919)
+            )
             x1n, x1c, x2n, x2c = [], [], [], []
             d1, d2 = [], []
             for i in range(batch_size):
                 los_idx = np.where(meta['los'][i])[0]
                 if len(los_idx) >= 2:
-                    i1, i2 = int(los_idx[0]), int(los_idx[1])
+                    selected = pair_rng.choice(los_idx, size=2, replace=False)
+                    i1, i2 = int(selected[0]), int(selected[1])
                 else:
                     i1, i2 = 0, 1
                 x1n.append(X_noisy[i, i1])
                 x1c.append(X_clean[i, i1])
                 x2n.append(X_noisy[i, i2])
                 x2c.append(X_clean[i, i2])
-                d1.append(int(meta['delays'][i, i1]))
-                d2.append(int(meta['delays'][i, i2]))
+                d1.append(float(meta['delay_float'][i, i1]))
+                d2.append(float(meta['delay_float'][i, i2]))
             return (torch.stack(x1n, dim=0), torch.stack(x1c, dim=0),
                     torch.stack(x2n, dim=0), torch.stack(x2c, dim=0),
                     d1, d2)
@@ -778,8 +812,6 @@ class SignalSimulator:
         # 分批次生成，避免内存溢出
         batch_cap = 500
         noisy_list, clean_list = [], []
-        group_list = []
-
         if self.scenario_mode == "urban8":
             snapshot_indices, uav_indices = self.build_urban_training_plan(n_samples, seed=seed)
             X_noisy, X_clean, groups = self.generate_urban_training_dataset_from_plan(
@@ -808,7 +840,7 @@ class SignalSimulator:
 
     def generate_paired_training_dataset(self, n_samples, seed=42):
         """
-        生成配对训练数据集（X1, X2 同信道同噪声），用于相关性损失训练。
+        生成配对训练数据集（同一发射波形、两条独立接收链路），用于相关性损失训练。
 
         返回:
             X1_noisy, X1_clean, X2_noisy, X2_clean: (n_samples, 2, signal_len)

@@ -304,7 +304,7 @@ def replot(result_dir):
     # --- 显示运行配置 ---
     if config:
         print(f"\n{'='*60}")
-        print(f"Run Configuration:")
+        print("Run Configuration:")
         if 'experiment_mode' in config:
             print(f"  Experiment mode: {config['experiment_mode']} | Loss mode: {config.get('loss_mode', 'N/A')}")
         print(f"  Samples: {config['n_samples']} | Batch: {config['batch_size']} | LR: {config['lr']}")

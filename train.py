@@ -222,7 +222,7 @@ def gcc_peak_loss(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_len=None):
 
     # 真实 TDOA 对应的索引（same 窗口中零延迟在 n//2）
     zero_idx = n // 2
-    true_idx = zero_idx + true_tdoa.long()
+    true_idx = zero_idx + torch.round(true_tdoa).long()
     true_idx = torch.clamp(true_idx, 0, n - 1)
 
     # 取真实 TDOA 位置的 GCC 幅度
@@ -258,7 +258,7 @@ def gcc_peak_loss_per_sample(y1_real, y1_imag, y2_real, y2_imag, true_tdoa, fft_
 
     cc_mag = crop_gcc_same(torch.abs(cc), n)
     zero_idx = n // 2
-    true_idx = zero_idx + true_tdoa.long()
+    true_idx = zero_idx + torch.round(true_tdoa).long()
     true_idx = torch.clamp(true_idx, 0, n - 1)
 
     batch_idx = torch.arange(cc_mag.shape[0], device=cc_mag.device)
@@ -308,28 +308,27 @@ def fisher_tdoa_loss(y1_r, y1_i, y2_r, y2_i, c1_r, c1_i, c2_r, c2_i, fs=40e6):
     """
     n = y1_r.shape[-1]
 
-    y1 = torch.complex(y1_r, y1_i)
-    c1 = torch.complex(c1_r, c1_i)
-
-    S_dae = torch.fft.fft(y1, dim=-1)
-    S_clean = torch.fft.fft(c1, dim=-1)
-
     freqs = torch.fft.fftfreq(n, d=1.0 / fs).to(y1_r.device)
     w = (2.0 * torch.pi * freqs) ** 2  # (n,)
 
-    psd_dae = torch.abs(S_dae) ** 2
-    psd_clean = torch.abs(S_clean) ** 2
+    def relative_bandwidth_error(y_r, y_i, c_r, c_i):
+        y = torch.complex(y_r, y_i)
+        clean = torch.complex(c_r, c_i)
+        psd_y = torch.abs(torch.fft.fft(y, dim=-1)) ** 2
+        psd_clean = torch.abs(torch.fft.fft(clean, dim=-1)) ** 2
+        rms_y = torch.sqrt(
+            torch.sum(w[None, :] * psd_y, dim=-1)
+            / (torch.sum(psd_y, dim=-1) + 1e-9)
+        )
+        rms_clean = torch.sqrt(
+            torch.sum(w[None, :] * psd_clean, dim=-1)
+            / (torch.sum(psd_clean, dim=-1) + 1e-9)
+        )
+        return torch.abs(rms_y - rms_clean) / (rms_clean + 1e-9)
 
-    num_dae = torch.sum(w[None, :] * psd_dae, dim=-1)
-    den_dae = torch.sum(psd_dae, dim=-1) + 1e-9
-    rms_dae = torch.sqrt(num_dae / den_dae)
-
-    num_clean = torch.sum(w[None, :] * psd_clean, dim=-1)
-    den_clean = torch.sum(psd_clean, dim=-1) + 1e-9
-    rms_clean = torch.sqrt(num_clean / den_clean)
-
-    rel_err = torch.abs(rms_dae - rms_clean) / (rms_clean + 1e-9)
-    return torch.mean(rel_err)
+    rel1 = relative_bandwidth_error(y1_r, y1_i, c1_r, c1_i)
+    rel2 = relative_bandwidth_error(y2_r, y2_i, c2_r, c2_i)
+    return torch.mean(0.5 * (rel1 + rel2))
 
 
 def frequency_task_reconstruction_loss(y, target, spectral_blend=0.25,
@@ -570,10 +569,14 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
     pair_freq_task_enabled = loss_mode in (
         "freq_task_pair", "freq_task_nested_pair", "freq_task_v4_min_pair"
     )
-    task_loss_enabled = (
+    task_loss_enabled = pair_freq_task_enabled or (
         (loss_mode != "paper_mse")
         and (not freq_task_recon_enabled)
-        and (corr_weight > 0 or lambda_peak > 0 or beta_fi > 0)
+        and (
+            corr_weight > 0 or lambda_peak > 0 or beta_fi > 0
+            or pair_phase_weight > 0 or pair_task_weight > 0
+            or pair_uncertainty_weight > 0 or cr_monotonic_weight > 0
+        )
     )
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -628,10 +631,15 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
 
                 # 合并 X1/X2 为单次前向传播
                 bx_all = torch.cat([bx1, bx2], dim=0)
+                active_cr = (
+                    nested_crs[(ep + n_batches) % len(nested_crs)]
+                    if nested_pair_task_enabled else None
+                )
                 if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
-                    active_cr = nested_crs[(ep + n_batches) % len(nested_crs)]
                     model.set_active_cr(active_cr)
                 if v4_task_sufficient_enabled and hasattr(model, "encode_full_latent"):
+                    if active_cr is None:
+                        raise RuntimeError("nested V4 training requires an active CR")
                     z_full_all = model.encode_full_latent(bx_all)
                     z_all = model._mask_latent(z_full_all, cr=active_cr)
                     y_all = model.decode_latent(z_all)
@@ -825,6 +833,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
         val_peak = 0.0
         val_total = 0.0
         n_val = 0
+        val_batch_index = 0
         with torch.no_grad():
             for batch in val_loader:
                 if task_loss_enabled and len(batch) >= 4:
@@ -832,11 +841,15 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     bx1, by1, bx2, by2 = [b.to(device) for b in batch[:4]]
                     true_tdoa_v = batch[4].to(device) if len(batch) >= 5 else None
                     bx_all = torch.cat([bx1, bx2], dim=0)
+                    val_active_cr = (
+                        nested_crs[val_batch_index % len(nested_crs)]
+                        if nested_pair_task_enabled else None
+                    )
                     if nested_pair_task_enabled and hasattr(model, "set_active_cr"):
-                        model.set_active_cr(nested_crs[0])
+                        model.set_active_cr(val_active_cr)
                     if v4_task_sufficient_enabled and hasattr(model, "encode_full_latent"):
                         z_full_all = model.encode_full_latent(bx_all)
-                        z_all = model._mask_latent(z_full_all, cr=nested_crs[0])
+                        z_all = model._mask_latent(z_full_all, cr=val_active_cr)
                         y_all = model.decode_latent(z_all)
                         z_full1_v, z_full2_v = z_full_all.chunk(2, dim=0)
                         z1_v, z2_v = z_all.chunk(2, dim=0)
@@ -938,6 +951,15 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                             logits_v, true_tdoa_v.float(), sigma=soft_peak_sigma
                         )
 
+                    fi_v = torch.tensor(0.0, device=device)
+                    if beta_fi > 0:
+                        fi_v = fisher_tdoa_loss(
+                            y1[:, 0, :], y1[:, 1, :],
+                            y2[:, 0, :], y2[:, 1, :],
+                            by1[:, 0, :], by1[:, 1, :],
+                            by2[:, 0, :], by2[:, 1, :],
+                        )
+
                     # Validation uses the final reconstruction weight for comparable selection.
                     loss_v = (
                         corr_weight * corr_v
@@ -947,6 +969,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                         + pair_task_weight * pair_task_v
                         + pair_uncertainty_weight * pair_uncertainty_v
                         + cr_monotonic_weight * cr_monotonic_v
+                        + beta_fi * fi_v
                     )
 
                     val_mse += mse_v_norm.item() * bx1.size(0)
@@ -956,6 +979,7 @@ def train_one_fold(device, model, train_loader, val_loader, epochs, lr,
                     val_peak += peak_v.item() * bx1.size(0)
                     val_total += loss_v.item() * bx1.size(0)
                     n_val += bx1.size(0)
+                    val_batch_index += 1
                 else:
                     bx, by = batch[0].to(device), batch[1].to(device)
                     y = model(bx)
@@ -1376,6 +1400,9 @@ def train_with_cv(device, cr, k=5, n_samples=10000, epochs=100,
         'final_retrain': final_retrain,
         'final_epochs': final_epochs if final_epochs is not None else epochs,
         'final_epoch_policy': 'configured',
+        'final_monitor_split': (
+            'full_training_dataset_eval_mode' if final_retrain else None
+        ),
         'resample_train_each_epoch': bool(resample_train_each_epoch),
         'resample_interval': max(1, int(resample_interval)),
         'training_protocol': training_protocol or (

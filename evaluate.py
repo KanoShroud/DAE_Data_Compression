@@ -1,9 +1,10 @@
 # evaluate.py
 import torch
 import numpy as np
-import torch.nn as nn
 import matplotlib.pyplot as plt
 from scipy import signal, optimize
+
+from experiment_integrity import validate_model_output, validate_urban_batch
 
 
 def gcc_phat(sig1, sig2):
@@ -276,25 +277,56 @@ def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size,
             starts.extend(np.asarray([x, y], dtype=float) for x in gx for y in gy)
 
         candidates = []
-        for x0 in starts:
-            x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
-            try:
-                res = optimize.least_squares(residual, x0=x0, bounds=bounds, loss='linear',
-                                             max_nfev=250)
-            except Exception:
-                continue
-            if res.success and np.all(np.isfinite(res.x)):
+        attempt_count = 0
+        exception_count = 0
+        retry_used = False
+
+        def run_starts(max_nfev):
+            nonlocal attempt_count, exception_count
+            found = []
+            for x0 in starts:
+                x0 = np.clip(np.asarray(x0, dtype=float), bounds[0], bounds[1])
+                attempt_count += 1
+                try:
+                    res = optimize.least_squares(
+                        residual, x0=x0, bounds=bounds, loss='linear',
+                        max_nfev=int(max_nfev),
+                    )
+                except Exception:
+                    exception_count += 1
+                    continue
+                if not (res.success and np.all(np.isfinite(res.x))
+                        and np.isfinite(res.cost)):
+                    continue
                 raw = raw_residual(res.x)
-                candidates.append({
+                found.append({
                     'x': np.asarray(res.x, dtype=float),
                     'cost': float(res.cost),
                     'normalized_cost': float(res.cost / max(len(active_pairs), 1)),
                     'raw_residual': raw,
+                    'solver_status': int(res.status),
+                    'solver_nfev': int(res.nfev),
+                    'solver_optimality': float(res.optimality),
+                    'solver_max_nfev': int(max_nfev),
                 })
+            return found
+
+        candidates = run_starts(250)
+        if not candidates:
+            # Pathological UAV geometries can converge a few iterations after
+            # the normal budget. Retry only complete failures so ordinary
+            # samples keep the original cost and every method shares the same
+            # deterministic fallback protocol.
+            retry_used = True
+            candidates = run_starts(1000)
         if not candidates:
             return None, {
                 'success': False, 'cost': float('inf'), 'n_pairs': len(active_pairs),
                 'n_uavs': len(idx_used), 'candidate_count': 0,
+                'solver_retry_used': bool(retry_used),
+                'solver_attempt_count': int(attempt_count),
+                'solver_exception_count': int(exception_count),
+                'solver_max_nfev': 1000 if retry_used else 250,
             }
         candidates.sort(key=lambda d: d['cost'])
         best_item = candidates[0]
@@ -313,6 +345,13 @@ def _localize_from_tdoa_pairs(uav_pos, pair_measurements, fs, c, area_size,
             'n_pairs': len(active_pairs),
             'n_uavs': len(idx_used),
             'candidate_count': len(candidates),
+            'solver_retry_used': bool(retry_used),
+            'solver_attempt_count': int(attempt_count),
+            'solver_exception_count': int(exception_count),
+            'solver_status': int(best_item['solver_status']),
+            'solver_nfev': int(best_item['solver_nfev']),
+            'solver_optimality': float(best_item['solver_optimality']),
+            'solver_max_nfev': int(best_item['solver_max_nfev']),
             'residual_rmse_m': float(np.sqrt(np.mean(raw ** 2))) if raw.size else float('nan'),
             'mean_abs_residual_m': float(np.mean(np.abs(raw))) if raw.size else float('nan'),
             'max_abs_residual_m': float(np.max(np.abs(raw))) if raw.size else float('nan'),
@@ -442,6 +481,13 @@ def _localization_detail(sample_index, error_m, est, meta, los_idx, pair_abs_err
         'geometry_gdop': float(loc_info.get('geometry_gdop', float('nan'))),
         'boundary_hit': int(bool(loc_info.get('boundary_hit', False))),
         'candidate_count': int(loc_info.get('candidate_count', 0)),
+        'solver_retry_used': int(bool(loc_info.get('solver_retry_used', False))),
+        'solver_attempt_count': int(loc_info.get('solver_attempt_count', 0)),
+        'solver_exception_count': int(loc_info.get('solver_exception_count', 0)),
+        'solver_status': int(loc_info.get('solver_status', 0)),
+        'solver_nfev': int(loc_info.get('solver_nfev', 0)),
+        'solver_optimality': float(loc_info.get('solver_optimality', float('nan'))),
+        'solver_max_nfev': int(loc_info.get('solver_max_nfev', 0)),
         'second_best_cost': float(loc_info.get('second_best_cost', float('nan'))),
         'second_best_x': float(loc_info.get('second_best_x', float('nan'))),
         'second_best_y': float(loc_info.get('second_best_y', float('nan'))),
@@ -482,7 +528,12 @@ def _all_pair_robust_mode(estimator):
             f"{estimator} was removed from the active evaluation path. "
             "Fig10 showed it is not a generally valid replacement for all_pair_wls."
         )
-    return None
+    if estimator == "single_ref":
+        return None
+    raise ValueError(
+        f"unknown localization estimator {estimator!r}; expected "
+        "'all_pair_wls' or the explicitly supported legacy 'single_ref'"
+    )
 
 
 def _localization_errors_from_batch(batch_np, meta, fs, c, area_size, gcc_func,
@@ -795,6 +846,8 @@ class UrbanLocalizationExperiment:
                  snr_range=None, num_trials=200, sub_sample=True, use_los_only=True,
                  batch_size=64, fixed_eval_set=True, estimator="all_pair_wls",
                  tdoa_lag_limit_samples=None):
+        if gcc_method not in {"standard", "phat"}:
+            raise ValueError("gcc_method must be 'standard' or 'phat'")
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
@@ -822,7 +875,10 @@ class UrbanLocalizationExperiment:
             chunks = []
             with torch.no_grad():
                 for start in range(0, flat.shape[0], self.batch_size):
-                    chunks.append(model(flat[start:start + self.batch_size]).cpu())
+                    batch = flat[start:start + self.batch_size]
+                    output = model(batch)
+                    validate_model_output(output, batch.shape, label=f"DAE-CR{cr}")
+                    chunks.append(output.cpu())
             outputs[cr] = torch.cat(chunks, dim=0).reshape(n_obs, n_uav, 2, self.sim.signal_len).numpy()
         return outputs
 
@@ -875,6 +931,10 @@ class UrbanLocalizationExperiment:
             eval_seed = self.seed if self.fixed_eval_set else None
             X_noisy, X_clean, meta = self.sim.generate_urban_batch(
                 self.num_trials, snr_db=float(snr), seed=eval_seed
+            )
+            validate_urban_batch(
+                X_noisy, X_clean, meta, self.sim,
+                expected_batch=self.num_trials,
             )
             raw_np = X_noisy.numpy()
             clean_np = X_clean.numpy()
@@ -952,6 +1012,9 @@ def _run_named_models(models_dict, X_noisy, simulator, device, batch_size=64):
         with torch.no_grad():
             for start in range(0, flat.shape[0], int(batch_size)):
                 y = model(flat[start:start + int(batch_size)])
+                validate_model_output(
+                    y, flat[start:start + int(batch_size)].shape, label=label
+                )
                 chunks.append(y.detach().cpu())
         outputs[label] = torch.cat(chunks, dim=0).reshape(
             n_obs, n_uav, 2, simulator.signal_len
@@ -976,6 +1039,16 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
     return pairwise delays and then use the same all-pair WLS localization
     solver as the waveform methods.
     """
+    if gcc_method not in {"standard", "phat"}:
+        raise ValueError("gcc_method must be 'standard' or 'phat'")
+    reserved = {"Raw", "Clean", "Geometry"}
+    duplicate = set(models_dict).intersection(direct_estimators or {})
+    invalid = reserved.intersection(set(models_dict) | set(direct_estimators or {}))
+    if duplicate or invalid:
+        raise ValueError(
+            f"method labels must be unique and non-reserved; "
+            f"duplicates={sorted(duplicate)}, reserved={sorted(invalid)}"
+        )
     snr_range = np.asarray(snr_range if snr_range is not None else np.arange(-10, 21, 2))
     gcc_func = gcc_standard if gcc_method == 'standard' else gcc_phat
     direct_estimators = direct_estimators or {}
@@ -1020,6 +1093,9 @@ def run_urban_method_comparison(models_dict, simulator, device, seed=None,
         eval_seed = seed if fixed_eval_set else None
         X_noisy, X_clean, meta = simulator.generate_urban_batch(
             int(num_trials), snr_db=float(snr), seed=eval_seed
+        )
+        validate_urban_batch(
+            X_noisy, X_clean, meta, simulator, expected_batch=int(num_trials)
         )
         raw_np = X_noisy.numpy()
         clean_np = X_clean.numpy()
@@ -1319,6 +1395,8 @@ class MonteCarloExperiment:
         参数:
             gcc_method: 'standard' (标准 GCC，默认) 或 'phat' (GCC-PHAT)
         """
+        if gcc_method not in {"standard", "phat"}:
+            raise ValueError("gcc_method must be 'standard' or 'phat'")
         self.models_dict = models_dict
         self.sim = simulator
         self.device = device
@@ -1895,7 +1973,7 @@ def plot_method_comparison(method_data, metric_key="rmse", plot_kind="main",
         "V5A1-GeoHybrid64": dict(color="#41ab5d", marker="*", linestyle=":", linewidth=1.35,
                                  label="V5-A.1 hard-bin GeoHybrid"),
         "V5B-Expert64": dict(color="#b30000", marker="*", linestyle="-", linewidth=1.55,
-                             label="V5-B expert mixture CR=16"),
+                             label="V5-B expert mixture (88 bins, CR=11.6)"),
         "FreqDAE-CR4": dict(color="#b2182b", marker="*", linestyle="-", linewidth=1.45,
                             label="FreqDAE CR=4"),
         "FreqDAE-CR8": dict(color="#d6604d", marker="P", linestyle="--", linewidth=1.40,

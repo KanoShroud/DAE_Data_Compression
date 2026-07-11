@@ -4,6 +4,8 @@ import pickle
 
 import numpy as np
 
+from experiment_integrity import assert_protocol_compatible
+
 
 def load_plot_data(result_dir):
     """Load a saved plot_data.pkl from a result directory."""
@@ -14,7 +16,7 @@ def load_plot_data(result_dir):
         return pickle.load(f)
 
 
-def load_static_baseline_cache(result_dir):
+def load_static_baseline_cache(result_dir, expected_config=None):
     """
     Load static baseline views that do not depend on the current innovation model.
 
@@ -23,6 +25,11 @@ def load_static_baseline_cache(result_dir):
     baseline configuration and evaluation set are intentionally unchanged.
     """
     data = load_plot_data(result_dir)
+    if expected_config is not None:
+        assert_protocol_compatible(
+            data.get("config", {}), expected_config,
+            context=f"static baseline cache {result_dir}",
+        )
     return {
         "source_dir": str(result_dir),
         "fig6_results": data.get("fig6_results"),
@@ -37,7 +44,7 @@ def load_static_baseline_cache(result_dir):
 
 def _snr_compatible(a, b):
     if a is None or b is None:
-        return True
+        return a is None and b is None
     try:
         return np.array_equal(np.asarray(a, dtype=float), np.asarray(b, dtype=float))
     except Exception:

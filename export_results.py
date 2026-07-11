@@ -10,7 +10,6 @@ import csv
 import argparse
 import os
 import pickle
-import sys
 
 import matplotlib
 matplotlib.use("Agg")

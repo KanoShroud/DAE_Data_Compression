@@ -24,6 +24,8 @@ import torch.nn.functional as F
 from scipy import signal
 from torch.utils.data import DataLoader, Dataset, Subset, TensorDataset
 
+from experiment_integrity import validate_selected_bins
+
 from task_baselines import (
     _diagnostics_from_estimator,
     _diagnostics_from_quality_estimator,
@@ -70,6 +72,79 @@ def _gaussian_filter_logits(signal_len: int, centers: np.ndarray,
         dist = torch.abs(idx - float(center))
         rows.append(-0.5 * (dist / max(float(width), 1e-3)).pow(2))
     return torch.stack(rows, dim=0)
+
+
+def _refine_peak_lag(lags, score, peak_idx, search_mask, sub_sample=True):
+    """Refine one specified peak without changing which local mode was chosen."""
+    idx = int(peak_idx)
+    lag = float(lags[idx])
+    if (sub_sample and 0 < idx < len(score) - 1
+            and search_mask[idx - 1] and search_mask[idx + 1]):
+        y0, y1, y2 = float(score[idx - 1]), float(score[idx]), float(score[idx + 1])
+        denom = y0 - 2.0 * y1 + y2
+        if abs(denom) > 1e-12:
+            delta = 0.5 * (y0 - y2) / denom
+            lag += float(np.clip(delta, -0.5, 0.5))
+    return lag
+
+
+def _distinct_peak_hypotheses(lags, score, search_mask, top_k=3,
+                              sub_sample=True, min_separation_bins=2):
+    """Return probability-ranked, distinct local maxima in the valid lag window.
+
+    Selecting the globally largest K bins usually returns adjacent samples from
+    one broad peak.  Here each hypothesis must be a local maximum and must be at
+    least ``min_separation_bins`` FFT-lag bins from an already selected mode.
+    Every retained mode is refined independently to sub-sample precision.
+    """
+    lags = np.asarray(lags, dtype=float)
+    score = np.asarray(score, dtype=float)
+    mask = np.asarray(search_mask, dtype=bool)
+    if lags.ndim != 1 or score.ndim != 1 or mask.ndim != 1:
+        raise ValueError("lags, score, and search_mask must be one-dimensional")
+    if not (lags.size == score.size == mask.size):
+        raise ValueError("lags, score, and search_mask must have equal lengths")
+    valid_idx = np.where(mask & np.isfinite(score))[0]
+    if valid_idx.size == 0:
+        return []
+
+    masked_score = np.full(score.shape, -np.inf, dtype=float)
+    masked_score[valid_idx] = score[valid_idx]
+    peak_idx = signal.find_peaks(masked_score)[0].astype(int).tolist()
+
+    # scipy.find_peaks excludes array endpoints.  A physical lag-window edge is
+    # still a valid local maximum when it exceeds its only in-window neighbor.
+    first, last = int(valid_idx[0]), int(valid_idx[-1])
+    if first == last:
+        peak_idx.append(first)
+    else:
+        if score[first] > score[first + 1]:
+            peak_idx.append(first)
+        if score[last] > score[last - 1]:
+            peak_idx.append(last)
+    if not peak_idx:
+        peak_idx = [int(valid_idx[np.argmax(score[valid_idx])])]
+
+    ranked = sorted(set(peak_idx), key=lambda idx: score[idx], reverse=True)
+    selected = []
+    min_sep = max(1, int(min_separation_bins))
+    for idx in ranked:
+        if all(abs(int(idx) - int(prev)) >= min_sep for prev in selected):
+            selected.append(int(idx))
+        if len(selected) >= max(1, int(top_k)):
+            break
+
+    return [
+        {
+            "lag": _refine_peak_lag(
+                lags, score, idx, mask, sub_sample=sub_sample
+            ),
+            "bin_lag": float(lags[idx]),
+            "prob": float(score[idx]),
+            "index": int(idx),
+        }
+        for idx in selected
+    ]
 
 
 class LearnableCompressedTDOALikelihood(nn.Module):
@@ -190,19 +265,39 @@ class LearnableCompressedTDOALikelihood(nn.Module):
 
 def soft_lag_ce(logits: torch.Tensor, lag_grid: torch.Tensor,
                 target_tdoa: torch.Tensor, sigma: float = 1.0) -> torch.Tensor:
+    return torch.mean(
+        soft_lag_ce_per_sample(logits, lag_grid, target_tdoa, sigma=sigma)
+    )
+
+
+def soft_lag_ce_per_sample(logits: torch.Tensor, lag_grid: torch.Tensor,
+                           target_tdoa: torch.Tensor,
+                           sigma: float = 1.0) -> torch.Tensor:
     target = target_tdoa.to(logits.device, dtype=logits.dtype)
     lags = lag_grid.to(logits.device, dtype=logits.dtype)
     sigma = max(float(sigma), 1e-3)
     weights = torch.exp(-0.5 * ((lags[None, :] - target[:, None]) / sigma) ** 2)
     weights = weights / (torch.sum(weights, dim=-1, keepdim=True) + 1e-9)
     logp = torch.log_softmax(logits, dim=-1)
-    return torch.mean(-torch.sum(weights * logp, dim=-1))
+    return -torch.sum(weights * logp, dim=-1)
 
 
 def posterior_aux_losses(model: LearnableCompressedTDOALikelihood,
                          logits: torch.Tensor,
                          target_tdoa: torch.Tensor,
                          width_radius: float = 2.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    outside_mass, width, unc = posterior_aux_losses_per_sample(
+        model, logits, target_tdoa, width_radius=width_radius
+    )
+    return torch.mean(outside_mass), torch.mean(width), torch.mean(unc)
+
+
+def posterior_aux_losses_per_sample(
+        model: LearnableCompressedTDOALikelihood,
+        logits: torch.Tensor,
+        target_tdoa: torch.Tensor,
+        width_radius: float = 2.0,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     prob = torch.softmax(logits, dim=-1)
     target = target_tdoa.to(logits.device, dtype=logits.dtype)
     lags = model.lag_grid.to(logits.device, dtype=logits.dtype)
@@ -215,7 +310,7 @@ def posterior_aux_losses(model: LearnableCompressedTDOALikelihood,
     mean, var = model.posterior_stats(logits)
     err2 = (mean - target).pow(2)
     unc = 0.5 * (err2 / var + torch.log(var))
-    return torch.mean(outside_mass), torch.mean(width), torch.mean(unc)
+    return outside_mass, width, unc
 
 
 def _batch_from_loader(batch):
@@ -533,12 +628,10 @@ class HardBinCompressedTDOALikelihood(nn.Module):
         amp_power: float = 1.0,
     ):
         super().__init__()
-        selected = np.asarray(selected_bins, dtype=int)
-        if selected.ndim != 1 or selected.size < 1:
-            raise ValueError("HardBinCompressedTDOALikelihood needs selected bins")
-        if np.any(selected < 0) or np.any(selected >= int(signal_len)):
-            raise ValueError("selected bins out of FFT range")
         self.signal_len = int(signal_len)
+        selected = validate_selected_bins(
+            selected_bins, self.signal_len, label="HardBin selected_bins"
+        )
         self.num_features = int(selected.size)
         self.lag_limit_samples = int(lag_limit_samples)
         self.score_temperature = float(score_temperature)
@@ -855,17 +948,28 @@ def train_v5a1_hardbin_tdoa(
             if train:
                 opt.zero_grad(set_to_none=True)
             logits = model(x1, x2)
-            ce = soft_lag_ce(logits, model.lag_grid, target, sigma=cfg.sigma)
-            amb, width, unc = posterior_aux_losses(model, logits, target)
-            mean, _ = model.posterior_stats(logits)
-            point = F.smooth_l1_loss(mean, target, beta=1.0)
-            loss = (
-                ce
-                + float(cfg.point_weight) * point
-                + float(cfg.ambiguity_weight) * amb
-                + float(cfg.width_weight) * width
-                + float(cfg.uncertainty_weight) * unc
+            ce_per = soft_lag_ce_per_sample(
+                logits, model.lag_grid, target, sigma=cfg.sigma
             )
+            amb_per, width_per, unc_per = posterior_aux_losses_per_sample(
+                model, logits, target
+            )
+            mean, _ = model.posterior_stats(logits)
+            point_per = F.smooth_l1_loss(
+                mean, target, beta=1.0, reduction="none"
+            )
+            loss_per = (
+                ce_per
+                + float(cfg.point_weight) * point_per
+                + float(cfg.ambiguity_weight) * amb_per
+                + float(cfg.width_weight) * width_per
+                + float(cfg.uncertainty_weight) * unc_per
+            )
+            loss = torch.mean(loss_per)
+            ce = torch.mean(ce_per)
+            amb = torch.mean(amb_per)
+            width = torch.mean(width_per)
+            point = torch.mean(point_per)
             if train:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -896,6 +1000,13 @@ def train_v5a1_hardbin_tdoa(
                 snr_np = snr_batch.detach().cpu().numpy()
                 abs_np = abs_err.detach().cpu().numpy()
                 entropy_np = entropy.detach().cpu().numpy()
+                per_sample_np = {
+                    "loss": loss_per.detach().cpu().numpy(),
+                    "ce": ce_per.detach().cpu().numpy(),
+                    "point": point_per.detach().cpu().numpy(),
+                    "width": width_per.detach().cpu().numpy(),
+                    "ambiguity": amb_per.detach().cpu().numpy(),
+                }
                 for bucket_name in buckets:
                     mask = np.asarray([
                         _snr_bucket_name(v) == bucket_name for v in snr_np
@@ -904,14 +1015,16 @@ def train_v5a1_hardbin_tdoa(
                         continue
                     count = int(np.sum(mask))
                     b = buckets[bucket_name]
-                    b["loss"] += batch_stats["loss"] * count
-                    b["ce"] += batch_stats["ce"] * count
-                    b["point"] += batch_stats["point"] * count
+                    b["loss"] += float(np.sum(per_sample_np["loss"][mask]))
+                    b["ce"] += float(np.sum(per_sample_np["ce"][mask]))
+                    b["point"] += float(np.sum(per_sample_np["point"][mask]))
                     b["mae"] += float(np.mean(abs_np[mask])) * count
                     b["within1"] += float(np.mean(abs_np[mask] <= 1.0)) * count
                     b["within2"] += float(np.mean(abs_np[mask] <= 2.0)) * count
-                    b["width"] += batch_stats["width"] * count
-                    b["ambiguity"] += batch_stats["ambiguity"] * count
+                    b["width"] += float(np.sum(per_sample_np["width"][mask]))
+                    b["ambiguity"] += float(
+                        np.sum(per_sample_np["ambiguity"][mask])
+                    )
                     b["entropy"] += float(np.mean(entropy_np[mask])) * count
                     b["count"] += count
         stats = _bucket_finalize(totals)
@@ -1191,6 +1304,12 @@ class V5BExpertGatedTDOAEstimator:
     hard-bin likelihood experts with non-oracle posterior-quality gates:
     Power64 is the low-confidence/low-SNR-safe expert, while GeoHybrid64 is the
     higher-resolution expert used when its posterior is sufficiently reliable.
+
+    The current two experts do not share one transmitted feature set. Their
+    selected-bin union therefore defines the communication budget; the frozen
+    Power64/GeoHybrid64 pair uses 88 complex bins (CR=2048/(2*88)=11.64), not
+    a strict CR16 budget. It is retained as an over-budget mechanism diagnostic
+    until a shared 64-bin expert design is trained.
     """
 
     def __init__(self, experts: Dict[str, LearnedHardBinCompressedTDOAEstimator],
@@ -1202,7 +1321,52 @@ class V5BExpertGatedTDOAEstimator:
         self.label = str(label)
         self.low_confidence_power_prior = float(low_confidence_power_prior)
         self.lags = self.experts["power"].lags.astype(float)
+        geo_lags = np.asarray(self.experts["geohybrid"].lags, dtype=float)
+        if geo_lags.shape != self.lags.shape or not np.allclose(
+            geo_lags, self.lags, rtol=0.0, atol=0.0
+        ):
+            raise ValueError("V5-B experts must use exactly the same lag grid")
+        power_len = int(self.experts["power"].model.signal_len)
+        geo_len = int(self.experts["geohybrid"].model.signal_len)
+        if power_len != geo_len:
+            raise ValueError("V5-B experts must use the same signal length")
+        self.signal_len = power_len
         self.last_quality = {}
+
+    def feature_budget(self):
+        """Return the actual transmitted union across all V5-B experts."""
+        expert_bins = {
+            name: validate_selected_bins(
+                adapter.model.selected_bins.detach().cpu().numpy(),
+                self.signal_len, label=f"V5-B {name} expert bins",
+            )
+            for name, adapter in self.experts.items()
+        }
+        union = np.unique(np.concatenate(list(expert_bins.values())))
+        overlap = np.intersect1d(
+            expert_bins["power"], expert_bins["geohybrid"]
+        )
+        real_scalars = int(2 * union.size)
+        target_bins = int(self.signal_len) // 16
+        return {
+            "expert_complex_bins": {
+                name: int(bins.size) for name, bins in expert_bins.items()
+            },
+            "power_complex_bins": int(expert_bins["power"].size),
+            "geohybrid_complex_bins": int(expert_bins["geohybrid"].size),
+            "overlap_complex_bins": int(overlap.size),
+            "unique_complex_bins": int(union.size),
+            "transmitted_union_complex_bins": int(union.size),
+            "transmitted_real_scalars": real_scalars,
+            "effective_cr": float(2 * self.signal_len / real_scalars),
+            "effective_cr_vs_input_real": float(
+                2 * self.signal_len / real_scalars
+            ),
+            "within_cr16": bool(union.size <= target_bins),
+            "within_cr16_budget": bool(union.size <= target_bins),
+            "exact_cr16": bool(union.size == target_bins),
+            "strict_cr16_budget_passed": bool(union.size == target_bins),
+        }
 
     @staticmethod
     def _expert_quality(prob, lags):
@@ -1262,17 +1426,14 @@ class V5BExpertGatedTDOAEstimator:
 
     def _topk_from_prob(self, prob, top_k: int = 3, lag_limit_samples=None):
         search_mask = _lag_mask(self.lags, lag_limit_samples)
-        search_idx = np.where(search_mask)[0]
-        if search_idx.size == 0:
-            search_idx = np.arange(prob.size)
-        top_k = max(1, int(top_k))
-        ranked = search_idx[np.argsort(prob[search_idx])[-top_k:]][::-1]
-        hypotheses = []
-        for idx in ranked:
-            hypotheses.append({
-                "lag": float(self.lags[int(idx)]),
-                "prob": float(prob[int(idx)]),
-            })
+        hypotheses = _distinct_peak_hypotheses(
+            self.lags,
+            prob,
+            search_mask,
+            top_k=top_k,
+            sub_sample=True,
+            min_separation_bins=2,
+        )
         if hypotheses:
             self.last_quality["topk_lag_spread"] = float(
                 max(h["lag"] for h in hypotheses) - min(h["lag"] for h in hypotheses)
@@ -1368,22 +1529,35 @@ class V5BExpertGatedTDOAEstimator:
         fused_prob = wp * power_prob + wg * geo_prob
         fused_prob = fused_prob / (np.sum(fused_prob) + 1e-12)
 
-        ranked = np.argsort(fused_prob)[::-1]
-        topk_lags = [float(self.lags[int(idx)]) for idx in ranked[:top_k]]
-        topk_probs = [float(fused_prob[int(idx)]) for idx in ranked[:top_k]]
+        search_mask = _lag_mask(self.lags, None)
+        hypotheses = _distinct_peak_hypotheses(
+            self.lags,
+            fused_prob,
+            search_mask,
+            top_k=top_k,
+            sub_sample=True,
+            min_separation_bins=2,
+        )
+        topk_lags = [float(item["lag"]) for item in hypotheses]
+        topk_bin_lags = [float(item["bin_lag"]) for item in hypotheses]
+        topk_probs = [float(item["prob"]) for item in hypotheses]
 
         def _hit(lag, tol):
             return abs(lag - float(true_tdoa)) <= float(tol)
 
-        topk_hit1 = [_hit(l, 1.0) for l in topk_lags]
-        topk_hit2 = [_hit(l, 2.0) for l in topk_lags]
+        topk_hit1 = [_hit(lag_value, 1.0) for lag_value in topk_lags]
+        topk_hit2 = [_hit(lag_value, 2.0) for lag_value in topk_lags]
 
-        power_ranked = np.argsort(power_prob)[::-1]
-        p_top1_lag = float(self.lags[int(power_ranked[0])])
+        power_mask = _lag_mask(self.lags, None)
+        p_idx, p_top1_lag, _ = _peak_from_score(
+            self.lags, power_prob, power_mask, sub_sample=True
+        )
         p_top1_hit1 = _hit(p_top1_lag, 1.0)
 
-        geo_ranked = np.argsort(geo_prob)[::-1]
-        g_top1_lag = float(self.lags[int(geo_ranked[0])])
+        geo_mask = _lag_mask(self.lags, None)
+        g_idx, g_top1_lag, _ = _peak_from_score(
+            self.lags, geo_prob, geo_mask, sub_sample=True
+        )
         g_top1_hit1 = _hit(g_top1_lag, 1.0)
 
         fused_top1, fused_top2, fused_margin, fused_mean, fused_var, fused_entropy = (
@@ -1393,7 +1567,6 @@ class V5BExpertGatedTDOAEstimator:
         oracle_hit1 = bool(p_top1_hit1 or g_top1_hit1)
 
         # Compute pair_weight the same way as estimate_pair()
-        search_mask = _lag_mask(self.lags, None)
         idx, estimate_lag, search_mask = _peak_from_score(
             self.lags, fused_prob, search_mask, sub_sample=True
         )
@@ -1413,18 +1586,25 @@ class V5BExpertGatedTDOAEstimator:
         return {
             "true_tdoa": float(true_tdoa),
             "top1_lag": topk_lags[0] if topk_lags else np.nan,
+            "top1_bin_lag": topk_bin_lags[0] if topk_bin_lags else np.nan,
             "estimate_lag": float(estimate_lag),
             "estimate_hit1": bool(_hit(estimate_lag, 1.0)),
             "estimate_hit2": bool(_hit(estimate_lag, 2.0)),
             "top1_prob": topk_probs[0] if topk_probs else np.nan,
             "top2_lag": topk_lags[1] if len(topk_lags) > 1 else np.nan,
+            "top2_bin_lag": topk_bin_lags[1] if len(topk_bin_lags) > 1 else np.nan,
             "top2_prob": topk_probs[1] if len(topk_probs) > 1 else np.nan,
             "top3_lag": topk_lags[2] if len(topk_lags) > 2 else np.nan,
+            "top3_bin_lag": topk_bin_lags[2] if len(topk_bin_lags) > 2 else np.nan,
             "top3_prob": topk_probs[2] if len(topk_probs) > 2 else np.nan,
             "top4_lag": topk_lags[3] if len(topk_lags) > 3 else np.nan,
+            "top4_bin_lag": topk_bin_lags[3] if len(topk_bin_lags) > 3 else np.nan,
             "top4_prob": topk_probs[3] if len(topk_probs) > 3 else np.nan,
             "top5_lag": topk_lags[4] if len(topk_lags) > 4 else np.nan,
+            "top5_bin_lag": topk_bin_lags[4] if len(topk_bin_lags) > 4 else np.nan,
             "top5_prob": topk_probs[4] if len(topk_probs) > 4 else np.nan,
+            "topk_distinct_peak_count": int(len(hypotheses)),
+            "topk_candidate_mode": "distinct_local_maxima_subsample",
             "top1_hit1": bool(topk_hit1[0]) if topk_hit1 else False,
             "top1_hit2": bool(topk_hit2[0]) if topk_hit2 else False,
             "top3_hit1": any(topk_hit1[:3]) if len(topk_hit1) >= 3 else any(topk_hit1),
@@ -1432,13 +1612,13 @@ class V5BExpertGatedTDOAEstimator:
             "top5_hit1": any(topk_hit1[:5]) if len(topk_hit1) >= 5 else any(topk_hit1),
             "top5_hit2": any(topk_hit2[:5]) if len(topk_hit2) >= 5 else any(topk_hit2),
             "power_top1_lag": p_top1_lag,
-            "power_top1_prob": float(power_prob[int(power_ranked[0])]),
+            "power_top1_prob": float(power_prob[int(p_idx)]),
             "power_top1_hit1": bool(p_top1_hit1),
             "power_entropy": float(power_q["entropy"]),
             "power_margin": float(power_q["margin"]),
             "power_quality": float(power_q["quality"]),
             "geo_top1_lag": g_top1_lag,
-            "geo_top1_prob": float(geo_prob[int(geo_ranked[0])]),
+            "geo_top1_prob": float(geo_prob[int(g_idx)]),
             "geo_top1_hit1": bool(g_top1_hit1),
             "geo_entropy": float(geo_q["entropy"]),
             "geo_margin": float(geo_q["margin"]),

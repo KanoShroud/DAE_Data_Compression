@@ -13,8 +13,8 @@ from datetime import datetime
 
 from train import train_with_cv
 import pickle
-from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo, plot_snr_comparison,
-                      plot_snr_comparison_multi, generate_snr_data, generate_snr_data_all,
+from evaluate import (MonteCarloExperiment, UrbanLocalizationExperiment, plot_monte_carlo,
+                      plot_snr_comparison_multi, generate_snr_data_all,
                       clean_peak_consistency, run_urban_method_comparison,
                       plot_method_comparison, plot_method_zoom_pair,
                       filter_method_comparison_data,
@@ -50,6 +50,11 @@ from experiment_cache import (
     merge_method_comparison_results,
 )
 from experiment_profiles import apply_experiment_profile
+from experiment_integrity import (
+    assert_non_oracle_normalization,
+    code_fingerprint,
+    protocol_fingerprint,
+)
 # ===================== 配置 =====================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 PAPER_REPRO_MODES = ("paper_repro", "paper_repro_fast_final", "paper_repro_eval_only")
@@ -119,6 +124,7 @@ USER_REPRO_REFERENCE_MODEL_DIR = BASELINE_RESULT_DIR
 USER_REUSE_STATIC_BASELINE_CACHE = True
 USER_STATIC_BASELINE_CACHE_RESULT_ID = "20260706_230643"
 USER_STATIC_BASELINE_CACHE_DIR = None
+USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC = False
 
 # 正式实验默认值。若要快速 smoke，可直接改这些普通变量。
 USER_N_SAMPLES = None
@@ -1466,26 +1472,6 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             source_plot_data = pickle.load(f)
             source_cv_results_dict = source_plot_data.get('cv_results_dict', {})
         print(f"[EvalOnly] Loaded source plot data: {source_pkl}")
-    if REUSE_STATIC_BASELINE_CACHE:
-        try:
-            static_baseline_cache = load_static_baseline_cache(STATIC_BASELINE_CACHE_DIR)
-            print(f"[BaselineCache] Loaded static Fig6-Fig8 cache: "
-                  f"{static_baseline_cache['source_dir']}")
-            required_cache_methods = []
-            if RUN_STRONG_BASELINES:
-                required_cache_methods.append("GeoAmbi-DFT-AML")
-                if RUN_GEOHYBRID_BASELINES:
-                    required_cache_methods.append("GeoHybrid-B64-C40F24")
-            if required_cache_methods and not method_data_contains(
-                    static_baseline_cache.get("baseline_all_results"),
-                    required_cache_methods):
-                print("[BaselineCache] Cache is stale for current strong-baseline set; "
-                      f"missing {required_cache_methods}. Baselines will be recomputed.")
-                static_baseline_cache = None
-        except Exception as exc:
-            static_baseline_cache = None
-            print(f"[BaselineCache] Cache unavailable, will recompute baselines: {exc}")
-
     # 1. 实例化 Simulator
     sim = SignalSimulator(channel_mode=CHANNEL_MODE,
                           n_fixed_channels=N_FIXED_CHANNELS,
@@ -1499,10 +1485,74 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                           urban_base_delay=URBAN_BASE_DELAY,
                           urban_min_los=URBAN_MIN_LOS,
                           urban_train_los_only=URBAN_TRAIN_LOS_ONLY)
+    if SCENARIO_MODE == "urban8":
+        assert_non_oracle_normalization(sim, context=EXPERIMENT_MODE)
     method_tdoa_lag_limit = compute_physical_tdoa_lag_limit(sim)
     if USE_PHYSICAL_TDOA_LAG_GATE:
         print(f"[TDOA Gate] method comparison lag_limit={method_tdoa_lag_limit} samples "
               f"(sample_distance={sim.c / sim.fs:.3f} m)")
+    if REUSE_STATIC_BASELINE_CACHE:
+        cache_expected_config = {
+            "seed": int(current_seed),
+            "channel_pool_seed": int(CHANNEL_POOL_SEED),
+            "scenario_mode": SCENARIO_MODE,
+            "channel_mode": CHANNEL_MODE,
+            "n_fixed_channels": int(N_FIXED_CHANNELS),
+            "nlos_prob": float(NLOS_PROB),
+            "delay_label_mode": DELAY_LABEL_MODE,
+            "multipath_scale": float(MULTIPATH_SCALE),
+            "normalization_mode": NORMALIZATION_MODE,
+            "urban_base_delay": float(URBAN_BASE_DELAY),
+            "urban_min_los": int(URBAN_MIN_LOS),
+            "urban_train_los_only": bool(URBAN_TRAIN_LOS_ONLY),
+            "train_snr_range": list(TRAIN_SNR_RANGE),
+            "eval_snr_range": [float(v) for v in EVAL_SNR_RANGE],
+            "monte_carlo_trials": int(MONTE_CARLO_TRIALS),
+            "fixed_eval_set": bool(FIXED_EVAL_SET),
+            "use_los_only": bool(USE_LOS_ONLY),
+            "tdoa_sub_sample": bool(TDOA_SUB_SAMPLE),
+            "tdoa_lag_limit_samples": method_tdoa_lag_limit,
+            "localization_estimator": LOCALIZATION_ESTIMATOR,
+            "baseline_cr": int(BASELINE_CR),
+            "baseline_dft_mode": BASELINE_DFT_MODE,
+            "baseline_dft_direct_source": BASELINE_DFT_DIRECT_SOURCE,
+            "baseline_hadamard_mode": BASELINE_HADAMARD_MODE,
+            "baseline_pca_train_source": BASELINE_PCA_TRAIN_SOURCE,
+            "baseline_pca_fixed_snr_db": float(BASELINE_PCA_FIXED_SNR_DB),
+            "baseline_pca_samples": int(BASELINE_PCA_SAMPLES),
+            "signal_len": int(sim.signal_len),
+            "fs_hz": float(sim.fs),
+            "c_mps": float(sim.c),
+            "area_size": list(sim.area_size),
+            "baseline_code_fingerprint": code_fingerprint(
+                os.path.dirname(os.path.abspath(__file__)),
+                filenames=(
+                    "signal_gen.py", "evaluate.py", "baselines.py",
+                    "task_baselines.py", "topk_localization.py",
+                    "experiment_integrity.py",
+                ),
+            ),
+        }
+        try:
+            static_baseline_cache = load_static_baseline_cache(
+                STATIC_BASELINE_CACHE_DIR, expected_config=cache_expected_config,
+            )
+            print(f"[BaselineCache] Loaded protocol-matched Fig6-Fig8 cache: "
+                  f"{static_baseline_cache['source_dir']}")
+            required_cache_methods = []
+            if RUN_STRONG_BASELINES:
+                required_cache_methods.append("GeoAmbi-DFT-AML")
+                if RUN_GEOHYBRID_BASELINES:
+                    required_cache_methods.append("GeoHybrid-B64-C40F24")
+            if required_cache_methods and not method_data_contains(
+                    static_baseline_cache.get("baseline_all_results"),
+                    required_cache_methods):
+                print("[BaselineCache] Cache is stale for current strong-baseline set; "
+                      f"missing {required_cache_methods}. Baselines will be recomputed.")
+                static_baseline_cache = None
+        except (FileNotFoundError, KeyError, RuntimeError, ValueError) as exc:
+            static_baseline_cache = None
+            print(f"[BaselineCache] Cache rejected; baselines will be recomputed: {exc}")
     clean_diag = None
     if EXPERIMENT_MODE in PAPER_REPRO_MODES:
         clean_diag = clean_peak_consistency(sim, n_trials=256, snr_db=20)
@@ -1566,6 +1616,20 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             sim, current_seed, method_tdoa_lag_limit
         )
         print(f"[V5-A.1] Hard-bin methods: {list(v5a1_bin_sets.keys())}")
+        if RUN_COMPRESSED_TDOA_V5B:
+            required = ("V5A1-Power64", "V5A1-GeoHybrid64")
+            if all(label in v5a1_bin_sets for label in required):
+                union_count = int(np.union1d(
+                    v5a1_bin_sets[required[0]], v5a1_bin_sets[required[1]]
+                ).size)
+                target_count = int(sim.signal_len // 16)
+                if (union_count != target_count
+                        and not USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC):
+                    raise RuntimeError(
+                        "V5-B training blocked before dataset/model construction: "
+                        f"the frozen expert-bin union is {union_count} complex bins, "
+                        f"where exact CR16 permits {target_count}."
+                    )
         v5a1_dataset = prepare_v5a1_hardbin_dataset(
             sim, v5a1_cfg, seed=current_seed + 9100
         )
@@ -1592,7 +1656,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         if RUN_COMPRESSED_TDOA_V5B:
             if ("V5A1-Power64" in v5a1_estimators
                     and "V5A1-GeoHybrid64" in v5a1_estimators):
-                v5b_estimators["V5B-Expert64"] = V5BExpertGatedTDOAEstimator(
+                candidate = V5BExpertGatedTDOAEstimator(
                     {
                         "power": v5a1_estimators["V5A1-Power64"],
                         "geohybrid": v5a1_estimators["V5A1-GeoHybrid64"],
@@ -1600,8 +1664,25 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     label="V5B-Expert64",
                     low_confidence_power_prior=0.65,
                 )
-                print("[V5-B] Added V5B-Expert64: Power64/GeoHybrid64 "
-                      "non-oracle posterior mixture.")
+                budget = candidate.feature_budget()
+                if (not budget["exact_cr16"]
+                        and not USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC):
+                    raise RuntimeError(
+                        "V5-B formal run blocked before evaluation: the union of "
+                        f"expert measurements transmits {budget['unique_complex_bins']} "
+                        "complex bins, but exact CR16 permits 64. Redesign a shared "
+                        "64-bin budget; do not compare this over-budget mechanism with "
+                        "CR16 baselines. Set USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC=True "
+                        "only to reproduce a clearly labelled historical diagnostic."
+                    )
+                v5b_estimators["V5B-Expert64"] = candidate
+                print(
+                    "[V5-B][Budget] "
+                    f"union={budget['unique_complex_bins']} complex bins, "
+                    f"real_scalars={budget['transmitted_real_scalars']}, "
+                    f"effective_CR={budget['effective_cr']:.2f}, "
+                    f"exact_CR16={budget['exact_cr16']}"
+                )
             else:
                 print("[V5-B][Warn] Power64 or GeoHybrid64 missing; "
                       "V5B-Expert64 will be skipped.")
@@ -1846,7 +1927,8 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             else:
                 ax_pk.text(0.5, 0.5, 'N/A', ha='center', va='center',
                            transform=ax_pk.transAxes, color='gray')
-            ax_pk.set_xlabel('Epoch'); ax_pk.set_ylabel('Peak Loss')
+            ax_pk.set_xlabel('Epoch')
+            ax_pk.set_ylabel('Peak Loss')
             ax_pk.grid(True, alpha=0.3)
 
         if LOSS_MODE == "paper_mse":
@@ -2500,11 +2582,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                                 "Figure 9 Focus: Frozen Chen-DAE vs Frequency-Task DAE"
                             ),
                             "strong_figure_filename": (
-                                f"Fig9_Focused_DAE_CR_Comparison"
+                                "Fig9_Focused_DAE_CR_Comparison"
                             ),
                             "strong_zoom_method_order": fig9_focus_order,
                             "strong_zoom_figure_filename": (
-                                f"Fig9_Focused_DAE_CR_Comparison_SNR_Zooms"
+                                "Fig9_Focused_DAE_CR_Comparison_SNR_Zooms"
                             ),
                             "table_prefix": "fig9_focus",
                             "innovation_model": ACTIVE_MODEL_NAME,
@@ -2541,7 +2623,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                                 "vs Frozen Chen-DAE and Strong Baselines"
                             ),
                             "strong_figure_filename": (
-                                f"Fig9_V5B_ExpertGated_TDOA_CR{BASELINE_CR}"
+                                "Fig9_V5B_ExpertGated_TDOA_CR11p6_OverBudget"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2549,7 +2631,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             ),
                             "strong_zoom_method_order": fig9_order,
                             "strong_zoom_figure_filename": (
-                                f"Fig9_V5B_ExpertGated_TDOA_CR{BASELINE_CR}_SNR_Zooms"
+                                "Fig9_V5B_ExpertGated_TDOA_CR11p6_OverBudget_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2590,7 +2672,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                                 "Figure 9 Focus: V5-A vs Compressed TDOA Baselines"
                             ),
                             "strong_figure_filename": (
-                                "Fig9_Focused_V5B_ExpertGated_CR16_Comparison"
+                                "Fig9_Focused_V5B_ExpertGated_CR11p6_OverBudget_Comparison"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 "Fig9_Focused_V5A1_HardBin_CR16_Comparison"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2598,7 +2680,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             ),
                             "strong_zoom_method_order": fig9_focus_order,
                             "strong_zoom_figure_filename": (
-                                "Fig9_Focused_V5B_ExpertGated_CR16_Comparison_SNR_Zooms"
+                                "Fig9_Focused_V5B_ExpertGated_CR11p6_OverBudget_Comparison_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 "Fig9_Focused_V5A1_HardBin_CR16_Comparison_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -3039,6 +3121,31 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 ),
             },
         }
+        plot_data['config'].update({
+            'channel_pool_seed': CHANNEL_POOL_SEED,
+            'signal_len': int(sim.signal_len),
+            'fs_hz': float(sim.fs),
+            'c_mps': float(sim.c),
+            'area_size': [float(v) for v in sim.area_size],
+            'baseline_code_fingerprint': code_fingerprint(
+                os.path.dirname(os.path.abspath(__file__)),
+                filenames=(
+                    "signal_gen.py", "evaluate.py", "baselines.py",
+                    "task_baselines.py", "topk_localization.py",
+                    "experiment_integrity.py",
+                ),
+            ),
+            'allow_overbudget_v5b_diagnostic': bool(
+                USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC
+            ),
+            'feature_budget_unit': 'real_float_scalars_without_quantization',
+        })
+        plot_data['config']['protocol_fingerprint'] = protocol_fingerprint(
+            plot_data['config']
+        )
+        plot_data['config']['code_fingerprint'] = code_fingerprint(
+            os.path.dirname(os.path.abspath(__file__))
+        )
         pkl_path = os.path.join(RESULT_DIR, "plot_data.pkl")
         with open(pkl_path, 'wb') as f:
             pickle.dump(plot_data, f)

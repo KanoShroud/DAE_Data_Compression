@@ -393,7 +393,6 @@ class NestedFrequencyPairwiseDAE(nn.Module):
         return z * mask
 
     def encode_latent(self, x, cr=None):
-        b = x.size(0)
         z = self.encode_full_latent(x)
         return self._mask_latent(z, cr=cr)
 

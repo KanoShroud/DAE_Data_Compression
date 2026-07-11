@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from experiment_integrity import validate_selected_bins
+
 
 def latent_real_dim(signal_len, cr):
     """Number of transmitted real scalars under the DAE CR convention."""
@@ -691,6 +693,11 @@ class DFTCompressionBaseline(nn.Module):
             bins = torch.as_tensor(selected_bins, dtype=torch.long)
             if bins.numel() != self.n_complex_bins:
                 raise ValueError("selected_bins length must match the DFT feature budget")
+        bins_np = validate_selected_bins(
+            bins.detach().cpu().numpy(), self.signal_len,
+            expected_count=self.n_complex_bins, label="DFT baseline selected_bins",
+        )
+        bins = torch.as_tensor(bins_np, dtype=torch.long)
         self.register_buffer("selected_bins", bins.long().contiguous())
 
     def forward(self, x):
@@ -783,10 +790,20 @@ class PCABaseline(nn.Module):
     def __init__(self, mean, components, signal_len=1024, requested_components=None):
         super().__init__()
         self.signal_len = int(signal_len)
+        if mean.ndim != 1 or int(mean.numel()) != 2 * self.signal_len:
+            raise ValueError("PCA mean must contain 2 * signal_len real values")
+        if components.ndim != 2 or int(components.shape[1]) != 2 * self.signal_len:
+            raise ValueError("PCA components must have shape [K, 2 * signal_len]")
         self.requested_components = int(
             requested_components if requested_components is not None else components.shape[0]
         )
         self.feature_dim = int(components.shape[0])
+        if self.feature_dim != self.requested_components:
+            raise ValueError(
+                "PCA component count differs from the requested feature budget"
+            )
+        if not bool(torch.isfinite(mean).all()) or not bool(torch.isfinite(components).all()):
+            raise ValueError("PCA state contains NaN or Inf")
         self.register_buffer("mean", mean.float().contiguous())
         self.register_buffer("components", components.float().contiguous())
 

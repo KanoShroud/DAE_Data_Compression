@@ -94,6 +94,8 @@ def _oracle_rejection_upper_bound(df):
     for bk, bl in buckets:
         sub = df if bk == "all" else df[df["snr_bucket"] == bk]
         n = len(sub)
+        if n == 0:
+            continue
         good = sub["oracle_expert_hit1"].sum()
         bad = n - good
         print(f"{bl:<18s} {n:6d} {int(good):6d} {int(bad):6d} {bad/n*100:6.1f}%")
@@ -114,6 +116,8 @@ def _expert_gating_upper_bound(df):
     for bk, bl in [("low", "SNR <= 0 dB"), ("mid", "2 <= SNR <= 6 dB"),
                     ("high", "SNR >= 8 dB"), ("all", "All SNR")]:
         sub = df if bk == "all" else df[df["snr_bucket"] == bk]
+        if len(sub) == 0:
+            continue
         v5b = sub["top1_hit1"].mean() * 100
         pw = sub["power_top1_hit1"].mean() * 100
         gh = sub["geo_top1_hit1"].mean() * 100
@@ -134,6 +138,10 @@ def main():
     parser.add_argument(
         "result_dir", nargs="?", default="运行结果/20260709_120019",
         help="Path to the result directory containing plot_data.pkl and model_*.pt"
+    )
+    parser.add_argument(
+        "--smoke", action="store_true",
+        help="Run one SNR and 20 trials; write *_smoke.csv without replacing full results."
     )
     args = parser.parse_args()
     result_dir = os.path.abspath(args.result_dir)
@@ -233,9 +241,14 @@ def main():
     eval_snr = [float(x) for x in cfg.get("eval_snr_range", np.arange(-10, 21, 2))]
     n_trials = int(cfg.get("monte_carlo_trials", 200))
     seed = int(cfg.get("seed", 42))
+    if args.smoke:
+        eval_snr = eval_snr[:1]
+        n_trials = 20
+    file_suffix = "_smoke" if args.smoke else ""
     print(f"[Diag] SNR range: {eval_snr}")
     print(f"[Diag] Monte Carlo trials: {n_trials}")
-    print(f"[Diag] This may take 5-10 minutes (eval-only, no training)...")
+    print("[Diag] Candidate mode: distinct local maxima with per-peak sub-sample refinement")
+    print("[Diag] This may take 5-10 minutes (eval-only, no training)...")
     df = run_v5b_topk_diagnostics(
         sim, device, v5b_est,
         snr_range=eval_snr,
@@ -248,24 +261,31 @@ def main():
     tables_dir = os.path.join(result_dir, "tables")
     os.makedirs(tables_dir, exist_ok=True)
 
-    _write_csv(df, os.path.join(tables_dir, "v5b_pair_topk_diagnostics.csv"))
+    _write_csv(df, os.path.join(
+        tables_dir, f"v5b_pair_topk_diagnostics{file_suffix}.csv"
+    ))
 
     # per-SNR summary
-    summary_cols = ["SNR_dB", "snr_bucket"]
     hit_cols = [c for c in df.columns if "_hit" in c or "oracle" in c]
     agg = df.groupby("SNR_dB").agg(
         n_pairs=("pair_id", "count"),
         **{c: (c, "mean") for c in hit_cols},
     ).reset_index()
-    _write_csv(agg, os.path.join(tables_dir, "v5b_topk_summary_by_snr.csv"))
+    _write_csv(agg, os.path.join(
+        tables_dir, f"v5b_topk_summary_by_snr{file_suffix}.csv"
+    ))
 
     # oracle expert summary
     ora_exp = _expert_gating_upper_bound(df)
-    _write_csv(ora_exp, os.path.join(tables_dir, "v5b_oracle_expert_summary.csv"))
+    _write_csv(ora_exp, os.path.join(
+        tables_dir, f"v5b_oracle_expert_summary{file_suffix}.csv"
+    ))
 
     # oracle pair rejection summary
     ora_rej = _oracle_rejection_upper_bound(df)
-    _write_csv(ora_rej, os.path.join(tables_dir, "v5b_oracle_pair_rejection_summary.csv"))
+    _write_csv(ora_rej, os.path.join(
+        tables_dir, f"v5b_oracle_pair_rejection_summary{file_suffix}.csv"
+    ))
 
     # --- print summary --------------------------------------------------------
     _summarize(df)

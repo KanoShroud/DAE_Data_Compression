@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import signal
 
+from experiment_integrity import validate_selected_bins
+
 
 def _lag_mask(lags, lag_limit_samples=None):
     if lag_limit_samples is None:
@@ -199,8 +201,10 @@ class DirectDFTTDOAEstimator:
 
     def __init__(self, selected_bins, signal_len=1024, label="DFT-Direct",
                  phat=False):
-        self.selected_bins = np.asarray(selected_bins, dtype=int)
         self.signal_len = int(signal_len)
+        self.selected_bins = validate_selected_bins(
+            selected_bins, self.signal_len, label=f"{label} selected_bins"
+        )
         self.label = str(label)
         self.phat = bool(phat)
         if self.selected_bins.ndim != 1 or self.selected_bins.size < 1:
@@ -217,15 +221,18 @@ class DirectDFTTDOAEstimator:
             2j * np.pi * np.outer(self.lags, self.freqs)
         ).astype(np.complex64)
 
-    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
-                      lag_limit_samples=None):
+    def score_pair(self, sig_i, sig_j):
+        """Return the exact delay score used by :meth:`estimate_pair`."""
         spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
         if self.phat:
             cross = cross / (np.abs(cross) + 1e-12)
+        return np.abs(self._steering @ cross)
 
-        score = np.abs(self._steering @ cross)
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        score = self.score_pair(sig_i, sig_j)
         search_mask = self._lag_mask(lag_limit_samples)
         idx, lag, search_mask = _peak_from_score(
             self.lags, score, search_mask, sub_sample=sub_sample
@@ -298,8 +305,8 @@ class Cao2017DFTAMLEstimator(DirectDFTTDOAEstimator):
         super().__init__(selected_bins, signal_len=signal_len, label=label, phat=False)
         self.weight_mode = str(weight_mode).lower()
 
-    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
-                      lag_limit_samples=None):
+    def score_pair(self, sig_i, sig_j):
+        """Return the Cao-style AML score without changing its Top-1 rule."""
         spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
@@ -310,7 +317,11 @@ class Cao2017DFTAMLEstimator(DirectDFTTDOAEstimator):
             weights = np.abs(cross).astype(float)
             weights = weights / (np.median(weights) + 1e-12)
             weights = np.clip(weights, 0.05, 20.0)
-        score = np.real(self._steering @ (weights * phase))
+        return np.real(self._steering @ (weights * phase))
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        score = self.score_pair(sig_i, sig_j)
         search_mask = self._lag_mask(lag_limit_samples)
         idx, lag, search_mask = _peak_from_score(
             self.lags, score, search_mask, sub_sample=sub_sample
@@ -341,8 +352,12 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
                  budget_limit_complex=None, use_consistency=True,
                  use_pair_uncertainty=True, budget_note=""):
         super().__init__(fine_bins, signal_len=signal_len, label=label, phat=False)
-        self.coarse_bins = np.asarray(coarse_bins, dtype=int)
-        self.fine_bins = np.asarray(fine_bins, dtype=int)
+        self.coarse_bins = validate_selected_bins(
+            coarse_bins, self.signal_len, label=f"{label} coarse_bins"
+        )
+        self.fine_bins = validate_selected_bins(
+            fine_bins, self.signal_len, label=f"{label} fine_bins"
+        )
         if self.coarse_bins.ndim != 1 or self.coarse_bins.size < 1:
             raise ValueError("GeoHybridDFTTDOAEstimator needs coarse bins")
         if self.fine_bins.ndim != 1 or self.fine_bins.size < 1:
@@ -411,6 +426,12 @@ class GeoHybridDFTTDOAEstimator(DirectDFTTDOAEstimator):
             "sidelobe_ratio": float(sidelobe_ratio),
             "margin": _score_margin(sidelobe_ratio),
         }
+
+    def score_pair(self, sig_i, sig_j):
+        raise NotImplementedError(
+            "GeoHybrid has no method-independent global score: its fine score "
+            "is conditioned on the coarse peak and a local lag window"
+        )
 
     def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
                       lag_limit_samples=None):
@@ -609,8 +630,8 @@ class Cao2020SegmentedFCEstimator(DirectDFTTDOAEstimator):
         hi = float(np.max(base))
         return (score - lo) / (hi - lo + 1e-12)
 
-    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
-                      lag_limit_samples=None):
+    def score_pair(self, sig_i, sig_j, lag_limit_samples=None):
+        """Return the exact segmented incoherent score used by Cao2020."""
         spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
@@ -637,7 +658,14 @@ class Cao2020SegmentedFCEstimator(DirectDFTTDOAEstimator):
             score = np.abs(self._steering @ phase)
         else:
             score = score / reliability_sum
+        return score
 
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        score = self.score_pair(
+            sig_i, sig_j, lag_limit_samples=lag_limit_samples,
+        )
+        search_mask = self._lag_mask(lag_limit_samples)
         idx, lag, search_mask = _peak_from_score(
             self.lags, score, search_mask, sub_sample=sub_sample
         )
@@ -706,14 +734,18 @@ class ZhaiPhaseSuperpositionEstimator(DirectDFTTDOAEstimator):
             weights = np.sqrt(mag / scale)
         return np.clip(weights, 0.05, 10.0)
 
-    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
-                      lag_limit_samples=None):
+    def score_pair(self, sig_i, sig_j):
+        """Return the phase-superposition score used by the original estimator."""
         spec_i = np.fft.fftshift(np.fft.fft(sig_i, norm="ortho"))
         spec_j = np.fft.fftshift(np.fft.fft(sig_j, norm="ortho"))
         cross = spec_i[self.selected_bins] * np.conj(spec_j[self.selected_bins])
         phase = cross / (np.abs(cross) + 1e-12)
         weights = self._phase_weights(cross)
-        score = np.abs(self._steering @ (weights * phase)) / (np.sum(weights) + 1e-12)
+        return np.abs(self._steering @ (weights * phase)) / (np.sum(weights) + 1e-12)
+
+    def estimate_pair(self, sig_i, sig_j, sub_sample=True, return_quality=True,
+                      lag_limit_samples=None):
+        score = self.score_pair(sig_i, sig_j)
         search_mask = self._lag_mask(lag_limit_samples)
         idx, lag, search_mask = _peak_from_score(
             self.lags, score, search_mask, sub_sample=sub_sample
