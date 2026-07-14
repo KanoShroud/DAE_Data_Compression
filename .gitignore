@@ -3,6 +3,7 @@
 __pycache__/
 参考文献/
 Obsidian Vault/
+Obsidian Vault/.obsidian
 *.pyc
 *.pyo
 *.pyd
