@@ -14,6 +14,11 @@ import torch
 from scipy import signal
 
 from baselines import DFTCompressionBaseline, HadamardProjectionBaseline, PCABaseline
+from compressed_tdoa import (
+    HardBinCompressedTDOALikelihood,
+    LearnedHardBinCompressedTDOAEstimator,
+    V5BExpertGatedTDOAEstimator,
+)
 from evaluate import _all_pair_robust_mode, _localize_from_tdoa_pairs, gcc_standard
 from experiment_integrity import (
     assert_exact_cr_budget,
@@ -193,6 +198,77 @@ def _feature_budget_gate(sim):
         raise RuntimeError("over-budget expert union was not rejected")
     validate_selected_bins(np.arange(64), signal_len, expected_count=64)
     _check(True, "strict CR16 accepts one shared 64-complex-bin budget")
+
+    shared = np.arange(40, dtype=int)
+    power_only = np.arange(40, 52, dtype=int)
+    geo_only = np.arange(52, 64, dtype=int)
+    power_bins = np.concatenate((shared, power_only))
+    geo_bins = np.concatenate((shared, geo_only))
+    power_model = HardBinCompressedTDOALikelihood(
+        power_bins, signal_len=signal_len, lag_limit_samples=16,
+    ).eval()
+    geo_model = HardBinCompressedTDOALikelihood(
+        geo_bins, signal_len=signal_len, lag_limit_samples=16,
+    ).eval()
+    power_est = LearnedHardBinCompressedTDOAEstimator(
+        power_model, torch.device("cpu"), label="V5A1-PowerShared52",
+    )
+    geo_est = LearnedHardBinCompressedTDOAEstimator(
+        geo_model, torch.device("cpu"), label="V5A1-GeoShared52",
+    )
+    shared_v5b = V5BExpertGatedTDOAEstimator(
+        {"power": power_est, "geohybrid": geo_est}, label="V5B-Shared64",
+    )
+    budget = shared_v5b.feature_budget()
+    _check(
+        budget["power_complex_bins"] == 52
+        and budget["geohybrid_complex_bins"] == 52,
+        "V5B-Shared64 experts each use 52 complex bins",
+    )
+    _check(
+        budget["overlap_complex_bins"] == 40
+        and budget["unique_complex_bins"] == 64,
+        "V5B-Shared64 uses 40 shared bins and a 64-bin union",
+    )
+    _check(
+        budget["exact_cr16"]
+        and budget["transmitted_real_scalars"] == target_real,
+        "V5B-Shared64 meets exact CR16",
+    )
+    rng = np.random.default_rng(17)
+    sig_i = rng.normal(size=signal_len) + 1j * rng.normal(size=signal_len)
+    sig_j = rng.normal(size=signal_len) + 1j * rng.normal(size=signal_len)
+    score = shared_v5b.score_pair(sig_i, sig_j)
+    _check(
+        score.shape == (33,) and np.all(np.isfinite(score))
+        and abs(float(np.sum(score)) - 1.0) < 1e-6,
+        "V5B-Shared64 produces a finite normalized posterior",
+    )
+
+    from evaluate_topk_fairness import (
+        DEVELOPMENT_SNAPSHOT_POOL_SEEDS,
+        LOCKED_SNAPSHOT_POOL_SEEDS,
+        _active_method_order,
+        _validate_pool_partitions,
+    )
+    partitions = _validate_pool_partitions(42)
+    _check(
+        partitions["development"] == sorted(DEVELOPMENT_SNAPSHOT_POOL_SEEDS)
+        and partitions["locked"] == sorted(LOCKED_SNAPSHOT_POOL_SEEDS),
+        "training/calibration/development/locked snapshot pools are disjoint",
+    )
+    method_order = _active_method_order({
+        "power_label": "V5A1-PowerShared52",
+        "geo_label": "V5A1-GeoShared52",
+        "method_label": "V5B-Shared64",
+    }, "dev_native_multi_pool")
+    _check(
+        all(label in method_order for label in (
+            "V5A1-PowerShared52", "V5A1-GeoShared52", "V5B-Shared64",
+            "V5A1-Power64", "V5A1-GeoHybrid64",
+        )),
+        "native multi-pool fairness includes shared and standalone V5 experts",
+    )
 
 
 def _model_and_cache_gate(sim):

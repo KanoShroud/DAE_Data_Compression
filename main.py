@@ -81,18 +81,30 @@ INNOVATION_MODES = (
 )
 COMPRESSED_TDOA_V5A_MODES = ("compressed_tdoa_v5a_fast",)
 COMPRESSED_TDOA_V5A1_MODES = ("compressed_tdoa_v5a1_hardbin_fast",)
-COMPRESSED_TDOA_V5B_MODES = ("compressed_tdoa_v5b_fast",)
+COMPRESSED_TDOA_V5B_LEGACY_MODES = ("compressed_tdoa_v5b_fast",)
+COMPRESSED_TDOA_V5B_SHARED64_MODES = (
+    "compressed_tdoa_v5b_shared64_smoke",
+    "compressed_tdoa_v5b_shared64_fast",
+)
+COMPRESSED_TDOA_V5B_MODES = (
+    COMPRESSED_TDOA_V5B_LEGACY_MODES + COMPRESSED_TDOA_V5B_SHARED64_MODES
+)
 COMPRESSED_TDOA_MODES = (
     COMPRESSED_TDOA_V5A_MODES + COMPRESSED_TDOA_V5A1_MODES
     + COMPRESSED_TDOA_V5B_MODES
 )
-V5A1_METHOD_LABELS = [
+V5A1_LEGACY_METHOD_LABELS = [
     "V5A1-Uniform64",
     "V5A1-Power64",
     "V5A1-Cao64",
     "V5A1-GeoHybrid64",
 ]
-V5B_METHOD_LABELS = ["V5B-Expert64"]
+V5A1_SHARED64_METHOD_LABELS = [
+    "V5A1-PowerShared52",
+    "V5A1-GeoShared52",
+]
+V5B_LEGACY_METHOD_LABELS = ["V5B-Expert64"]
+V5B_SHARED64_METHOD_LABELS = ["V5B-Shared64"]
 BASELINE_RESULT_ID = "20260702_000925"
 BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "运行结果", BASELINE_RESULT_ID)
@@ -105,7 +117,8 @@ FREQ_TASK_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # 环境变量覆盖默认关闭，避免外部 shell/PyCharm 配置不一致导致误运行。
 ALLOW_ENV_OVERRIDES = False
 
-# 可选: "compressed_tdoa_v5a1_hardbin_fast"、"compressed_tdoa_v5a_fast"、
+# 可选: "compressed_tdoa_v5b_shared64_smoke"、"compressed_tdoa_v5b_shared64_fast"、
+#       "compressed_tdoa_v5a1_hardbin_fast"、"compressed_tdoa_v5a_fast"、
 #       "freq_task_v4_min_fast"、
 #       "geohybrid_direct_only_eval"、"geohybrid_v2_eval"、
 #       "freq_task_v3_fast_final"、"freq_task_v3_200_final"、"freq_task_v3_eval_only"、
@@ -114,8 +127,8 @@ ALLOW_ENV_OVERRIDES = False
 #       "freq_task"、"freq_task_fast_final"、"freq_task_200_final"、
 #       "paper_repro_eval_only"、"paper_repro"、"paper_repro_fast_final"、"r20_1"
 # 若 USER_EXPERIMENT_PROFILE 不为 None，会覆盖下方相关 USER_* 变量。
-USER_EXPERIMENT_PROFILE = "compressed_tdoa_v5b_fast"
-USER_EXPERIMENT_MODE = "compressed_tdoa_v5b_fast"
+USER_EXPERIMENT_PROFILE = "compressed_tdoa_v5b_shared64_fast"
+USER_EXPERIMENT_MODE = "compressed_tdoa_v5b_shared64_fast"
 USER_MODEL_SOURCE_DIR = BASELINE_RESULT_DIR
 USER_FREQ_TASK_MODEL_SOURCE_DIR = FREQ_TASK_RESULT_DIR
 USER_FREQ_TASK_V2_MODEL_SOURCE_DIR = None
@@ -284,10 +297,28 @@ EXPERIMENT_MODE_SOURCE = (
 )
 RUN_COMPRESSED_TDOA_V5A = EXPERIMENT_MODE in COMPRESSED_TDOA_V5A_MODES
 RUN_COMPRESSED_TDOA_V5B = EXPERIMENT_MODE in COMPRESSED_TDOA_V5B_MODES
+RUN_COMPRESSED_TDOA_V5B_SHARED64 = (
+    EXPERIMENT_MODE in COMPRESSED_TDOA_V5B_SHARED64_MODES
+)
 RUN_COMPRESSED_TDOA_V5A1 = (
     EXPERIMENT_MODE in COMPRESSED_TDOA_V5A1_MODES or RUN_COMPRESSED_TDOA_V5B
 )
 RUN_COMPRESSED_TDOA = EXPERIMENT_MODE in COMPRESSED_TDOA_MODES
+
+if RUN_COMPRESSED_TDOA_V5B_SHARED64:
+    V5A1_METHOD_LABELS = list(V5A1_SHARED64_METHOD_LABELS)
+    V5B_METHOD_LABELS = list(V5B_SHARED64_METHOD_LABELS)
+    V5B_POWER_EXPERT_LABEL = "V5A1-PowerShared52"
+    V5B_GEO_EXPERT_LABEL = "V5A1-GeoShared52"
+    V5B_ACTIVE_LABEL = "V5B-Shared64"
+    V5B_BUDGET_TAG = "CR16_Shared64"
+else:
+    V5A1_METHOD_LABELS = list(V5A1_LEGACY_METHOD_LABELS)
+    V5B_METHOD_LABELS = list(V5B_LEGACY_METHOD_LABELS)
+    V5B_POWER_EXPERT_LABEL = "V5A1-Power64"
+    V5B_GEO_EXPERT_LABEL = "V5A1-GeoHybrid64"
+    V5B_ACTIVE_LABEL = "V5B-Expert64"
+    V5B_BUDGET_TAG = "CR11p6_OverBudget"
 CR_LIST = [4, 8, 16]
 FAST_FINAL_EPOCHS_BY_CR = {4: 197, 8: 197, 16: 197}
 BATCH_SIZE = 128
@@ -689,7 +720,9 @@ elif EXPERIMENT_MODE in COMPRESSED_TDOA_MODES:
     RESTORE_BEST = False
     FINAL_RETRAIN = False
     FINAL_RETRAIN_EPOCHS = None
-    if RUN_COMPRESSED_TDOA_V5B:
+    if RUN_COMPRESSED_TDOA_V5B_SHARED64:
+        TRAINING_PROTOCOL = "compressed_tdoa_v5b_shared64_expert_gated_hardbin"
+    elif RUN_COMPRESSED_TDOA_V5B:
         TRAINING_PROTOCOL = "compressed_tdoa_v5b_expert_gated_hardbin"
     elif RUN_COMPRESSED_TDOA_V5A1:
         TRAINING_PROTOCOL = "compressed_tdoa_v5a1_hardbin_exact_likelihood"
@@ -704,12 +737,14 @@ elif EXPERIMENT_MODE in COMPRESSED_TDOA_MODES:
     BETA_FI = 0.0
     LOSS_CONFIG = PAPER_REPRO_LOSS_CONFIG
     LOSS_MODE = (
+        "compressed_tdoa_v5b_shared64_expert_gated"
+        if RUN_COMPRESSED_TDOA_V5B_SHARED64 else (
         "compressed_tdoa_v5b_expert_gated"
         if RUN_COMPRESSED_TDOA_V5B else (
             "compressed_tdoa_v5a1_hardbin"
             if RUN_COMPRESSED_TDOA_V5A1
             else "compressed_tdoa_v5a"
-        )
+        ))
     )
     USE_ADAPTIVE_PEAK = False
     TRAIN_SNR_RANGE = (-10, 20)
@@ -717,12 +752,14 @@ elif EXPERIMENT_MODE in COMPRESSED_TDOA_MODES:
     MONTE_CARLO_TRIALS = 200
     FIG2_SNR_LIST = [-10, 0, 10, 20]
     DIAGNOSTICS_VERSION = (
+        "compressed_tdoa_v5b_shared64_fast"
+        if RUN_COMPRESSED_TDOA_V5B_SHARED64 else (
         "compressed_tdoa_v5b_expert_gated_fast"
         if RUN_COMPRESSED_TDOA_V5B else (
             "compressed_tdoa_v5a1_hardbin_fast"
             if RUN_COMPRESSED_TDOA_V5A1
             else "compressed_tdoa_v5a_cr16_fast"
-        )
+        ))
     )
     CHANNEL_MODE = "fixed"
     N_FIXED_CHANNELS = 50
@@ -1146,8 +1183,12 @@ if RUN_COMPRESSED_TDOA_V5A1:
           f"amb={V5A1_AMBIGUITY_WEIGHT} | width={V5A1_WIDTH_WEIGHT} | "
           f"unc={V5A1_UNCERTAINTY_WEIGHT}")
 if RUN_COMPRESSED_TDOA_V5B:
-    print("[Config] V5-B expert gating enabled: Power64 + GeoHybrid64 "
-          "non-oracle posterior mixture; hard-bin experts restore best ValMAE.")
+    if RUN_COMPRESSED_TDOA_V5B_SHARED64:
+        print("[Config] V5-B Shared64 enabled: PowerShared52 + GeoShared52; "
+              "40 shared + 12 power-only + 12 geo-only bins; exact CR16 union.")
+    else:
+        print("[Config] V5-B legacy diagnostic enabled: Power64 + GeoHybrid64; "
+              "88-bin union, over-budget unless explicitly allowed.")
 if SCENARIO_MODE == "urban8":
     print(f"[Config] urban_base_delay={URBAN_BASE_DELAY} | urban_min_los={URBAN_MIN_LOS} | "
           f"urban_train_los_only={URBAN_TRAIN_LOS_ONLY} | fixed_eval_set={FIXED_EVAL_SET} | "
@@ -1259,6 +1300,82 @@ def _selected_bins_from_model(model):
     return model.selected_bins.detach().cpu().numpy().astype(int)
 
 
+def evenly_spaced_unique_bins(bins, count):
+    """Select a deterministic, spectrum-spread subset from unique FFT bins."""
+    values = np.unique(np.asarray(bins, dtype=int))
+    count = int(count)
+    if count < 1 or values.size < count:
+        raise ValueError(
+            f"Need at least {count} unique bins, got {values.size}."
+        )
+    indices = np.floor(
+        np.arange(count, dtype=float) * values.size / count
+    ).astype(int)
+    selected = values[indices]
+    if np.unique(selected).size != count:
+        raise RuntimeError("evenly_spaced_unique_bins produced duplicates")
+    return selected.astype(int)
+
+
+def make_v5b_shared64_bins(power_bins, geohybrid_bins):
+    """Build two 52-bin expert views whose transmitted union is exactly 64.
+
+    The frozen historical experts overlap on 40 bins.  Those 40 bins form the
+    shared core.  Each branch receives 12 deterministic, spectrum-spread bins
+    from its own historical exclusive pool.  The function fails loudly if the
+    historical selectors no longer have the audited 40/24/24 structure.
+    """
+    power = np.unique(np.asarray(power_bins, dtype=int))
+    geo = np.unique(np.asarray(geohybrid_bins, dtype=int))
+    shared = np.intersect1d(power, geo)
+    power_only_pool = np.setdiff1d(power, shared)
+    geo_only_pool = np.setdiff1d(geo, shared)
+
+    if shared.size != 40:
+        raise RuntimeError(
+            f"Shared64 design expects 40 historical overlap bins, got {shared.size}. "
+            "Do not silently change the frequency-budget protocol."
+        )
+    if power_only_pool.size < 12 or geo_only_pool.size < 12:
+        raise RuntimeError(
+            "Shared64 design requires at least 12 exclusive bins per expert: "
+            f"power={power_only_pool.size}, geo={geo_only_pool.size}."
+        )
+
+    power_only = evenly_spaced_unique_bins(power_only_pool, 12)
+    geo_only = evenly_spaced_unique_bins(geo_only_pool, 12)
+    power_shared52 = np.sort(np.concatenate((shared, power_only))).astype(int)
+    geo_shared52 = np.sort(np.concatenate((shared, geo_only))).astype(int)
+    transmitted_union = np.union1d(power_shared52, geo_shared52)
+
+    if power_shared52.size != 52 or geo_shared52.size != 52:
+        raise RuntimeError(
+            f"Shared64 expert sizes must be 52/52, got "
+            f"{power_shared52.size}/{geo_shared52.size}."
+        )
+    if np.intersect1d(power_shared52, geo_shared52).size != 40:
+        raise RuntimeError("Shared64 expert overlap must be exactly 40 bins")
+    if transmitted_union.size != 64:
+        raise RuntimeError(
+            f"Shared64 transmitted union must be 64 bins, got "
+            f"{transmitted_union.size}."
+        )
+
+    meta = {
+        "shared_count": 40,
+        "power_only_count": 12,
+        "geo_only_count": 12,
+        "power_expert_count": 52,
+        "geo_expert_count": 52,
+        "union_count": 64,
+        "shared_bins": [int(v) for v in shared.tolist()],
+        "power_only_bins": [int(v) for v in power_only.tolist()],
+        "geo_only_bins": [int(v) for v in geo_only.tolist()],
+        "transmitted_union_bins": [int(v) for v in transmitted_union.tolist()],
+    }
+    return power_shared52, geo_shared52, meta
+
+
 def build_v5a1_hardbin_sets(simulator, seed, lag_limit_samples):
     """
     Build fixed exact-bin sets for V5-A.1 diagnostics.
@@ -1300,6 +1417,26 @@ def build_v5a1_hardbin_sets(simulator, seed, lag_limit_samples):
             f"V5-A.1 GeoHybrid hard-bin set has {geohybrid_bins.size} bins, "
             f"expected {simulator.signal_len // BASELINE_CR}."
         )
+
+    if RUN_COMPRESSED_TDOA_V5B_SHARED64:
+        power_shared52, geo_shared52, shared_meta = make_v5b_shared64_bins(
+            power_bins, geohybrid_bins
+        )
+        selected = {
+            "V5A1-PowerShared52": power_shared52,
+            "V5A1-GeoShared52": geo_shared52,
+        }
+        meta.update({
+            "v5a1_bin_sources": ["power_shared52", "geo_shared52"],
+            "v5a1_method_labels": list(selected.keys()),
+            "v5a1_selected_bins_by_method": {
+                label: [int(v) for v in bins.tolist()]
+                for label, bins in selected.items()
+            },
+            "v5b_shared64": shared_meta,
+        })
+        return selected, meta
+
     all_sets = {
         "uniform": ("V5A1-Uniform64", uniform_bins),
         "power": ("V5A1-Power64", power_bins),
@@ -1459,6 +1596,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
     v5a_training_result = None
     v5a1_estimators = {}
     v5b_estimators = {}
+    v5b_feature_budget = None
     v5a1_training_results = {}
     v5a1_bin_meta = None
     source_plot_data = None
@@ -1617,7 +1755,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
         )
         print(f"[V5-A.1] Hard-bin methods: {list(v5a1_bin_sets.keys())}")
         if RUN_COMPRESSED_TDOA_V5B:
-            required = ("V5A1-Power64", "V5A1-GeoHybrid64")
+            required = (V5B_POWER_EXPERT_LABEL, V5B_GEO_EXPERT_LABEL)
             if all(label in v5a1_bin_sets for label in required):
                 union_count = int(np.union1d(
                     v5a1_bin_sets[required[0]], v5a1_bin_sets[required[1]]
@@ -1648,23 +1786,28 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
             history["model_path"] = model_path
             history["model_class"] = "HardBinCompressedTDOALikelihood"
             history["weight_mode"] = str(V5A1_WEIGHT_MODE)
+            history["system_budget_scope"] = (
+                "shared_expert_union"
+                if RUN_COMPRESSED_TDOA_V5B_SHARED64 else "standalone_method"
+            )
             v5a1_training_results[label] = history
             v5a1_estimators[label] = LearnedHardBinCompressedTDOAEstimator(
                 model, DEVICE, label=label, weight_mode=V5A1_WEIGHT_MODE
             )
             print(f"[V5-A.1][Saved] {label}: {model_path}")
         if RUN_COMPRESSED_TDOA_V5B:
-            if ("V5A1-Power64" in v5a1_estimators
-                    and "V5A1-GeoHybrid64" in v5a1_estimators):
+            if (V5B_POWER_EXPERT_LABEL in v5a1_estimators
+                    and V5B_GEO_EXPERT_LABEL in v5a1_estimators):
                 candidate = V5BExpertGatedTDOAEstimator(
                     {
-                        "power": v5a1_estimators["V5A1-Power64"],
-                        "geohybrid": v5a1_estimators["V5A1-GeoHybrid64"],
+                        "power": v5a1_estimators[V5B_POWER_EXPERT_LABEL],
+                        "geohybrid": v5a1_estimators[V5B_GEO_EXPERT_LABEL],
                     },
-                    label="V5B-Expert64",
+                    label=V5B_ACTIVE_LABEL,
                     low_confidence_power_prior=0.65,
                 )
                 budget = candidate.feature_budget()
+                v5b_feature_budget = dict(budget)
                 if (not budget["exact_cr16"]
                         and not USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC):
                     raise RuntimeError(
@@ -1675,7 +1818,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                         "CR16 baselines. Set USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC=True "
                         "only to reproduce a clearly labelled historical diagnostic."
                     )
-                v5b_estimators["V5B-Expert64"] = candidate
+                v5b_estimators[V5B_ACTIVE_LABEL] = candidate
                 print(
                     "[V5-B][Budget] "
                     f"union={budget['unique_complex_bins']} complex bins, "
@@ -1684,8 +1827,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     f"exact_CR16={budget['exact_cr16']}"
                 )
             else:
-                print("[V5-B][Warn] Power64 or GeoHybrid64 missing; "
-                      "V5B-Expert64 will be skipped.")
+                print(
+                    f"[V5-B][Warn] {V5B_POWER_EXPERT_LABEL} or "
+                    f"{V5B_GEO_EXPERT_LABEL} missing; "
+                    f"{V5B_ACTIVE_LABEL} will be skipped."
+                )
 
     # 2. 使用 k-fold 交叉验证训练各个压缩率下的网络
     shared_v3_state = None
@@ -2380,7 +2526,12 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     "v5a1_weight_mode": str(V5A1_WEIGHT_MODE) if RUN_COMPRESSED_TDOA_V5A1 else None,
                     "v5b_expert_gated_tdoa": bool(RUN_COMPRESSED_TDOA_V5B),
                     "v5b_method_labels": list(V5B_METHOD_LABELS) if RUN_COMPRESSED_TDOA_V5B else [],
-                    "v5b_experts": ["V5A1-Power64", "V5A1-GeoHybrid64"] if RUN_COMPRESSED_TDOA_V5B else [],
+                    "v5b_experts": (
+                        [V5B_POWER_EXPERT_LABEL, V5B_GEO_EXPERT_LABEL]
+                        if RUN_COMPRESSED_TDOA_V5B else []
+                    ),
+                    "v5b_shared64": bool(RUN_COMPRESSED_TDOA_V5B_SHARED64),
+                    "v5b_feature_budget": v5b_feature_budget,
                     "v5b_low_confidence_power_prior": 0.65 if RUN_COMPRESSED_TDOA_V5B else None,
                     "export_method_zoom_figures": EXPORT_METHOD_ZOOM_FIGURES,
                     "method_zoom_low_snr_max": METHOD_ZOOM_LOW_SNR_MAX,
@@ -2610,8 +2761,10 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             "strong_method_order": fig9_order,
                             "strong_title": (
                                 (
-                                    "Figure 9: V5-B Expert-Gated Compressed TDOA "
-                                    "vs Frozen Chen-DAE and Strong Baselines"
+                                    ("Figure 9: V5-B Shared64 Expert-Gated Compressed TDOA "
+                                     if RUN_COMPRESSED_TDOA_V5B_SHARED64 else
+                                     "Figure 9: V5-B Over-Budget Expert-Gated Diagnostic ")
+                                    + "vs Frozen Chen-DAE and Strong Baselines"
                                 )
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 (
@@ -2623,7 +2776,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                                 "vs Frozen Chen-DAE and Strong Baselines"
                             ),
                             "strong_figure_filename": (
-                                "Fig9_V5B_ExpertGated_TDOA_CR11p6_OverBudget"
+                                f"Fig9_V5B_ExpertGated_TDOA_{V5B_BUDGET_TAG}"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2631,7 +2784,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             ),
                             "strong_zoom_method_order": fig9_order,
                             "strong_zoom_figure_filename": (
-                                "Fig9_V5B_ExpertGated_TDOA_CR11p6_OverBudget_SNR_Zooms"
+                                f"Fig9_V5B_ExpertGated_TDOA_{V5B_BUDGET_TAG}_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 f"Fig9_V5A1_HardBin_TDOA_CR{BASELINE_CR}_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2665,14 +2818,16 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             **common_config,
                             "strong_method_order": fig9_focus_order,
                             "strong_title": (
-                                "Figure 9 Focus: V5-B Expert-Gated Diagnostics"
+                                ("Figure 9 Focus: V5-B Shared64"
+                                 if RUN_COMPRESSED_TDOA_V5B_SHARED64 else
+                                 "Figure 9 Focus: V5-B Over-Budget Diagnostic")
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 "Figure 9 Focus: V5-A.1 Hard-Bin Diagnostics"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
                                 "Figure 9 Focus: V5-A vs Compressed TDOA Baselines"
                             ),
                             "strong_figure_filename": (
-                                "Fig9_Focused_V5B_ExpertGated_CR11p6_OverBudget_Comparison"
+                                f"Fig9_Focused_V5B_ExpertGated_{V5B_BUDGET_TAG}_Comparison"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 "Fig9_Focused_V5A1_HardBin_CR16_Comparison"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -2680,7 +2835,7 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                             ),
                             "strong_zoom_method_order": fig9_focus_order,
                             "strong_zoom_figure_filename": (
-                                "Fig9_Focused_V5B_ExpertGated_CR11p6_OverBudget_Comparison_SNR_Zooms"
+                                f"Fig9_Focused_V5B_ExpertGated_{V5B_BUDGET_TAG}_Comparison_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5B else
                                 "Fig9_Focused_V5A1_HardBin_CR16_Comparison_SNR_Zooms"
                                 if RUN_COMPRESSED_TDOA_V5A1 else
@@ -3102,8 +3257,17 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                 'v5a1_score_temperature': (
                     float(V5A1_SCORE_TEMPERATURE) if RUN_COMPRESSED_TDOA_V5A1 else None
                 ),
-                'v5a1_bin_sources': (
+                'v5a1_requested_bin_sources': (
                     list(V5A1_BIN_SOURCES) if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                'v5a1_effective_bin_sources': (
+                    list((v5a1_bin_meta or {}).get("v5a1_bin_sources", ()))
+                    if RUN_COMPRESSED_TDOA_V5A1 else None
+                ),
+                # Backward-compatible key now records the bins actually used.
+                'v5a1_bin_sources': (
+                    list((v5a1_bin_meta or {}).get("v5a1_bin_sources", ()))
+                    if RUN_COMPRESSED_TDOA_V5A1 else None
                 ),
                 'v5a1_weight_mode': (
                     str(V5A1_WEIGHT_MODE) if RUN_COMPRESSED_TDOA_V5A1 else None
@@ -3113,9 +3277,11 @@ for seed_run_idx, current_seed in enumerate(SEED_LIST):
                     list(V5B_METHOD_LABELS) if RUN_COMPRESSED_TDOA_V5B else None
                 ),
                 'v5b_experts': (
-                    ["V5A1-Power64", "V5A1-GeoHybrid64"]
+                    [V5B_POWER_EXPERT_LABEL, V5B_GEO_EXPERT_LABEL]
                     if RUN_COMPRESSED_TDOA_V5B else None
                 ),
+                'v5b_shared64': bool(RUN_COMPRESSED_TDOA_V5B_SHARED64),
+                'v5b_feature_budget': v5b_feature_budget,
                 'v5b_low_confidence_power_prior': (
                     0.65 if RUN_COMPRESSED_TDOA_V5B else None
                 ),

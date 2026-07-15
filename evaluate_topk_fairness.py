@@ -5,10 +5,10 @@ PyCharm direct-run entry. Frozen neural estimators are never retrained. The
 historical PCA baseline is deterministically rebuilt once from its recorded
 training protocol and then cached. Every strong baseline enters its native
 Top1-WLS track; methods with a legitimate delay score also enter identical
-CommonTop1/CommonTop3 backends. The current historical V5-B pair is an
-over-budget diagnostic (88 complex bins), so formal dev/mid/locked modes are
-blocked until a shared 64-bin version is trained. ``plot_existing`` remains
-the safe PyCharm default for inspecting the frozen diagnostic rows.
+CommonTop1/CommonTop3 backends. Historical V5B-Expert64 fusion is retained as
+an over-budget CR11.64 diagnostic, while V5B-Shared64 is the strict-CR16
+candidate. Native-only development uses snapshot pools disjoint from training,
+calibration, and locked evaluation before any shared Top-K backend is opened.
 """
 
 from __future__ import annotations
@@ -61,15 +61,20 @@ from topk_localization import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260709_120019"
+PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260711_154042"
 PYCHARM_DAE_RESULT = PROJECT_ROOT / "运行结果" / "20260702_000925"
-PYCHARM_RUN_MODE = "plot_existing"  # smoke | dev_fair | dev_mid_gate | plot_existing | locked_holdout
+PYCHARM_LEGACY_V5_RESULT = PROJECT_ROOT / "运行结果" / "20260709_120019"
+PYCHARM_RUN_MODE = "dev_native_multi_pool"
 PYCHARM_PROGRESS_EVERY = 10
 PYCHARM_ALLOW_LOCKED_OVERWRITE = False
 
-# This manifest is deliberately fixed before any locked result is inspected.
+# These manifests are fixed before calibration/development/locked results are inspected.
+CALIBRATION_SNAPSHOT_POOL_SEEDS = (142, 542)
+DEVELOPMENT_SNAPSHOT_POOL_SEEDS = (242, 342, 442)
 LOCKED_SNAPSHOT_POOL_SEEDS = (1042, 2042, 3042, 4042, 5042)
 LOCKED_TRIALS_PER_SNR = 100
+DEV_NATIVE_SNR = (-10, -6, -2, 0, 2, 6, 12, 20)
+DEV_NATIVE_TRIALS_PER_SNR = 60
 DEV_FAIR_SNR = (-10, -8, -6, -4, 0, 8)
 DEV_FAIR_TRIALS_PER_SNR = 30
 DEV_MID_SNR = (2, 4, 6)
@@ -100,6 +105,11 @@ METHOD_DISPLAY = {
     "Raw": "Raw",
     "DAE-CR16": "DAE-CR16",
     "V5B-Expert64": "V5B (CR11.6)",
+    "V5B-Shared64": "V5B-Shared64 (CR16)",
+    "V5A1-PowerShared52": "PowerShared52",
+    "V5A1-GeoShared52": "GeoShared52",
+    "V5A1-Power64": "Power64 (legacy)",
+    "V5A1-GeoHybrid64": "GeoHybrid64 (legacy)",
     "DFT-train-power": "DFT-Power",
     "DFT-Fisher-Direct": "DFT-Fisher",
     "Cao2017-DFT-AML": "Cao2017",
@@ -113,6 +123,11 @@ METHOD_STYLE = {
     "Raw": dict(color="#111111", marker="o", linestyle="--"),
     "DAE-CR16": dict(color="#d62728", marker="s", linestyle="-"),
     "V5B-Expert64": dict(color="#008b8b", marker="D", linestyle="-"),
+    "V5B-Shared64": dict(color="#008b8b", marker="D", linestyle="-"),
+    "V5A1-PowerShared52": dict(color="#56b4e9", marker="^", linestyle="-"),
+    "V5A1-GeoShared52": dict(color="#0072b2", marker="v", linestyle="-"),
+    "V5A1-Power64": dict(color="#9ad9f3", marker="^", linestyle="--"),
+    "V5A1-GeoHybrid64": dict(color="#004b76", marker="v", linestyle="--"),
     "DFT-train-power": dict(color="#2ca02c", marker="^", linestyle="-"),
     "DFT-Fisher-Direct": dict(color="#7fbf7b", marker="v", linestyle=":"),
     "Cao2017-DFT-AML": dict(color="#1f77b4", marker="P", linestyle="-"),
@@ -160,13 +175,33 @@ def _resolve_v5_bins(data, label):
     return np.asarray(bins, dtype=int)
 
 
-def _load_v5b(source_dir, data, simulator, device):
+def _v5b_artifact_spec(data):
     cfg = data.get("config", {})
+    if bool(cfg.get("v5b_shared64", False)):
+        return {
+            "method_label": "V5B-Shared64",
+            "power_label": "V5A1-PowerShared52",
+            "geo_label": "V5A1-GeoShared52",
+            "power_file": "model_v5a1_powershared52.pt",
+            "geo_file": "model_v5a1_geoshared52.pt",
+        }
+    return {
+        "method_label": "V5B-Expert64",
+        "power_label": "V5A1-Power64",
+        "geo_label": "V5A1-GeoHybrid64",
+        "power_file": "model_v5a1_power64.pt",
+        "geo_file": "model_v5a1_geohybrid64.pt",
+    }
+
+
+def _load_v5b_with_experts(source_dir, data, simulator, device):
+    cfg = data.get("config", {})
+    spec = _v5b_artifact_spec(data)
     lag_limit = int(cfg.get("tdoa_lag_limit_samples", 48))
     estimators = {}
     for key, label, filename in (
-        ("power", "V5A1-Power64", "model_v5a1_power64.pt"),
-        ("geohybrid", "V5A1-GeoHybrid64", "model_v5a1_geohybrid64.pt"),
+        ("power", spec["power_label"], spec["power_file"]),
+        ("geohybrid", spec["geo_label"], spec["geo_file"]),
     ):
         model = HardBinCompressedTDOALikelihood(
             selected_bins=_resolve_v5_bins(data, label),
@@ -182,13 +217,40 @@ def _load_v5b(source_dir, data, simulator, device):
             model, device, label=label,
             weight_mode=cfg.get("v5a1_weight_mode", "combined"),
         )
-    return V5BExpertGatedTDOAEstimator(
+    fused = V5BExpertGatedTDOAEstimator(
         estimators,
-        label="V5B-Expert64",
+        label=spec["method_label"],
         low_confidence_power_prior=float(
             cfg.get("v5b_low_confidence_power_prior", 0.65)
         ),
     )
+    experts_by_label = {
+        spec["power_label"]: estimators["power"],
+        spec["geo_label"]: estimators["geohybrid"],
+    }
+    return fused, experts_by_label
+
+
+def _load_v5b(source_dir, data, simulator, device):
+    fused, _ = _load_v5b_with_experts(
+        source_dir, data, simulator, device,
+    )
+    return fused
+
+
+def _expert_feature_budget(estimator, signal_len):
+    bins = np.asarray(estimator.model.selected_bins.detach().cpu(), dtype=int)
+    unique_bins = int(np.unique(bins).size)
+    if unique_bins != int(bins.size):
+        raise RuntimeError(f"{estimator.label} contains duplicate selected bins")
+    real_scalars = 2 * unique_bins
+    return {
+        "complex_bins": unique_bins,
+        "transmitted_real_scalars": real_scalars,
+        "effective_cr_vs_2048_real": float(2 * signal_len / real_scalars),
+        "within_cr16_budget": bool(real_scalars <= 2 * signal_len // 16),
+        "strict_cr16_budget_passed": bool(real_scalars == 2 * signal_len // 16),
+    }
 
 
 def _v5b_feature_budget(estimator, signal_len):
@@ -540,8 +602,13 @@ def _cluster_bootstrap_method_gain(frame, target, baseline, solver, bucket,
     }
 
 
-def _export_method_comparison(frame, output_dir, prefix, target="V5B-Expert64"):
+def _export_method_comparison(frame, output_dir, prefix, target=None):
     """Export paired cross-method evidence; positive gain favors ``target``."""
+    if target is None:
+        target = (
+            "V5B-Shared64"
+            if "V5B-Shared64" in set(frame["method"]) else "V5B-Expert64"
+        )
     rows = []
     available_solvers = list(dict.fromkeys(frame["solver"].tolist()))
     for solver in available_solvers:
@@ -570,12 +637,58 @@ def _export_method_comparison(frame, output_dir, prefix, target="V5B-Expert64"):
     return output_path
 
 
+def _export_poolwise_method_comparison(frame, output_dir, prefix, target=None):
+    """Export the same paired evidence separately for every snapshot pool."""
+    if target is None:
+        target = (
+            "V5B-Shared64"
+            if "V5B-Shared64" in set(frame["method"]) else "V5B-Expert64"
+        )
+    rows = []
+    for pool_seed in sorted(frame["pool_seed"].unique().tolist()):
+        pool_frame = frame.loc[frame["pool_seed"] == pool_seed]
+        for solver in list(dict.fromkeys(pool_frame["solver"].tolist())):
+            solver_methods = set(
+                pool_frame.loc[pool_frame["solver"] == solver, "method"]
+            )
+            if target not in solver_methods:
+                continue
+            for baseline in FAIR_METHOD_ORDER:
+                if baseline == target or baseline not in solver_methods:
+                    continue
+                for bucket in ("low", "mid", "high", "all"):
+                    stats = _cluster_bootstrap_method_gain(
+                        pool_frame, target, baseline, solver, bucket,
+                        seed=int(pool_seed) + 97 * len(rows), n_boot=1000,
+                    )
+                    rows.append({
+                        "pool_seed": int(pool_seed),
+                        "target": target,
+                        "baseline": baseline,
+                        "solver": solver,
+                        "snr_bucket": bucket,
+                        "positive_gain_means_target_better": True,
+                        **stats,
+                    })
+    output_path = Path(output_dir) / f"{prefix}_method_comparison_by_pool.csv"
+    pd.DataFrame(rows).to_csv(output_path, index=False, encoding="utf-8")
+    print(f"[Analysis] saved {output_path}", flush=True)
+    return output_path
+
+
 def _mode_config(mode, cfg):
     full_snr = tuple(float(v) for v in cfg.get(
         "eval_snr_range", np.arange(-10, 21, 2)
     ))
     if mode == "smoke":
         return (int(cfg.get("seed", 42)),), (-10.0,), 2, "fair_topk_smoke"
+    if mode == "dev_native_multi_pool":
+        return (
+            tuple(int(v) for v in DEVELOPMENT_SNAPSHOT_POOL_SEEDS),
+            tuple(float(v) for v in DEV_NATIVE_SNR),
+            int(DEV_NATIVE_TRIALS_PER_SNR),
+            "fair_native_dev_multi_pool",
+        )
     if mode == "dev_fair":
         return (
             (int(cfg.get("seed", 42)),), tuple(float(v) for v in DEV_FAIR_SNR),
@@ -592,6 +705,25 @@ def _mode_config(mode, cfg):
             int(LOCKED_TRIALS_PER_SNR), "fair_topk_locked",
         )
     raise ValueError(f"unknown run mode: {mode}")
+
+
+def _validate_pool_partitions(training_pool_seed):
+    partitions = {
+        "training": {int(training_pool_seed)},
+        "calibration": {int(v) for v in CALIBRATION_SNAPSHOT_POOL_SEEDS},
+        "development": {int(v) for v in DEVELOPMENT_SNAPSHOT_POOL_SEEDS},
+        "locked": {int(v) for v in LOCKED_SNAPSHOT_POOL_SEEDS},
+    }
+    names = tuple(partitions)
+    for index, left in enumerate(names):
+        for right in names[index + 1:]:
+            overlap = partitions[left].intersection(partitions[right])
+            if overlap:
+                raise RuntimeError(
+                    f"snapshot-pool leakage between {left} and {right}: "
+                    f"{sorted(overlap)}"
+                )
+    return {name: sorted(values) for name, values in partitions.items()}
 
 
 def _aggregate_for_plot(frame, snr_filter=None):
@@ -740,6 +872,7 @@ def _plot_fairness_results(frame, output_dir, prefix):
     fig.tight_layout(rect=(0.0, 0.13, 1.0, 0.94))
     suffix = {
         "fair_topk_smoke": "_Smoke",
+        "fair_native_dev_multi_pool": "_NativeMultiPool",
         "fair_topk_dev_mid": "_Mid",
         "fair_topk_locked": "_Locked",
     }.get(str(prefix), "")
@@ -747,17 +880,19 @@ def _plot_fairness_results(frame, output_dir, prefix):
     fig.savefig(native_path, format="svg", bbox_inches="tight")
     plt.close(fig)
 
-    common_methods = [
-        method for method in FAIR_METHOD_ORDER
-        if method != "GeoHybrid-B64-C40F24"
-        and method in set(frame["method"].unique())
-    ]
     available_solvers = set(frame["solver"].unique())
     solver_order = [
         label for label, _ in COMMON_SOLVERS if label in available_solvers
     ]
     if not solver_order:
-        raise ValueError("fairness rows contain no common solver results")
+        print(f"[Plot] saved {native_path}", flush=True)
+        return native_path, None
+
+    common_methods = [
+        method for method in FAIR_METHOD_ORDER
+        if method != "GeoHybrid-B64-C40F24"
+        and method in set(frame["method"].unique())
+    ]
     all_summary = _aggregate_for_plot(frame)
     low_summary = _aggregate_for_plot(frame, lambda x: x["SNR_dB"] <= 0)
     solver_style = {
@@ -817,10 +952,27 @@ def _plot_fairness_results(frame, output_dir, prefix):
     return native_path, attribution_path
 
 
+def _active_method_order(v5b_spec, run_mode):
+    if run_mode in ("smoke", "dev_native_multi_pool"):
+        return (
+            "Raw", "DAE-CR16",
+            v5b_spec["power_label"], v5b_spec["geo_label"],
+            v5b_spec["method_label"],
+            "V5A1-Power64", "V5A1-GeoHybrid64",
+            "DFT-train-power", "Cao2017-DFT-AML",
+            "Zhai-CRLB-Decimation",
+        )
+    return tuple(
+        v5b_spec["method_label"] if name == "V5B-Expert64" else name
+        for name in FAIR_METHOD_ORDER
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-mode", choices=(
-        "smoke", "dev_fair", "dev_mid_gate", "plot_existing", "locked_holdout"
+        "smoke", "dev_native_multi_pool", "dev_fair", "dev_mid_gate",
+        "plot_existing", "locked_holdout"
     ),
                         default=PYCHARM_RUN_MODE)
     parser.add_argument("--source-result", default=str(PYCHARM_SOURCE_RESULT))
@@ -832,6 +984,11 @@ def main():
     dae_dir = Path(args.dae_result).resolve()
     data = _load_pickle(source_dir / "plot_data.pkl")
     cfg = data.get("config", {})
+    v5b_spec = _v5b_artifact_spec(data)
+    v5b_method_label = v5b_spec["method_label"]
+    global FAIR_METHOD_ORDER
+    FAIR_METHOD_ORDER = _active_method_order(v5b_spec, args.run_mode)
+    native_only_run = args.run_mode in ("smoke", "dev_native_multi_pool")
     output_dir = source_dir / "tables" / "topk_fairness"
     output_dir.mkdir(parents=True, exist_ok=True)
     if args.run_mode == "plot_existing":
@@ -877,6 +1034,7 @@ def main():
         )
 
     training_pool_seed = int(cfg.get("channel_pool_seed", cfg.get("seed", 42)))
+    pool_partitions = _validate_pool_partitions(training_pool_seed)
     training_sim = _build_simulator(cfg, training_pool_seed)
     base_sim = _build_simulator(cfg, pool_seeds[0])
     assert_non_oracle_normalization(training_sim, context=args.run_mode)
@@ -884,9 +1042,13 @@ def main():
     if (training_sim.signal_len != base_sim.signal_len
             or tuple(training_sim.area_size) != tuple(base_sim.area_size)):
         raise RuntimeError("training and evaluation simulators use different dimensions")
-    v5b = _load_v5b(source_dir, data, training_sim, device)
+    v5b, current_experts = _load_v5b_with_experts(
+        source_dir, data, training_sim, device,
+    )
     v5b_budget = _v5b_feature_budget(v5b, base_sim.signal_len)
-    if args.run_mode in ("dev_fair", "dev_mid_gate", "locked_holdout") and not v5b_budget[
+    if args.run_mode in (
+        "dev_native_multi_pool", "dev_fair", "dev_mid_gate", "locked_holdout"
+    ) and not v5b_budget[
         "strict_cr16_budget_passed"
     ]:
         raise RuntimeError(
@@ -894,16 +1056,55 @@ def main():
             "the strict 64-complex-bin CR16 budget"
         )
     dae = _load_dae(dae_dir, device)
-    waveform_models, pca_cache_path, pca_protocol = _load_or_build_waveform_baselines(
-        data, training_sim, device, output_dir, training_pool_seed,
-    )
+    legacy_experts = {}
+    legacy_data = None
+    legacy_dir = PYCHARM_LEGACY_V5_RESULT.resolve()
+    if native_only_run:
+        legacy_data = _load_pickle(legacy_dir / "plot_data.pkl")
+        legacy_fused, legacy_experts = _load_v5b_with_experts(
+            legacy_dir, legacy_data, training_sim, device,
+        )
+        if str(legacy_fused.label) != "V5B-Expert64":
+            raise RuntimeError("legacy V5 source is not the expected V5B-Expert64 run")
+        for label in ("V5A1-Power64", "V5A1-GeoHybrid64"):
+            if label not in legacy_experts:
+                raise RuntimeError(f"legacy exact-CR16 expert missing: {label}")
+            budget = _expert_feature_budget(
+                legacy_experts[label], base_sim.signal_len,
+            )
+            if not budget["strict_cr16_budget_passed"]:
+                raise RuntimeError(f"legacy standalone expert is not CR16: {label}")
+    if native_only_run:
+        waveform_models, pca_cache_path, pca_protocol = {}, None, None
+    else:
+        waveform_models, pca_cache_path, pca_protocol = (
+            _load_or_build_waveform_baselines(
+                data, training_sim, device, output_dir, training_pool_seed,
+            )
+        )
     common_estimators, native_only_estimators, selected_bins = (
         _build_direct_estimators(data, base_sim.signal_len)
     )
-    common_methods = {
-        "Raw", "DAE-CR16", "V5B-Expert64", "Hadamard", "PCA",
-        *common_estimators.keys(),
-    }
+    if native_only_run:
+        common_estimators = {
+            label: estimator for label, estimator in common_estimators.items()
+            if label in FAIR_METHOD_ORDER
+        }
+        native_only_estimators = {
+            label: estimator for label, estimator in native_only_estimators.items()
+            if label in FAIR_METHOD_ORDER
+        }
+        selected_bins = {
+            label: bins for label, bins in selected_bins.items()
+            if label in FAIR_METHOD_ORDER
+        }
+        common_methods = set()
+        active_common_solvers = []
+    else:
+        common_methods = {
+            "Raw", "DAE-CR16", v5b_method_label, "Hadamard", "PCA",
+            *common_estimators.keys(),
+        }
     method_protocols = {
         name: {
             "native_top1": True,
@@ -912,31 +1113,54 @@ def main():
         }
         for name in FAIR_METHOD_ORDER
     }
-    method_protocols["GeoHybrid-B64-C40F24"]["common_topk_reason"] = (
-        "disabled: the native method uses a coarse-conditioned local fine window; "
-        "a global Top-K curve would change the published implementation"
-    )
-    method_protocols["V5B-Expert64"]["feature_budget"] = v5b_budget
-    method_protocols["V5B-Expert64"]["role"] = (
+    if "GeoHybrid-B64-C40F24" in method_protocols:
+        method_protocols["GeoHybrid-B64-C40F24"]["common_topk_reason"] = (
+            "disabled: the native method uses a coarse-conditioned local fine window; "
+            "a global Top-K curve would change the published implementation"
+        )
+    method_protocols[v5b_method_label]["feature_budget"] = v5b_budget
+    method_protocols[v5b_method_label]["role"] = (
         "over_budget_diagnostic"
         if not v5b_budget["strict_cr16_budget_passed"] else "compressed_method"
     )
+    for label, estimator in {**current_experts, **legacy_experts}.items():
+        if label in method_protocols:
+            method_protocols[label]["feature_budget"] = _expert_feature_budget(
+                estimator, base_sim.signal_len,
+            )
+            method_protocols[label]["role"] = (
+                "legacy_standalone_exact_cr16"
+                if label in legacy_experts else "shared64_component_expert"
+            )
     artifact_paths = {
-        "v5_power": source_dir / "model_v5a1_power64.pt",
-        "v5_geohybrid": source_dir / "model_v5a1_geohybrid64.pt",
+        "v5_power": source_dir / v5b_spec["power_file"],
+        "v5_geohybrid": source_dir / v5b_spec["geo_file"],
         "dae_cr16": dae_dir / "model_cr16.pt",
-        "pca_cr16": pca_cache_path,
         "plot_data": source_dir / "plot_data.pkl",
         "fairness_code": Path(__file__).resolve(),
         "topk_code": PROJECT_ROOT / "topk_localization.py",
         "shared_evaluator_code": PROJECT_ROOT / "evaluate.py",
         "task_baseline_code": PROJECT_ROOT / "task_baselines.py",
     }
+    if pca_cache_path is not None:
+        artifact_paths["pca_cr16"] = pca_cache_path
+    if legacy_experts:
+        artifact_paths.update({
+            "legacy_v5_power64": legacy_dir / "model_v5a1_power64.pt",
+            "legacy_v5_geohybrid64": legacy_dir / "model_v5a1_geohybrid64.pt",
+            "legacy_v5_plot_data": legacy_dir / "plot_data.pkl",
+        })
     manifest = {
         "run_mode": args.run_mode,
         "source_result": str(source_dir),
         "dae_result": str(dae_dir),
         "snapshot_pool_seeds": list(pool_seeds),
+        "pool_partitions": pool_partitions,
+        "development_pool_set_id": _manifest_hash({
+            "pool_seeds": list(DEVELOPMENT_SNAPSHOT_POOL_SEEDS),
+            "snr_values": list(DEV_NATIVE_SNR),
+            "trials_per_snr": int(DEV_NATIVE_TRIALS_PER_SNR),
+        }),
         "snr_values": list(snr_values),
         "trials_per_snr": int(trials),
         "methods": list(FAIR_METHOD_ORDER),
@@ -955,8 +1179,8 @@ def main():
         ),
         "locked_results_must_not_be_used_for_tuning": args.run_mode == "locked_holdout",
         "evaluation_seed_rule": (
-            "development uses cfg.seed for every SNR; locked pools use "
-            "pool_seed + 100000"
+            "smoke/legacy development use cfg.seed; independent native and "
+            "locked pools use pool_seed + 100000"
         ),
         "artifact_sha256": {
             key: _file_sha256(path) for key, path in artifact_paths.items()
@@ -966,6 +1190,8 @@ def main():
         "source_result": str(source_dir),
         "dae_result": str(dae_dir),
         "development_eval_seed": int(cfg.get("seed", 42)),
+        "pool_partitions": pool_partitions,
+        "active_pool_seeds": list(pool_seeds),
         "trials_per_snr": int(trials),
         "top_k": COMMON_TOP_K,
         "min_peak_separation_bins": COMMON_MIN_PEAK_SEPARATION,
@@ -1029,39 +1255,56 @@ def main():
                 for ui, uj in pairs:
                     raw_i = _complex_channel(raw, trial, ui)
                     raw_j = _complex_channel(raw, trial, uj)
-                    native_by_method["V5B-Expert64"].append(
+                    native_by_method[v5b_method_label].append(
                         _native_estimator_top1(v5b, raw_i, raw_j, lag_limit)
                     )
-                    common_by_method["V5B-Expert64"].append(
-                        posterior_topk(
-                            v5b, raw_i, raw_j, lag_limit, COMMON_TOP_K,
-                            COMMON_MIN_PEAK_SEPARATION,
+                    if v5b_method_label in common_methods:
+                        common_by_method[v5b_method_label].append(
+                            posterior_topk(
+                                v5b, raw_i, raw_j, lag_limit, COMMON_TOP_K,
+                                COMMON_MIN_PEAK_SEPARATION,
+                            )
                         )
-                    )
+                    for label, estimator in current_experts.items():
+                        if label in native_by_method:
+                            native_by_method[label].append(
+                                _native_estimator_top1(
+                                    estimator, raw_i, raw_j, lag_limit,
+                                )
+                            )
+                    for label, estimator in legacy_experts.items():
+                        if label in native_by_method:
+                            native_by_method[label].append(
+                                _native_estimator_top1(
+                                    estimator, raw_i, raw_j, lag_limit,
+                                )
+                            )
                     for label, batch in waveform_outputs.items():
                         sig_i = _complex_channel(batch, trial, ui)
                         sig_j = _complex_channel(batch, trial, uj)
                         native_by_method[label].append(
                             _native_waveform_top1(sig_i, sig_j, lag_limit)
                         )
-                        common_by_method[label].append(
-                            waveform_gcc_topk(
-                                sig_i, sig_j, lag_limit, COMMON_TOP_K,
-                                COMMON_MIN_PEAK_SEPARATION,
+                        if label in common_methods:
+                            common_by_method[label].append(
+                                waveform_gcc_topk(
+                                    sig_i, sig_j, lag_limit, COMMON_TOP_K,
+                                    COMMON_MIN_PEAK_SEPARATION,
+                                )
                             )
-                        )
                     for label, estimator in common_estimators.items():
                         native_by_method[label].append(
                             _native_estimator_top1(
                                 estimator, raw_i, raw_j, lag_limit,
                             )
                         )
-                        common_by_method[label].append(
-                            estimator_score_topk(
-                                estimator, raw_i, raw_j, lag_limit,
-                                COMMON_TOP_K, COMMON_MIN_PEAK_SEPARATION,
+                        if label in common_methods:
+                            common_by_method[label].append(
+                                estimator_score_topk(
+                                    estimator, raw_i, raw_j, lag_limit,
+                                    COMMON_TOP_K, COMMON_MIN_PEAK_SEPARATION,
+                                )
                             )
-                        )
                     for label, estimator in native_only_estimators.items():
                         native_by_method[label].append(
                             _native_estimator_top1(
@@ -1247,6 +1490,8 @@ def main():
         encoding="utf-8",
     )
     _export_method_comparison(frame, output_dir, prefix)
+    if args.run_mode == "dev_native_multi_pool":
+        _export_poolwise_method_comparison(frame, output_dir, prefix)
     _plot_fairness_results(frame, output_dir, prefix)
     if prefix == "fair_topk_dev_mid" and (output_dir / "fair_topk_dev_rows.csv").exists():
         complete_frame, complete_prefix = _merge_existing_development_rows(output_dir)

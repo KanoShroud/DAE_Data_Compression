@@ -26,7 +26,7 @@ from topk_localization import estimator_score_topk, posterior_topk, waveform_gcc
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260709_120019"
+PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260711_154042"
 PYCHARM_DAE_RESULT = PROJECT_ROOT / "运行结果" / "20260702_000925"
 PYCHARM_SNR_DB = 0.0
 PYCHARM_TRIALS = 10
@@ -139,8 +139,10 @@ def _runtime_accuracy_rows(dev_rows, frontend, evidence):
 
 
 def _plot_pareto(runtime, output_dir):
+    v5_candidates = [m for m in runtime["method"].unique() if str(m).startswith("V5B-")]
+    v5_method = v5_candidates[0] if v5_candidates else "V5B-Expert64"
     methods = [
-        "DAE-CR16", "V5B-Expert64", "DFT-train-power",
+        "DAE-CR16", v5_method, "DFT-train-power",
         "Cao2017-DFT-AML", "Zhai-CRLB-Decimation", "Hadamard", "PCA",
     ]
     solvers = ("OriginalTop1-WLS", "CommonTop3-GeoBeam", "CommonTop3-ScreenRefit")
@@ -178,8 +180,7 @@ def _plot_pareto(runtime, output_dir):
     method_handles = [
         Line2D([0], [0], color=fair.METHOD_STYLE[m]["color"], marker="o",
                linestyle="", markersize=6, label=(
-                   "V5B (CR11.6)" if m == "V5B-Expert64"
-                   else fair.METHOD_DISPLAY[m]
+                   fair.METHOD_DISPLAY.get(m, m)
                ))
         for m in methods
     ]
@@ -216,6 +217,12 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     simulator = fair._build_simulator(cfg, seed)
     v5b = fair._load_v5b(source_dir, data, simulator, device)
+    v5_label = str(v5b.label)
+    v5_spec = fair._v5b_artifact_spec(data)
+    fair_method_order = tuple(
+        v5_label if name == "V5B-Expert64" else name
+        for name in fair.FAIR_METHOD_ORDER
+    )
     dae = fair._load_dae(dae_dir, device)
     waveform_models, pca_cache, pca_protocol = fair._load_or_build_waveform_baselines(
         data, simulator, device, output_dir, seed,
@@ -309,8 +316,8 @@ def main():
             for i, j in pairs_by_trial[trial]
         ]
 
-    benchmark("V5B-Expert64", "native", v5_native)
-    benchmark("V5B-Expert64", "common", v5_common)
+    benchmark(v5_label, "native", v5_native)
+    benchmark(v5_label, "common", v5_common)
 
     for label, estimator in direct_estimators.items():
         def native_builder(trial, estimator=estimator):
@@ -358,24 +365,46 @@ def main():
     v5_budget = fair._v5b_feature_budget(v5b, simulator.signal_len)
     pca_model = waveform_models["PCA"]
     had_model = waveform_models["Hadamard"]
+
+    v5_description = (
+        "two hard-bin likelihood experts; strict shared-64 CR16"
+        if v5_budget["strict_cr16_budget_passed"]
+        else "two hard-bin likelihood experts; over-budget diagnostic"
+    )
     static = {
         "Raw": (0, 0, 2048, False, "none", np.nan),
         "DAE-CR16": (
-            dae_params, dae_buffers, 128, True, "supervised neural training",
+            dae_params,
+            dae_buffers,
+            128,
+            True,
+            "supervised neural training",
             _file_mb(dae_dir / "model_cr16.pt"),
         ),
-        "V5B-Expert64": (
-            v5_params, v5_buffers, v5_budget["transmitted_real_scalars"], False,
-            "two hard-bin likelihood experts; over-budget CR16 diagnostic",
-            _file_mb(source_dir / "model_v5a1_power64.pt")
-            + _file_mb(source_dir / "model_v5a1_geohybrid64.pt"),
+        v5_label: (
+            v5_params,
+            v5_buffers,
+            v5_budget["transmitted_real_scalars"],
+            False,
+            v5_description,
+            _file_mb(source_dir / v5_spec["power_file"])
+            + _file_mb(source_dir / v5_spec["geo_file"]),
         ),
         "Hadamard": (
-            0, int(had_model.rows.numel()), 128, True, "fixed transform", np.nan,
+            0,
+            int(had_model.rows.numel()),
+            128,
+            True,
+            "fixed transform",
+            np.nan,
         ),
         "PCA": (
-            0, int(pca_model.mean.numel() + pca_model.components.numel()),
-            128, True, "offline PCA fit", _file_mb(pca_cache),
+            0,
+            int(pca_model.mean.numel() + pca_model.components.numel()),
+            128,
+            True,
+            "offline PCA fit",
+            _file_mb(pca_cache),
         ),
     }
     for label in direct_estimators:
@@ -384,7 +413,7 @@ def main():
         static[label] = (0, 64, 128, False, "fixed hybrid estimator", np.nan)
 
     model_rows = []
-    for method in fair.FAIR_METHOD_ORDER:
+    for method in fair_method_order:
         params, buffers, feature_dim, reconstructs, fit, artifact_mb = static[method]
         peak = max(
             [frontend.get(method, {}).get("peak_extra_gpu_mb", 0.0)]
@@ -406,7 +435,7 @@ def main():
             "offline_fit_or_training": fit,
             "measured_peak_extra_gpu_mb": float(peak),
             "strict_cr16_budget_passed": bool(
-                method != "V5B-Expert64" or v5_budget["strict_cr16_budget_passed"]
+                method != v5_label or v5_budget["strict_cr16_budget_passed"]
             ),
         })
     model_frame = pd.DataFrame(model_rows)

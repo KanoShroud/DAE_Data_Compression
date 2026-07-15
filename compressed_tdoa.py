@@ -1136,7 +1136,9 @@ def train_v5a1_hardbin_tdoa(
         "best_mid_snr_weight": float(cfg.best_mid_snr_weight),
         "best_high_snr_weight": float(cfg.best_high_snr_weight),
         "lag_limit_samples": int(lag_limit),
-        "cr": 16,
+        "cr": float(simulator.signal_len / model.num_features),
+        "cr_scope": "standalone_expert_input",
+        "expert_complex_bins": int(model.num_features),
         "snr_grid": [float(v) for v in cfg.snr_grid],
         "train_pair_count": int(len(bundle["train_idx"])),
         "val_pair_count": int(len(bundle["val_idx"])),
@@ -1301,15 +1303,13 @@ class V5BExpertGatedTDOAEstimator:
     V5-B lightweight expert mixture for hard-bin compressed-domain TDOA.
 
     This is not a waveform-denoising neural network. It combines two trained
-    hard-bin likelihood experts with non-oracle posterior-quality gates:
-    Power64 is the low-confidence/low-SNR-safe expert, while GeoHybrid64 is the
-    higher-resolution expert used when its posterior is sufficiently reliable.
+    hard-bin likelihood experts with non-oracle posterior-quality gates. The
+    power expert is the low-confidence/low-SNR-safe branch, while the geometry
+    expert is used when its posterior is sufficiently reliable.
 
-    The current two experts do not share one transmitted feature set. Their
-    selected-bin union therefore defines the communication budget; the frozen
-    Power64/GeoHybrid64 pair uses 88 complex bins (CR=2048/(2*88)=11.64), not
-    a strict CR16 budget. It is retained as an over-budget mechanism diagnostic
-    until a shared 64-bin expert design is trained.
+    Communication cost is always computed from the union of both experts' FFT
+    bins. This supports both the historical 88-bin diagnostic and a strict
+    shared-64-bin design without changing the gating logic.
     """
 
     def __init__(self, experts: Dict[str, LearnedHardBinCompressedTDOAEstimator],
