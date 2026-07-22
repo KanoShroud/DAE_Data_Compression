@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "d9fbd8357c44a88f",
+        "id": "7c768487c3efb5e9",
         "type": "tabs",
         "children": [
           {
-            "id": "41d828c58cef5abc",
+            "id": "6abbdfa9c509bf88",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "进展总结_20260715.md",
+                "file": "插值频谱补全与TDOA_20260722.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "进展总结_20260715"
+              "title": "插值频谱补全与TDOA_20260722"
             }
           }
         ]
@@ -33,7 +33,7 @@
       {
         "id": "2b0e576e7c310586",
         "type": "tabs",
-        "dimension": 26.64783427495292,
+        "dimension": 37.134778510838835,
         "children": [
           {
             "id": "1b7e12b0884a39bf",
@@ -128,7 +128,7 @@
       {
         "id": "ed178d3b19046ebf",
         "type": "tabs",
-        "dimension": 73.35216572504709,
+        "dimension": 62.865221489161165,
         "children": [
           {
             "id": "7f7d185f16b5f0b0",
@@ -136,13 +136,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "进展总结_20260715.md",
+                "file": "插值频谱补全与TDOA_20260722.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "进展总结_20260715 的大纲"
+              "title": "插值频谱补全与TDOA_20260722 的大纲"
             }
           }
         ]
@@ -192,6 +192,9 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "nutstore-sync:开始同步": false,
+      "nutstore-sync:停止同步": false,
+      "nutstore-sync:打开 Chatbox": false,
       "switcher:打开快速切换": false,
       "graph:查看关系图谱": false,
       "canvas:新建白板": false,
@@ -203,10 +206,32 @@
       "realclaudian:Open Claudian": false
     }
   },
-  "active": "41d828c58cef5abc",
+  "active": "6abbdfa9c509bf88",
   "lastOpenFiles": [
-    "进展总结_20260715.md",
+    "插值频谱补全与TDOA_20260722.pdf",
+    "插值频谱补全与TDOA_20260722.md",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_11_tzp_robustness_audit.png",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_11_tzp_robustness_audit.svg",
+    "导师汇报_插值频谱补全与TDOA_20260720.md",
+    "_插值频谱补全与TDOA__20260722.pdf",
+    "导师汇报_插值频谱补全与TDOA_BPSK扩展_20260720.md",
+    "导师汇报_插值频谱补全与TDOA_BPSK扩展_20260722.pdf",
+    "导师汇报_插值频谱补全与TDOA_BPSK扩展_20260722.md",
+    "导师汇报_插值频谱补全与TDOA_BPSK扩展_20260720.pdf",
     "文献综述_20260714.md",
+    "进展总结_20260715.md",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_10_tzp_dense_performance.png",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_10_tzp_dense_performance.svg",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_09_tzp_dense_mechanism.png",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_09_tzp_dense_mechanism.svg",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_08_information_comparators.png",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_08_information_comparators.svg",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_07_overlap_effect.png",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/figure_07_overlap_effect.svg",
+    "导师汇报_插值频谱补全与TDOA_20260720.pdf",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720/advisor_report_bpsk_manifest.json",
+    "assets/插值频谱补全汇报_BPSK扩展_20260720",
+    "assets/插值频谱补全汇报_20260720",
     "运行结果/20260702_000925.md",
     "报告文档.md",
     "运行结果",
@@ -223,14 +248,7 @@
     "未命名 1.canvas",
     "未命名.canvas",
     "欢迎.md",
-    "DAE New Method",
     "obsidian-proxy-github/README.md",
-    "obsidian-proxy-github/manifest.json",
-    "obsidian-proxy-github/main.js",
-    "obsidian-proxy-github",
-    "未命名.base",
-    "未命名 1.base",
-    "未命名 2.base",
     "未命名.md"
   ]
 }
