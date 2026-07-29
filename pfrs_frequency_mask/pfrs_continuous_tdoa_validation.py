@@ -1,7 +1,8 @@
 """Continuous-delay validation for frozen PFRS spectral masks.
 
 This standalone script reads the masks frozen by
-``PFRS_20260716_141935_confirmation`` and evaluates actual continuous TDOA
+``运行结果/PFRS/PFRS_20260716_141935_confirmation`` and evaluates actual
+continuous TDOA
 estimation under the same nuisance-profiled two-receiver model.  It does not
 train a model, reselect frequency bins, or import the project's main training
 and localization pipeline.
@@ -39,10 +40,14 @@ import pandas as pd
 import pfrs_finite_delay_selection as pfrs
 
 
-ROOT = Path(__file__).resolve().parent
+MODULE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = MODULE_ROOT.parent
 PYCHARM_RUN_MODE = "continuous_validation"
 PYCHARM_SOURCE_RESULT_DIR = (
-    ROOT / "运行结果" / "PFRS_20260716_141935_confirmation"
+    PROJECT_ROOT
+    / "运行结果"
+    / "PFRS"
+    / "PFRS_20260716_141935_confirmation"
 )
 
 
@@ -1286,7 +1291,12 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = args.output_dir
     if output_dir is None:
-        output_dir = ROOT / "运行结果" / f"PFRS_CONTINUOUS_{timestamp}_{config.mode}"
+        output_dir = (
+            PROJECT_ROOT
+            / "运行结果"
+            / "PFRS"
+            / f"PFRS_CONTINUOUS_{timestamp}_{config.mode}"
+        )
     run(config, args.source_dir, output_dir.resolve())
 
 

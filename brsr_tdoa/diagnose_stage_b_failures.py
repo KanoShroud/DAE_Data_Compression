@@ -69,7 +69,10 @@ from brsr_tdoa.brsr_waveform import (  # noqa: E402
 
 PYCHARM_RUN_MODE = "diagnostic"
 SOURCE_RESULT_DIR = (
-    ROOT / "运行结果" / "BRSR_STAGE_B_20260718_173940_development"
+    ROOT
+    / "运行结果"
+    / "BRSR"
+    / "BRSR_STAGE_B_20260718_173940_development"
 )
 
 
@@ -1435,6 +1438,7 @@ def main() -> None:
     output = (
         ROOT
         / "运行结果"
+        / "BRSR"
         / f"BRSR_STAGE_B_DIAG_{timestamp}_{config.mode}"
     )
     output.mkdir(parents=True, exist_ok=False)

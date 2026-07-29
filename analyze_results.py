@@ -5,7 +5,7 @@ PyCharm direct use:
     Edit DEFAULT_RESULT_DIR below, then run this file.
 
 Command-line use:
-    python analyze_results.py "运行结果/20260704_195946"
+    python analyze_results.py "运行结果/论文复现与传统基线/20260704_195946_强任务基线评估"
 
 The script does not train or re-evaluate models. It only reads an existing
 plot_data.pkl and writes compact CSV/Markdown summaries into tables/.
@@ -22,7 +22,12 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_RESULT_DIR = ROOT / "运行结果" / "20260704_195946"
+DEFAULT_RESULT_DIR = (
+    ROOT
+    / "运行结果"
+    / "论文复现与传统基线"
+    / "20260704_195946_强任务基线评估"
+)
 
 RESULT_FIELDS = (
     "fig6_results",

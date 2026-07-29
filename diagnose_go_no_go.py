@@ -49,7 +49,11 @@ from task_baselines import (
 )
 
 
-DEFAULT_SOURCE_RESULT = Path("运行结果") / "20260707_143945"
+DEFAULT_SOURCE_RESULT = (
+    Path("运行结果")
+    / "FreqDAE"
+    / "20260707_143945_FreqDAE_v3嵌套任务头"
+)
 DEFAULT_OUTPUT_ROOT = Path("运行结果")
 DEFAULT_SNRS = [-10.0, 0.0, 10.0, 20.0]
 DEFAULT_CR_LIST = [4, 8, 16]
@@ -627,7 +631,7 @@ def run_go_no_go(args) -> Path:
         args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
     )
     out_dir = Path(args.output_dir) if args.output_dir else (
-        DEFAULT_OUTPUT_ROOT / f"go_no_go_{_timestamp()}"
+        DEFAULT_OUTPUT_ROOT / "FreqDAE" / f"{_timestamp()}_TaskHead直接诊断"
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     tables_dir = out_dir / "tables"
@@ -763,7 +767,8 @@ def parse_args():
     parser.add_argument("--source-result", type=str, default=str(DEFAULT_SOURCE_RESULT),
                         help="Existing v3 result directory containing model_cr*.pt and plot_data.pkl.")
     parser.add_argument("--output-dir", type=str, default=None,
-                        help="Output directory. Default: 运行结果/go_no_go_YYYYMMDD_HHMMSS")
+                        help="Output directory. Default: 运行结果/FreqDAE/"
+                             "YYYYMMDD_HHMMSS_TaskHead直接诊断")
     parser.add_argument("--device", type=str, default=None,
                         help="Torch device. Default: cuda if available else cpu.")
     parser.add_argument("--snrs", type=float, nargs="+", default=DEFAULT_SNRS,

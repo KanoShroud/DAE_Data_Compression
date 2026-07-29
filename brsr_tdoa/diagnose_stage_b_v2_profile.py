@@ -52,7 +52,12 @@ from brsr_tdoa.brsr_waveform import (  # noqa: E402
 )
 
 
-SOURCE_RESULT_DIR = ROOT / "运行结果" / "BRSR_STAGE_B_20260718_173940_development"
+SOURCE_RESULT_DIR = (
+    ROOT
+    / "运行结果"
+    / "BRSR"
+    / "BRSR_STAGE_B_20260718_173940_development"
+)
 PYCHARM_RUN_MODE: Literal["smoke", "research"] = "research"
 
 
@@ -832,7 +837,12 @@ def _sha256(path: Path) -> str:
 
 def _output_dir(mode: str) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return ROOT / "运行结果" / f"BRSR_STAGE_B_V2_STEP1_{timestamp}_{mode}"
+    return (
+        ROOT
+        / "运行结果"
+        / "BRSR"
+        / f"BRSR_STAGE_B_V2_STEP1_{timestamp}_{mode}"
+    )
 
 
 def main() -> None:

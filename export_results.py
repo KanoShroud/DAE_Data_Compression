@@ -3,7 +3,7 @@
 Export tables and paper-ready figures from a saved plot_data.pkl result folder.
 
 Default target is the frozen v3.1 paper reproduction baseline:
-运行结果/20260702_000925
+运行结果/论文复现与传统基线/20260702_000925_论文复现v3.1
 """
 
 import csv
@@ -22,7 +22,8 @@ from evaluate import (filter_method_comparison_data, plot_method_comparison,
 
 
 DEFAULT_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                  "运行结果", "20260702_000925")
+                                  "运行结果", "论文复现与传统基线",
+                                  "20260702_000925_论文复现v3.1")
 EXPORT_MARKDOWN_TABLES = True
 
 

@@ -2,7 +2,7 @@
 # 从 plot_data.pkl 读取绘图数据，重新生成 SVG 图。
 #
 # PyCharm 直接运行：修改下方 RESULT_DIR 为实际路径，点击运行即可。
-# 命令行运行：python replot.py "运行结果/20260529_165138"
+# 命令行运行：python replot.py "运行结果/论文复现与传统基线/20260702_000925_论文复现v3.1"
 
 import os
 import sys
@@ -17,7 +17,7 @@ from evaluate import (plot_snr_comparison, plot_snr_comparison_multi,
                       build_tdoa_metrics_from_method_comparison)
 
 # ========== 在此修改结果目录路径 ==========
-RESULT_DIR = "运行结果/20260601_145854"
+RESULT_DIR = "运行结果/论文复现与传统基线/20260702_000925_论文复现v3.1"
 # ==========================================
 
 

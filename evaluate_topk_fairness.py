@@ -61,9 +61,24 @@ from topk_localization import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260711_154042"
-PYCHARM_DAE_RESULT = PROJECT_ROOT / "运行结果" / "20260702_000925"
-PYCHARM_LEGACY_V5_RESULT = PROJECT_ROOT / "运行结果" / "20260709_120019"
+PYCHARM_SOURCE_RESULT = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "压缩域TDOA_V5"
+    / "20260711_154042_V5B_Shared64严格CR16"
+)
+PYCHARM_DAE_RESULT = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "论文复现与传统基线"
+    / "20260702_000925_论文复现v3.1"
+)
+PYCHARM_LEGACY_V5_RESULT = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "压缩域TDOA_V5"
+    / "20260709_120019_V5B专家门控"
+)
 PYCHARM_RUN_MODE = "dev_native_multi_pool"
 PYCHARM_PROGRESS_EVERY = 10
 PYCHARM_ALLOW_LOCKED_OVERWRITE = False

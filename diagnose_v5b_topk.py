@@ -2,11 +2,11 @@
 """V5-B pair-level top-K posterior diagnostic (eval-only, no retraining).
 
 Usage from PyCharm:  Run this file directly (default result dir is
-``运行结果/20260709_120019``).
+``运行结果/压缩域TDOA_V5/20260709_120019_V5B专家门控``).
 
 Usage from terminal::
 
-    D:\\Software\\anaconda3\\envs\\PyTorch\\python.exe diagnose_v5b_topk.py "运行结果/20260709_120019"
+    D:\\Software\\anaconda3\\envs\\PyTorch\\python.exe diagnose_v5b_topk.py "运行结果/压缩域TDOA_V5/20260709_120019_V5B专家门控"
 
 Output: four CSV files in ``{result_dir}/tables/`` plus a summary table
 printed to stdout grouped by low / mid / high SNR.
@@ -136,7 +136,9 @@ def main():
         description="V5-B pair-level top-K posterior diagnostic"
     )
     parser.add_argument(
-        "result_dir", nargs="?", default="运行结果/20260709_120019",
+        "result_dir",
+        nargs="?",
+        default="运行结果/压缩域TDOA_V5/20260709_120019_V5B专家门控",
         help="Path to the result directory containing plot_data.pkl and model_*.pt"
     )
     parser.add_argument(

@@ -105,10 +105,14 @@ V5A1_SHARED64_METHOD_LABELS = [
 ]
 V5B_LEGACY_METHOD_LABELS = ["V5B-Expert64"]
 V5B_SHARED64_METHOD_LABELS = ["V5B-Shared64"]
-BASELINE_RESULT_ID = "20260702_000925"
+BASELINE_RESULT_ID = os.path.join(
+    "论文复现与传统基线", "20260702_000925_论文复现v3.1"
+)
 BASELINE_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "运行结果", BASELINE_RESULT_ID)
-FREQ_TASK_RESULT_ID = "20260706_103701"
+FREQ_TASK_RESULT_ID = os.path.join(
+    "FreqDAE", "20260706_103701_FreqDAE_v1频率选择"
+)
 FREQ_TASK_RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "运行结果", FREQ_TASK_RESULT_ID)
 
@@ -135,7 +139,9 @@ USER_FREQ_TASK_V2_MODEL_SOURCE_DIR = None
 USER_FREQ_TASK_V3_MODEL_SOURCE_DIR = None
 USER_REPRO_REFERENCE_MODEL_DIR = BASELINE_RESULT_DIR
 USER_REUSE_STATIC_BASELINE_CACHE = True
-USER_STATIC_BASELINE_CACHE_RESULT_ID = "20260706_230643"
+USER_STATIC_BASELINE_CACHE_RESULT_ID = os.path.join(
+    "FreqDAE", "20260706_230643_FreqDAE_v2成对频域"
+)
 USER_STATIC_BASELINE_CACHE_DIR = None
 USER_ALLOW_OVERBUDGET_V5B_DIAGNOSTIC = False
 
@@ -1095,7 +1101,21 @@ if torch.cuda.is_available():
 
 # 输出目录 —— 每次运行创建独立子文件夹，避免结果互相覆盖
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "运行结果", TIMESTAMP)
+RESULT_DESCRIPTION = str(USER_EXPERIMENT_PROFILE or EXPERIMENT_MODE)
+if EXPERIMENT_MODE in COMPRESSED_TDOA_MODES:
+    RESULT_GROUP = "压缩域TDOA_V5"
+elif EXPERIMENT_MODE in INNOVATION_MODES:
+    RESULT_GROUP = "FreqDAE"
+elif RESULT_DESCRIPTION.startswith(("geoambi", "geohybrid")):
+    RESULT_GROUP = "GeoAmbi_GeoHybrid"
+else:
+    RESULT_GROUP = "论文复现与传统基线"
+RESULT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "运行结果",
+    RESULT_GROUP,
+    f"{TIMESTAMP}_{RESULT_DESCRIPTION}",
+)
 os.makedirs(RESULT_DIR, exist_ok=True)
 
 # 日志重定向 —— 同时输出到控制台和文件

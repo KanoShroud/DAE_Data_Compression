@@ -1433,7 +1433,7 @@ def run(mode: str) -> Path:
     protocol_validation = _protocol_validation(config, model, tau_grid, base, nested)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = ROOT / "运行结果" / f"PASR_{timestamp}_{mode}"
+    output_dir = ROOT / "运行结果" / "PASR" / f"PASR_{timestamp}_{mode}"
     output_dir.mkdir(parents=True, exist_ok=False)
     print("PASR-TDOA standalone experiment", flush=True)
     print(f"Mode: {mode}", flush=True)

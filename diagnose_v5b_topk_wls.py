@@ -13,7 +13,7 @@ from signal_gen import SignalSimulator
 
 # PyCharm direct-run settings. The low-SNR gate has passed, so the default now
 # performs the full audit run. Command-line arguments remain available for smoke tests.
-PYCHARM_RESULT_DIR = "运行结果/20260709_120019"
+PYCHARM_RESULT_DIR = "运行结果/压缩域TDOA_V5/20260709_120019_V5B专家门控"
 PYCHARM_RUN_MODE = "full"  # smoke | low_gate | full
 PYCHARM_PROGRESS_EVERY = 20
 PYCHARM_BEAM_MAX_PAIRS = 12

@@ -10,6 +10,7 @@
 - Zhai 目标：令 `ωk=2πfk`，以本地周期图作为功率的插件估计，最大化选中频点功率加权角频率方差 `J=S2-S1²/S0`；在固定噪声尺度与增益归一化下，这等价于最小化时延 CRLB 的共同因子。它用于相对选频，不作为受控主实验的绝对 CRLB 数值报告。
 - 插值方法：理想周期插值、多相 FIR、周期线性和周期三次样条。上采样后的滤波严格称为抗镜像滤波，不称为抗混叠滤波。
 - 插值得到的值不作为新独立观测，不加入 CRLB 信息求和。
+- 原网格补全、连续 TDOA 与时域补零密集频谱（TZP-DS）算子统一位于 `alignment_core.py`；`tzp_dense.py` 仅保留历史导入的兼容路径。
 
 ## 最重要的数值一致性检验
 
@@ -17,7 +18,7 @@
 
 ## 运行方法
 
-在 PyCharm 打开 `run_interpolation_alignment.py`，修改顶部普通变量：
+在 PyCharm 打开统一入口 `run_interpolation_alignment.py`，修改顶部普通变量：
 
 ```python
 PROFILE = "sanity"
@@ -31,6 +32,8 @@ PROFILE = "sanity"
 - `synthetic_full`：论文式合成 Monte Carlo，耗时较长；
 - `project_smoke`：调用现有 `SignalSimulator` 的 urban8/LOS 小样本检查；
 - `project_full`：项目场景完整验证，必须由用户在 PyCharm 中运行。
+- `bpsk_parameter_sweep`：五类信号、四档频点预算、五档 SNR、五档重叠率的 BPSK/TZP-DS 正式参数扫描；
+- `bpsk_parameter_sweep_smoke`：上述扩展的两条件轻量验证。
 
 结果保存到 `运行结果/频谱插值对齐/YYYYMMDD_HHMMSS/`，包含配置、协议清单、逐试验 CSV、汇总 CSV、配对比较、算子诊断、绘图数据和 SVG。
 
@@ -45,9 +48,11 @@ PROFILE = "sanity"
 波形和频谱图使用四个固定子种子分别展示平滑复谱、平滑幅度随机相位谱、宽带随机复谱和多频带随机相位谱；时延得分图完整列出九种对照方法，并对完全重合的五种原网格确定性补全作显式说明。这些机制样本只用于解释插值过程，统计性能图严格来自既有逐试验结果。直接在 PyCharm 运行该脚本即可，默认读取
 `运行结果/频谱插值对齐/20260714_184753_411401_synthetic_full`。输出同时保存到正式结果的 `figures/advisor_report/` 和 Obsidian 汇报图片目录。使用 `--validate-only` 可只检查数据与数值一致性检验而不生成图片。
 
+同一文件顶部的 `PLOT_PROFILE` 设为 `"bpsk_parameter_sweep"` 时，会读取 BPSK/TZP-DS 正式结果并导出 11 张扩展图与全部报告数据表。旧的 `run_bpsk_parameter_sweep.py` 和 `plot_bpsk_parameter_sweep.py` 已改为兼容启动器：原有 PyCharm 配置和历史结果中的脚本名仍可直接使用，但实现不再分叉。
+
 ## BPSK 扩展参数扫描
 
-`run_bpsk_parameter_sweep.py` 是与旧 `synthetic_full` 完全分离的新入口。它不会改写旧配置、旧 trial 或旧图片，并在新结果目录中保存旧正式结果关键文件的 SHA-256。冻结参数为：
+`bpsk_parameter_sweep` 是统一插值实验入口中的扩展 profile。它不会改写旧 `synthetic_full` 配置、trial 或图片，并在新结果目录中保存旧正式结果关键文件的 SHA-256。冻结参数为：
 
 - DFT 长度 `N=512`；
 - 单站频点数 `M=256/128/64/32`；
@@ -63,7 +68,7 @@ BPSK-RRC 使用与 `signal_gen.py` 相同的 BPSK、每符号2点、RRC滚降0.2
 
 新增“时域补零密集频谱”（Time-Zero-Padded Dense Spectrum，代码字段 `TZP-DS`）对照。它把每站稀疏频谱 IFFT 为512点复数 IQ 序列，在末尾补零至4096点，再 FFT 得到8倍密集频率栅格，并直接在密集互谱上进行0.01 sample连续时延搜索。该方法保持每站实际传输 `M` 个复频点，不复用交集估计。正式运行前还检查：原频点一致性、原未选频点仍为零、算子秩等于 `M`，以及 ZoomFFT 与定义式直接求和一致。
 
-`plot_bpsk_parameter_sweep.py` 读取完成后的500个 trial chunk，导出：
+`plot_interpolation_mechanism.py` 的 BPSK/TZP-DS 模式读取完成后的500个 trial chunk，导出：
 
 - 五类信号的含噪频谱、复数 IQ 波形、映射频谱和缺失频点图，时域插值处理 I/Q 而不是 `abs(IQ)`；
 - 原网格确定性补全等价性、缺失能量和由插值输出实测的有效共同频点率图；

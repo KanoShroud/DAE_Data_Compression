@@ -1262,7 +1262,12 @@ def main() -> None:
     config = CONFIGS[args.mode]
     if args.output_dir is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = ROOT / "运行结果" / f"BRSR_STAGE_A_{timestamp}_{config.mode}"
+        output_dir = (
+            ROOT
+            / "运行结果"
+            / "BRSR"
+            / f"BRSR_STAGE_A_{timestamp}_{config.mode}"
+        )
     else:
         output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=False)

@@ -1672,7 +1672,12 @@ def main() -> None:
     args = parse_args()
     config = CONFIGS[args.mode]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output = ROOT / "运行结果" / f"BRSR_STAGE_B_{timestamp}_{config.mode}"
+    output = (
+        ROOT
+        / "运行结果"
+        / "BRSR"
+        / f"BRSR_STAGE_B_{timestamp}_{config.mode}"
+    )
     output.mkdir(parents=True, exist_ok=False)
     log_path = output / "run.log"
     start = time.perf_counter()

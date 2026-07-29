@@ -39,6 +39,7 @@ import pandas as pd
 from scipy.linalg import eigvalsh
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYCHARM_RUN_MODE = "confirmation"
 
 
@@ -1616,8 +1617,11 @@ def main() -> None:
             raise ValueError("--trials is only supported by smoke/research modes")
         confirmation_config = CONFIRMATION_CONFIGS[args.mode]
         if output_dir is None:
-            output_dir = Path(__file__).resolve().parent / "运行结果" / (
-                f"PFRS_{timestamp}_{confirmation_config.mode}"
+            output_dir = (
+                PROJECT_ROOT
+                / "运行结果"
+                / "PFRS"
+                / f"PFRS_{timestamp}_{confirmation_config.mode}"
             )
         run_confirmation(confirmation_config, output_dir.resolve())
         return
@@ -1628,8 +1632,11 @@ def main() -> None:
             raise ValueError("--trials must be >= 10")
         config = replace(config, n_trials=args.trials)
     if output_dir is None:
-        output_dir = Path(__file__).resolve().parent / "运行结果" / (
-            f"PFRS_{timestamp}_{config.mode}"
+        output_dir = (
+            PROJECT_ROOT
+            / "运行结果"
+            / "PFRS"
+            / f"PFRS_{timestamp}_{config.mode}"
         )
     run(config, output_dir.resolve())
 

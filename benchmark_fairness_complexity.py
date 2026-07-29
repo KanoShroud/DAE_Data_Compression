@@ -26,8 +26,18 @@ from topk_localization import estimator_score_topk, posterior_topk, waveform_gcc
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-PYCHARM_SOURCE_RESULT = PROJECT_ROOT / "运行结果" / "20260711_154042"
-PYCHARM_DAE_RESULT = PROJECT_ROOT / "运行结果" / "20260702_000925"
+PYCHARM_SOURCE_RESULT = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "压缩域TDOA_V5"
+    / "20260711_154042_V5B_Shared64严格CR16"
+)
+PYCHARM_DAE_RESULT = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "论文复现与传统基线"
+    / "20260702_000925_论文复现v3.1"
+)
 PYCHARM_SNR_DB = 0.0
 PYCHARM_TRIALS = 10
 PYCHARM_REPEATS = 3

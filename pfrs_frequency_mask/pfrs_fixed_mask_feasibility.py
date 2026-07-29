@@ -35,9 +35,15 @@ import pandas as pd
 import pfrs_finite_delay_selection as pfrs
 
 
-ROOT = Path(__file__).resolve().parent
+MODULE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = MODULE_ROOT.parent
 PYCHARM_RUN_MODE = "certificate"
-PYCHARM_SOURCE_DIR = ROOT / "运行结果" / "PFRS_20260716_141935_confirmation"
+PYCHARM_SOURCE_DIR = (
+    PROJECT_ROOT
+    / "运行结果"
+    / "PFRS"
+    / "PFRS_20260716_141935_confirmation"
+)
 
 PRIMARY_METHOD = "PFRS"
 ZHAI_METHOD = "Zhai-Fisher"
@@ -124,7 +130,7 @@ def _load_frozen_model(source_dir: Path) -> FrozenModel:
 
     source_script = Path(str(manifest["script"]))
     if not source_script.is_file():
-        source_script = ROOT / "pfrs_finite_delay_selection.py"
+        source_script = MODULE_ROOT / "pfrs_finite_delay_selection.py"
     if _sha256(source_script) != str(manifest["script_sha256"]):
         raise RuntimeError("Frozen PFRS source hash mismatch")
 
@@ -756,7 +762,12 @@ def run(config: CertificateConfig, source_dir: Path, output_dir: Path) -> None:
 
 def _default_output_dir(mode: str) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return ROOT / "运行结果" / f"PFRS_FIXED_MASK_{stamp}_{mode}"
+    return (
+        PROJECT_ROOT
+        / "运行结果"
+        / "PFRS"
+        / f"PFRS_FIXED_MASK_{stamp}_{mode}"
+    )
 
 
 def main() -> None:
