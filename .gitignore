@@ -8,3 +8,11 @@ Obsidian Vault/.obsidian
 *.pyo
 *.pyd
 *.xml
+
+# Independent datasets and shared weights; keep their documentation/indexes.
+datasets/*/
+checkpoints/*/
+datasets/*.npy
+datasets/*.npz
+checkpoints/*.pt
+checkpoints/*.pth

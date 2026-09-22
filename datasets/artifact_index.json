@@ -1,0 +1,4025 @@
+{
+  "scope": "Existing experiment bundles; index only, no copied artifacts",
+  "files": [
+    {
+      "path": "运行结果/BRSR/BRSR_STAGE_B_20260718_173940_development/candidate_covariance.npy",
+      "bytes": 2432
+    },
+    {
+      "path": "运行结果/PFRS/PFRS_20260716_141935_confirmation/pfrs_paired_trial_errors.npz",
+      "bytes": 1057640
+    },
+    {
+      "path": "运行结果/PFRS/PFRS_CONTINUOUS_20260716_152435_continuous_validation/pfrs_continuous_trial_errors.npz",
+      "bytes": 4712163
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0000_smooth_complex_M256_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0001_smooth_complex_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 7008
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0002_smooth_complex_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 6274
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0003_smooth_complex_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 5943
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0004_smooth_complex_M256_snrm5_ov1.paired.npz",
+      "bytes": 4218
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0005_smooth_complex_M256_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0006_smooth_complex_M256_snr0_ov0p25.paired.npz",
+      "bytes": 6033
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0007_smooth_complex_M256_snr0_ov0p5.paired.npz",
+      "bytes": 5514
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0008_smooth_complex_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5212
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0009_smooth_complex_M256_snr0_ov1.paired.npz",
+      "bytes": 3930
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0010_smooth_complex_M256_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0011_smooth_complex_M256_snr5_ov0p25.paired.npz",
+      "bytes": 5887
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0012_smooth_complex_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5390
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0013_smooth_complex_M256_snr5_ov0p75.paired.npz",
+      "bytes": 4825
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0014_smooth_complex_M256_snr5_ov1.paired.npz",
+      "bytes": 3872
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0015_smooth_complex_M256_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0016_smooth_complex_M256_snr10_ov0p25.paired.npz",
+      "bytes": 5500
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0017_smooth_complex_M256_snr10_ov0p5.paired.npz",
+      "bytes": 4867
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0018_smooth_complex_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4690
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0019_smooth_complex_M256_snr10_ov1.paired.npz",
+      "bytes": 3674
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0020_smooth_complex_M256_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0021_smooth_complex_M256_snr15_ov0p25.paired.npz",
+      "bytes": 5311
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0022_smooth_complex_M256_snr15_ov0p5.paired.npz",
+      "bytes": 4618
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0023_smooth_complex_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4192
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0024_smooth_complex_M256_snr15_ov1.paired.npz",
+      "bytes": 3339
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0025_smooth_complex_M128_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0026_smooth_complex_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 7016
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0027_smooth_complex_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 6946
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0028_smooth_complex_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 6432
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0029_smooth_complex_M128_snrm5_ov1.paired.npz",
+      "bytes": 5052
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0030_smooth_complex_M128_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0031_smooth_complex_M128_snr0_ov0p25.paired.npz",
+      "bytes": 6339
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0032_smooth_complex_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6021
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0033_smooth_complex_M128_snr0_ov0p75.paired.npz",
+      "bytes": 5463
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0034_smooth_complex_M128_snr0_ov1.paired.npz",
+      "bytes": 4363
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0035_smooth_complex_M128_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0036_smooth_complex_M128_snr5_ov0p25.paired.npz",
+      "bytes": 5935
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0037_smooth_complex_M128_snr5_ov0p5.paired.npz",
+      "bytes": 5462
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0038_smooth_complex_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5320
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0039_smooth_complex_M128_snr5_ov1.paired.npz",
+      "bytes": 4284
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0040_smooth_complex_M128_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0041_smooth_complex_M128_snr10_ov0p25.paired.npz",
+      "bytes": 5815
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0042_smooth_complex_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5607
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0043_smooth_complex_M128_snr10_ov0p75.paired.npz",
+      "bytes": 4854
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0044_smooth_complex_M128_snr10_ov1.paired.npz",
+      "bytes": 4014
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0045_smooth_complex_M128_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0046_smooth_complex_M128_snr15_ov0p25.paired.npz",
+      "bytes": 5642
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0047_smooth_complex_M128_snr15_ov0p5.paired.npz",
+      "bytes": 4928
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0048_smooth_complex_M128_snr15_ov0p75.paired.npz",
+      "bytes": 5018
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0049_smooth_complex_M128_snr15_ov1.paired.npz",
+      "bytes": 3783
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0050_smooth_complex_M64_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0051_smooth_complex_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 7043
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0052_smooth_complex_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7000
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0053_smooth_complex_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 6960
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0054_smooth_complex_M64_snrm5_ov1.paired.npz",
+      "bytes": 5304
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0055_smooth_complex_M64_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0056_smooth_complex_M64_snr0_ov0p25.paired.npz",
+      "bytes": 7061
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0057_smooth_complex_M64_snr0_ov0p5.paired.npz",
+      "bytes": 6453
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0058_smooth_complex_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6034
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0059_smooth_complex_M64_snr0_ov1.paired.npz",
+      "bytes": 4834
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0060_smooth_complex_M64_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0061_smooth_complex_M64_snr5_ov0p25.paired.npz",
+      "bytes": 6054
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0062_smooth_complex_M64_snr5_ov0p5.paired.npz",
+      "bytes": 5781
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0063_smooth_complex_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5624
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0064_smooth_complex_M64_snr5_ov1.paired.npz",
+      "bytes": 4537
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0065_smooth_complex_M64_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0066_smooth_complex_M64_snr10_ov0p25.paired.npz",
+      "bytes": 6094
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0067_smooth_complex_M64_snr10_ov0p5.paired.npz",
+      "bytes": 5709
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0068_smooth_complex_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5319
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0069_smooth_complex_M64_snr10_ov1.paired.npz",
+      "bytes": 4407
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0070_smooth_complex_M64_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0071_smooth_complex_M64_snr15_ov0p25.paired.npz",
+      "bytes": 5712
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0072_smooth_complex_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5319
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0073_smooth_complex_M64_snr15_ov0p75.paired.npz",
+      "bytes": 4957
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0074_smooth_complex_M64_snr15_ov1.paired.npz",
+      "bytes": 4153
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0075_smooth_complex_M32_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0076_smooth_complex_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 6971
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0077_smooth_complex_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7085
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0078_smooth_complex_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 6856
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0079_smooth_complex_M32_snrm5_ov1.paired.npz",
+      "bytes": 5279
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0080_smooth_complex_M32_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0081_smooth_complex_M32_snr0_ov0p25.paired.npz",
+      "bytes": 7320
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0082_smooth_complex_M32_snr0_ov0p5.paired.npz",
+      "bytes": 6939
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0083_smooth_complex_M32_snr0_ov0p75.paired.npz",
+      "bytes": 6516
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0084_smooth_complex_M32_snr0_ov1.paired.npz",
+      "bytes": 5211
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0085_smooth_complex_M32_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0086_smooth_complex_M32_snr5_ov0p25.paired.npz",
+      "bytes": 6852
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0087_smooth_complex_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6222
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0088_smooth_complex_M32_snr5_ov0p75.paired.npz",
+      "bytes": 5908
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0089_smooth_complex_M32_snr5_ov1.paired.npz",
+      "bytes": 4835
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0090_smooth_complex_M32_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0091_smooth_complex_M32_snr10_ov0p25.paired.npz",
+      "bytes": 6160
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0092_smooth_complex_M32_snr10_ov0p5.paired.npz",
+      "bytes": 5823
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0093_smooth_complex_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5587
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0094_smooth_complex_M32_snr10_ov1.paired.npz",
+      "bytes": 4445
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0095_smooth_complex_M32_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0096_smooth_complex_M32_snr15_ov0p25.paired.npz",
+      "bytes": 6129
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0097_smooth_complex_M32_snr15_ov0p5.paired.npz",
+      "bytes": 5690
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0098_smooth_complex_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5427
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0099_smooth_complex_M32_snr15_ov1.paired.npz",
+      "bytes": 4454
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0100_smooth_magnitude_random_phase_M256_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0101_smooth_magnitude_random_phase_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 7040
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0102_smooth_magnitude_random_phase_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 6100
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0103_smooth_magnitude_random_phase_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 5693
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0104_smooth_magnitude_random_phase_M256_snrm5_ov1.paired.npz",
+      "bytes": 4232
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0105_smooth_magnitude_random_phase_M256_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0106_smooth_magnitude_random_phase_M256_snr0_ov0p25.paired.npz",
+      "bytes": 5968
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0107_smooth_magnitude_random_phase_M256_snr0_ov0p5.paired.npz",
+      "bytes": 5670
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0108_smooth_magnitude_random_phase_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5317
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0109_smooth_magnitude_random_phase_M256_snr0_ov1.paired.npz",
+      "bytes": 3894
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0110_smooth_magnitude_random_phase_M256_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0111_smooth_magnitude_random_phase_M256_snr5_ov0p25.paired.npz",
+      "bytes": 5850
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0112_smooth_magnitude_random_phase_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5555
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0113_smooth_magnitude_random_phase_M256_snr5_ov0p75.paired.npz",
+      "bytes": 4903
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0114_smooth_magnitude_random_phase_M256_snr5_ov1.paired.npz",
+      "bytes": 3841
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0115_smooth_magnitude_random_phase_M256_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0116_smooth_magnitude_random_phase_M256_snr10_ov0p25.paired.npz",
+      "bytes": 5472
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0117_smooth_magnitude_random_phase_M256_snr10_ov0p5.paired.npz",
+      "bytes": 5163
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0118_smooth_magnitude_random_phase_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4622
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0119_smooth_magnitude_random_phase_M256_snr10_ov1.paired.npz",
+      "bytes": 3620
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0120_smooth_magnitude_random_phase_M256_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0121_smooth_magnitude_random_phase_M256_snr15_ov0p25.paired.npz",
+      "bytes": 5236
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0122_smooth_magnitude_random_phase_M256_snr15_ov0p5.paired.npz",
+      "bytes": 4624
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0123_smooth_magnitude_random_phase_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4471
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0124_smooth_magnitude_random_phase_M256_snr15_ov1.paired.npz",
+      "bytes": 3368
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0125_smooth_magnitude_random_phase_M128_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0126_smooth_magnitude_random_phase_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 7211
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0127_smooth_magnitude_random_phase_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 6996
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0128_smooth_magnitude_random_phase_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 6653
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0129_smooth_magnitude_random_phase_M128_snrm5_ov1.paired.npz",
+      "bytes": 4964
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0130_smooth_magnitude_random_phase_M128_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0131_smooth_magnitude_random_phase_M128_snr0_ov0p25.paired.npz",
+      "bytes": 6454
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0132_smooth_magnitude_random_phase_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6099
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0133_smooth_magnitude_random_phase_M128_snr0_ov0p75.paired.npz",
+      "bytes": 5463
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0134_smooth_magnitude_random_phase_M128_snr0_ov1.paired.npz",
+      "bytes": 4444
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0135_smooth_magnitude_random_phase_M128_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0136_smooth_magnitude_random_phase_M128_snr5_ov0p25.paired.npz",
+      "bytes": 5873
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0137_smooth_magnitude_random_phase_M128_snr5_ov0p5.paired.npz",
+      "bytes": 5548
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0138_smooth_magnitude_random_phase_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5343
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0139_smooth_magnitude_random_phase_M128_snr5_ov1.paired.npz",
+      "bytes": 3984
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0140_smooth_magnitude_random_phase_M128_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0141_smooth_magnitude_random_phase_M128_snr10_ov0p25.paired.npz",
+      "bytes": 5730
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0142_smooth_magnitude_random_phase_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5272
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0143_smooth_magnitude_random_phase_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5212
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0144_smooth_magnitude_random_phase_M128_snr10_ov1.paired.npz",
+      "bytes": 4085
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0145_smooth_magnitude_random_phase_M128_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0146_smooth_magnitude_random_phase_M128_snr15_ov0p25.paired.npz",
+      "bytes": 5417
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0147_smooth_magnitude_random_phase_M128_snr15_ov0p5.paired.npz",
+      "bytes": 4906
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0148_smooth_magnitude_random_phase_M128_snr15_ov0p75.paired.npz",
+      "bytes": 4757
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0149_smooth_magnitude_random_phase_M128_snr15_ov1.paired.npz",
+      "bytes": 3939
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0150_smooth_magnitude_random_phase_M64_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0151_smooth_magnitude_random_phase_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 7128
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0152_smooth_magnitude_random_phase_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7153
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0153_smooth_magnitude_random_phase_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 6953
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0154_smooth_magnitude_random_phase_M64_snrm5_ov1.paired.npz",
+      "bytes": 5240
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0155_smooth_magnitude_random_phase_M64_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0156_smooth_magnitude_random_phase_M64_snr0_ov0p25.paired.npz",
+      "bytes": 7006
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0157_smooth_magnitude_random_phase_M64_snr0_ov0p5.paired.npz",
+      "bytes": 6479
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0158_smooth_magnitude_random_phase_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6032
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0159_smooth_magnitude_random_phase_M64_snr0_ov1.paired.npz",
+      "bytes": 4783
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0160_smooth_magnitude_random_phase_M64_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0161_smooth_magnitude_random_phase_M64_snr5_ov0p25.paired.npz",
+      "bytes": 6392
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0162_smooth_magnitude_random_phase_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6056
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0163_smooth_magnitude_random_phase_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5489
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0164_smooth_magnitude_random_phase_M64_snr5_ov1.paired.npz",
+      "bytes": 4507
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0165_smooth_magnitude_random_phase_M64_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0166_smooth_magnitude_random_phase_M64_snr10_ov0p25.paired.npz",
+      "bytes": 5942
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0167_smooth_magnitude_random_phase_M64_snr10_ov0p5.paired.npz",
+      "bytes": 5700
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0168_smooth_magnitude_random_phase_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5372
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0169_smooth_magnitude_random_phase_M64_snr10_ov1.paired.npz",
+      "bytes": 4259
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0170_smooth_magnitude_random_phase_M64_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0171_smooth_magnitude_random_phase_M64_snr15_ov0p25.paired.npz",
+      "bytes": 5670
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0172_smooth_magnitude_random_phase_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5385
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0173_smooth_magnitude_random_phase_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5095
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0174_smooth_magnitude_random_phase_M64_snr15_ov1.paired.npz",
+      "bytes": 4209
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0175_smooth_magnitude_random_phase_M32_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0176_smooth_magnitude_random_phase_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 6992
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0177_smooth_magnitude_random_phase_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 6938
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0178_smooth_magnitude_random_phase_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 6847
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0179_smooth_magnitude_random_phase_M32_snrm5_ov1.paired.npz",
+      "bytes": 5325
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0180_smooth_magnitude_random_phase_M32_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0181_smooth_magnitude_random_phase_M32_snr0_ov0p25.paired.npz",
+      "bytes": 7163
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0182_smooth_magnitude_random_phase_M32_snr0_ov0p5.paired.npz",
+      "bytes": 6895
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0183_smooth_magnitude_random_phase_M32_snr0_ov0p75.paired.npz",
+      "bytes": 6564
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0184_smooth_magnitude_random_phase_M32_snr0_ov1.paired.npz",
+      "bytes": 5163
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0185_smooth_magnitude_random_phase_M32_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0186_smooth_magnitude_random_phase_M32_snr5_ov0p25.paired.npz",
+      "bytes": 6652
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0187_smooth_magnitude_random_phase_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6087
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0188_smooth_magnitude_random_phase_M32_snr5_ov0p75.paired.npz",
+      "bytes": 5780
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0189_smooth_magnitude_random_phase_M32_snr5_ov1.paired.npz",
+      "bytes": 4761
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0190_smooth_magnitude_random_phase_M32_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0191_smooth_magnitude_random_phase_M32_snr10_ov0p25.paired.npz",
+      "bytes": 5954
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0192_smooth_magnitude_random_phase_M32_snr10_ov0p5.paired.npz",
+      "bytes": 5951
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0193_smooth_magnitude_random_phase_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5492
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0194_smooth_magnitude_random_phase_M32_snr10_ov1.paired.npz",
+      "bytes": 4552
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0195_smooth_magnitude_random_phase_M32_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0196_smooth_magnitude_random_phase_M32_snr15_ov0p25.paired.npz",
+      "bytes": 5822
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0197_smooth_magnitude_random_phase_M32_snr15_ov0p5.paired.npz",
+      "bytes": 5555
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0198_smooth_magnitude_random_phase_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5266
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0199_smooth_magnitude_random_phase_M32_snr15_ov1.paired.npz",
+      "bytes": 4355
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0200_broadband_random_M256_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0201_broadband_random_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 7033
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0202_broadband_random_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 6146
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0203_broadband_random_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 5490
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0204_broadband_random_M256_snrm5_ov1.paired.npz",
+      "bytes": 3871
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0205_broadband_random_M256_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0206_broadband_random_M256_snr0_ov0p25.paired.npz",
+      "bytes": 5926
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0207_broadband_random_M256_snr0_ov0p5.paired.npz",
+      "bytes": 5306
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0208_broadband_random_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5091
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0209_broadband_random_M256_snr0_ov1.paired.npz",
+      "bytes": 3832
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0210_broadband_random_M256_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0211_broadband_random_M256_snr5_ov0p25.paired.npz",
+      "bytes": 5503
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0212_broadband_random_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5009
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0213_broadband_random_M256_snr5_ov0p75.paired.npz",
+      "bytes": 4692
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0214_broadband_random_M256_snr5_ov1.paired.npz",
+      "bytes": 3589
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0215_broadband_random_M256_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0216_broadband_random_M256_snr10_ov0p25.paired.npz",
+      "bytes": 5215
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0217_broadband_random_M256_snr10_ov0p5.paired.npz",
+      "bytes": 4766
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0218_broadband_random_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4284
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0219_broadband_random_M256_snr10_ov1.paired.npz",
+      "bytes": 3117
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0220_broadband_random_M256_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0221_broadband_random_M256_snr15_ov0p25.paired.npz",
+      "bytes": 4798
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0222_broadband_random_M256_snr15_ov0p5.paired.npz",
+      "bytes": 4435
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0223_broadband_random_M256_snr15_ov0p75.paired.npz",
+      "bytes": 3801
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0224_broadband_random_M256_snr15_ov1.paired.npz",
+      "bytes": 3044
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0225_broadband_random_M128_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0226_broadband_random_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 7070
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0227_broadband_random_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 6986
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0228_broadband_random_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 6415
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0229_broadband_random_M128_snrm5_ov1.paired.npz",
+      "bytes": 4874
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0230_broadband_random_M128_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0231_broadband_random_M128_snr0_ov0p25.paired.npz",
+      "bytes": 6467
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0232_broadband_random_M128_snr0_ov0p5.paired.npz",
+      "bytes": 5555
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0233_broadband_random_M128_snr0_ov0p75.paired.npz",
+      "bytes": 5393
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0234_broadband_random_M128_snr0_ov1.paired.npz",
+      "bytes": 4262
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0235_broadband_random_M128_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0236_broadband_random_M128_snr5_ov0p25.paired.npz",
+      "bytes": 5755
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0237_broadband_random_M128_snr5_ov0p5.paired.npz",
+      "bytes": 5398
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0238_broadband_random_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5007
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0239_broadband_random_M128_snr5_ov1.paired.npz",
+      "bytes": 4168
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0240_broadband_random_M128_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0241_broadband_random_M128_snr10_ov0p25.paired.npz",
+      "bytes": 5460
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0242_broadband_random_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5202
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0243_broadband_random_M128_snr10_ov0p75.paired.npz",
+      "bytes": 4942
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0244_broadband_random_M128_snr10_ov1.paired.npz",
+      "bytes": 3965
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0245_broadband_random_M128_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0246_broadband_random_M128_snr15_ov0p25.paired.npz",
+      "bytes": 5192
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0247_broadband_random_M128_snr15_ov0p5.paired.npz",
+      "bytes": 4842
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0248_broadband_random_M128_snr15_ov0p75.paired.npz",
+      "bytes": 4534
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0249_broadband_random_M128_snr15_ov1.paired.npz",
+      "bytes": 3582
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0250_broadband_random_M64_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0251_broadband_random_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 7144
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0252_broadband_random_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7167
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0253_broadband_random_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 7035
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0254_broadband_random_M64_snrm5_ov1.paired.npz",
+      "bytes": 5411
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0255_broadband_random_M64_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0256_broadband_random_M64_snr0_ov0p25.paired.npz",
+      "bytes": 7130
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0257_broadband_random_M64_snr0_ov0p5.paired.npz",
+      "bytes": 6253
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0258_broadband_random_M64_snr0_ov0p75.paired.npz",
+      "bytes": 5653
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0259_broadband_random_M64_snr0_ov1.paired.npz",
+      "bytes": 4564
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0260_broadband_random_M64_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0261_broadband_random_M64_snr5_ov0p25.paired.npz",
+      "bytes": 6165
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0262_broadband_random_M64_snr5_ov0p5.paired.npz",
+      "bytes": 5610
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0263_broadband_random_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5357
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0264_broadband_random_M64_snr5_ov1.paired.npz",
+      "bytes": 4160
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0265_broadband_random_M64_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0266_broadband_random_M64_snr10_ov0p25.paired.npz",
+      "bytes": 5803
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0267_broadband_random_M64_snr10_ov0p5.paired.npz",
+      "bytes": 5542
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0268_broadband_random_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5167
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0269_broadband_random_M64_snr10_ov1.paired.npz",
+      "bytes": 4184
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0270_broadband_random_M64_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0271_broadband_random_M64_snr15_ov0p25.paired.npz",
+      "bytes": 5403
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0272_broadband_random_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5242
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0273_broadband_random_M64_snr15_ov0p75.paired.npz",
+      "bytes": 4814
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0274_broadband_random_M64_snr15_ov1.paired.npz",
+      "bytes": 4049
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0275_broadband_random_M32_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0276_broadband_random_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 7114
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0277_broadband_random_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7045
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0278_broadband_random_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 6939
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0279_broadband_random_M32_snrm5_ov1.paired.npz",
+      "bytes": 5408
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0280_broadband_random_M32_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0281_broadband_random_M32_snr0_ov0p25.paired.npz",
+      "bytes": 7312
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0282_broadband_random_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7020
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0283_broadband_random_M32_snr0_ov0p75.paired.npz",
+      "bytes": 6397
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0284_broadband_random_M32_snr0_ov1.paired.npz",
+      "bytes": 4981
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0285_broadband_random_M32_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0286_broadband_random_M32_snr5_ov0p25.paired.npz",
+      "bytes": 7070
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0287_broadband_random_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6156
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0288_broadband_random_M32_snr5_ov0p75.paired.npz",
+      "bytes": 5590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0289_broadband_random_M32_snr5_ov1.paired.npz",
+      "bytes": 4645
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0290_broadband_random_M32_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0291_broadband_random_M32_snr10_ov0p25.paired.npz",
+      "bytes": 6167
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0292_broadband_random_M32_snr10_ov0p5.paired.npz",
+      "bytes": 5878
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0293_broadband_random_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5417
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0294_broadband_random_M32_snr10_ov1.paired.npz",
+      "bytes": 4499
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0295_broadband_random_M32_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0296_broadband_random_M32_snr15_ov0p25.paired.npz",
+      "bytes": 5754
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0297_broadband_random_M32_snr15_ov0p5.paired.npz",
+      "bytes": 5632
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0298_broadband_random_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5050
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0299_broadband_random_M32_snr15_ov1.paired.npz",
+      "bytes": 4121
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0300_multiband_M256_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0301_multiband_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 7157
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0302_multiband_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 6426
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0303_multiband_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 6019
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0304_multiband_M256_snrm5_ov1.paired.npz",
+      "bytes": 4368
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0305_multiband_M256_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0306_multiband_M256_snr0_ov0p25.paired.npz",
+      "bytes": 6313
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0307_multiband_M256_snr0_ov0p5.paired.npz",
+      "bytes": 5695
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0308_multiband_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5099
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0309_multiband_M256_snr0_ov1.paired.npz",
+      "bytes": 3888
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0310_multiband_M256_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0311_multiband_M256_snr5_ov0p25.paired.npz",
+      "bytes": 5620
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0312_multiband_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5185
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0313_multiband_M256_snr5_ov0p75.paired.npz",
+      "bytes": 4687
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0314_multiband_M256_snr5_ov1.paired.npz",
+      "bytes": 3775
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0315_multiband_M256_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0316_multiband_M256_snr10_ov0p25.paired.npz",
+      "bytes": 5405
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0317_multiband_M256_snr10_ov0p5.paired.npz",
+      "bytes": 4958
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0318_multiband_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4274
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0319_multiband_M256_snr10_ov1.paired.npz",
+      "bytes": 3538
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0320_multiband_M256_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0321_multiband_M256_snr15_ov0p25.paired.npz",
+      "bytes": 4930
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0322_multiband_M256_snr15_ov0p5.paired.npz",
+      "bytes": 4593
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0323_multiband_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4109
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0324_multiband_M256_snr15_ov1.paired.npz",
+      "bytes": 3113
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0325_multiband_M128_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0326_multiband_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 7273
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0327_multiband_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 6867
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0328_multiband_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 6625
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0329_multiband_M128_snrm5_ov1.paired.npz",
+      "bytes": 4901
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0330_multiband_M128_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0331_multiband_M128_snr0_ov0p25.paired.npz",
+      "bytes": 6724
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0332_multiband_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6148
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0333_multiband_M128_snr0_ov0p75.paired.npz",
+      "bytes": 5759
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0334_multiband_M128_snr0_ov1.paired.npz",
+      "bytes": 4463
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0335_multiband_M128_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0336_multiband_M128_snr5_ov0p25.paired.npz",
+      "bytes": 5830
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0337_multiband_M128_snr5_ov0p5.paired.npz",
+      "bytes": 5642
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0338_multiband_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5138
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0339_multiband_M128_snr5_ov1.paired.npz",
+      "bytes": 4279
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0340_multiband_M128_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0341_multiband_M128_snr10_ov0p25.paired.npz",
+      "bytes": 5792
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0342_multiband_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5432
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0343_multiband_M128_snr10_ov0p75.paired.npz",
+      "bytes": 4780
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0344_multiband_M128_snr10_ov1.paired.npz",
+      "bytes": 3712
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0345_multiband_M128_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0346_multiband_M128_snr15_ov0p25.paired.npz",
+      "bytes": 5428
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0347_multiband_M128_snr15_ov0p5.paired.npz",
+      "bytes": 5059
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0348_multiband_M128_snr15_ov0p75.paired.npz",
+      "bytes": 4603
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0349_multiband_M128_snr15_ov1.paired.npz",
+      "bytes": 3758
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0350_multiband_M64_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0351_multiband_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 7301
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0352_multiband_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7123
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0353_multiband_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 6830
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0354_multiband_M64_snrm5_ov1.paired.npz",
+      "bytes": 5353
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0355_multiband_M64_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0356_multiband_M64_snr0_ov0p25.paired.npz",
+      "bytes": 7193
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0357_multiband_M64_snr0_ov0p5.paired.npz",
+      "bytes": 6762
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0358_multiband_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6226
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0359_multiband_M64_snr0_ov1.paired.npz",
+      "bytes": 4878
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0360_multiband_M64_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0361_multiband_M64_snr5_ov0p25.paired.npz",
+      "bytes": 6463
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0362_multiband_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6016
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0363_multiband_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5344
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0364_multiband_M64_snr5_ov1.paired.npz",
+      "bytes": 4533
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0365_multiband_M64_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0366_multiband_M64_snr10_ov0p25.paired.npz",
+      "bytes": 6123
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0367_multiband_M64_snr10_ov0p5.paired.npz",
+      "bytes": 5485
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0368_multiband_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5276
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0369_multiband_M64_snr10_ov1.paired.npz",
+      "bytes": 4333
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0370_multiband_M64_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0371_multiband_M64_snr15_ov0p25.paired.npz",
+      "bytes": 6018
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0372_multiband_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5365
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0373_multiband_M64_snr15_ov0p75.paired.npz",
+      "bytes": 4950
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0374_multiband_M64_snr15_ov1.paired.npz",
+      "bytes": 4061
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0375_multiband_M32_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0376_multiband_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 7154
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0377_multiband_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 6936
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0378_multiband_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 6904
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0379_multiband_M32_snrm5_ov1.paired.npz",
+      "bytes": 5385
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0380_multiband_M32_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0381_multiband_M32_snr0_ov0p25.paired.npz",
+      "bytes": 7363
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0382_multiband_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7075
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0383_multiband_M32_snr0_ov0p75.paired.npz",
+      "bytes": 6862
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0384_multiband_M32_snr0_ov1.paired.npz",
+      "bytes": 5313
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0385_multiband_M32_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0386_multiband_M32_snr5_ov0p25.paired.npz",
+      "bytes": 7141
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0387_multiband_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6576
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0388_multiband_M32_snr5_ov0p75.paired.npz",
+      "bytes": 5999
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0389_multiband_M32_snr5_ov1.paired.npz",
+      "bytes": 4568
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0390_multiband_M32_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0391_multiband_M32_snr10_ov0p25.paired.npz",
+      "bytes": 6945
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0392_multiband_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6060
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0393_multiband_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5483
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0394_multiband_M32_snr10_ov1.paired.npz",
+      "bytes": 4502
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0395_multiband_M32_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0396_multiband_M32_snr15_ov0p25.paired.npz",
+      "bytes": 6511
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0397_multiband_M32_snr15_ov0p5.paired.npz",
+      "bytes": 5766
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0398_multiband_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5376
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0399_multiband_M32_snr15_ov1.paired.npz",
+      "bytes": 4292
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0400_urban8_bpsk_rrc_M256_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0401_urban8_bpsk_rrc_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 6987
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0402_urban8_bpsk_rrc_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 6475
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0403_urban8_bpsk_rrc_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 5979
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0404_urban8_bpsk_rrc_M256_snrm5_ov1.paired.npz",
+      "bytes": 4526
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0405_urban8_bpsk_rrc_M256_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0406_urban8_bpsk_rrc_M256_snr0_ov0p25.paired.npz",
+      "bytes": 6300
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0407_urban8_bpsk_rrc_M256_snr0_ov0p5.paired.npz",
+      "bytes": 5847
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0408_urban8_bpsk_rrc_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5513
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0409_urban8_bpsk_rrc_M256_snr0_ov1.paired.npz",
+      "bytes": 4120
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0410_urban8_bpsk_rrc_M256_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0411_urban8_bpsk_rrc_M256_snr5_ov0p25.paired.npz",
+      "bytes": 5919
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0412_urban8_bpsk_rrc_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5416
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0413_urban8_bpsk_rrc_M256_snr5_ov0p75.paired.npz",
+      "bytes": 5205
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0414_urban8_bpsk_rrc_M256_snr5_ov1.paired.npz",
+      "bytes": 3886
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0415_urban8_bpsk_rrc_M256_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0416_urban8_bpsk_rrc_M256_snr10_ov0p25.paired.npz",
+      "bytes": 5725
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0417_urban8_bpsk_rrc_M256_snr10_ov0p5.paired.npz",
+      "bytes": 5334
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0418_urban8_bpsk_rrc_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4695
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0419_urban8_bpsk_rrc_M256_snr10_ov1.paired.npz",
+      "bytes": 3628
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0420_urban8_bpsk_rrc_M256_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0421_urban8_bpsk_rrc_M256_snr15_ov0p25.paired.npz",
+      "bytes": 5168
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0422_urban8_bpsk_rrc_M256_snr15_ov0p5.paired.npz",
+      "bytes": 4740
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0423_urban8_bpsk_rrc_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4405
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0424_urban8_bpsk_rrc_M256_snr15_ov1.paired.npz",
+      "bytes": 3463
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0425_urban8_bpsk_rrc_M128_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0426_urban8_bpsk_rrc_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 7204
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0427_urban8_bpsk_rrc_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 6870
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0428_urban8_bpsk_rrc_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 6798
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0429_urban8_bpsk_rrc_M128_snrm5_ov1.paired.npz",
+      "bytes": 5067
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0430_urban8_bpsk_rrc_M128_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0431_urban8_bpsk_rrc_M128_snr0_ov0p25.paired.npz",
+      "bytes": 6826
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0432_urban8_bpsk_rrc_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6354
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0433_urban8_bpsk_rrc_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6008
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0434_urban8_bpsk_rrc_M128_snr0_ov1.paired.npz",
+      "bytes": 4673
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0435_urban8_bpsk_rrc_M128_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0436_urban8_bpsk_rrc_M128_snr5_ov0p25.paired.npz",
+      "bytes": 6238
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0437_urban8_bpsk_rrc_M128_snr5_ov0p5.paired.npz",
+      "bytes": 5595
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0438_urban8_bpsk_rrc_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5567
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0439_urban8_bpsk_rrc_M128_snr5_ov1.paired.npz",
+      "bytes": 4283
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0440_urban8_bpsk_rrc_M128_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0441_urban8_bpsk_rrc_M128_snr10_ov0p25.paired.npz",
+      "bytes": 5951
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0442_urban8_bpsk_rrc_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5489
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0443_urban8_bpsk_rrc_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5138
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0444_urban8_bpsk_rrc_M128_snr10_ov1.paired.npz",
+      "bytes": 4163
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0445_urban8_bpsk_rrc_M128_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0446_urban8_bpsk_rrc_M128_snr15_ov0p25.paired.npz",
+      "bytes": 5649
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0447_urban8_bpsk_rrc_M128_snr15_ov0p5.paired.npz",
+      "bytes": 5340
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0448_urban8_bpsk_rrc_M128_snr15_ov0p75.paired.npz",
+      "bytes": 4929
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0449_urban8_bpsk_rrc_M128_snr15_ov1.paired.npz",
+      "bytes": 3920
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0450_urban8_bpsk_rrc_M64_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0451_urban8_bpsk_rrc_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 7161
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0452_urban8_bpsk_rrc_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7008
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0453_urban8_bpsk_rrc_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 6927
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0454_urban8_bpsk_rrc_M64_snrm5_ov1.paired.npz",
+      "bytes": 5309
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0455_urban8_bpsk_rrc_M64_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0456_urban8_bpsk_rrc_M64_snr0_ov0p25.paired.npz",
+      "bytes": 7156
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0457_urban8_bpsk_rrc_M64_snr0_ov0p5.paired.npz",
+      "bytes": 6737
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0458_urban8_bpsk_rrc_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6352
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0459_urban8_bpsk_rrc_M64_snr0_ov1.paired.npz",
+      "bytes": 5068
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0460_urban8_bpsk_rrc_M64_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0461_urban8_bpsk_rrc_M64_snr5_ov0p25.paired.npz",
+      "bytes": 6709
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0462_urban8_bpsk_rrc_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6117
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0463_urban8_bpsk_rrc_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5942
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0464_urban8_bpsk_rrc_M64_snr5_ov1.paired.npz",
+      "bytes": 4629
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0465_urban8_bpsk_rrc_M64_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0466_urban8_bpsk_rrc_M64_snr10_ov0p25.paired.npz",
+      "bytes": 6318
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0467_urban8_bpsk_rrc_M64_snr10_ov0p5.paired.npz",
+      "bytes": 5764
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0468_urban8_bpsk_rrc_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5650
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0469_urban8_bpsk_rrc_M64_snr10_ov1.paired.npz",
+      "bytes": 4426
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0470_urban8_bpsk_rrc_M64_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0471_urban8_bpsk_rrc_M64_snr15_ov0p25.paired.npz",
+      "bytes": 6021
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0472_urban8_bpsk_rrc_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5537
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0473_urban8_bpsk_rrc_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5134
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0474_urban8_bpsk_rrc_M64_snr15_ov1.paired.npz",
+      "bytes": 4204
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0475_urban8_bpsk_rrc_M32_snrm5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0476_urban8_bpsk_rrc_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 7140
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0477_urban8_bpsk_rrc_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7141
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0478_urban8_bpsk_rrc_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 6913
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0479_urban8_bpsk_rrc_M32_snrm5_ov1.paired.npz",
+      "bytes": 5256
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0480_urban8_bpsk_rrc_M32_snr0_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0481_urban8_bpsk_rrc_M32_snr0_ov0p25.paired.npz",
+      "bytes": 7155
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0482_urban8_bpsk_rrc_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7002
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0483_urban8_bpsk_rrc_M32_snr0_ov0p75.paired.npz",
+      "bytes": 6867
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0484_urban8_bpsk_rrc_M32_snr0_ov1.paired.npz",
+      "bytes": 5344
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0485_urban8_bpsk_rrc_M32_snr5_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0486_urban8_bpsk_rrc_M32_snr5_ov0p25.paired.npz",
+      "bytes": 7320
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0487_urban8_bpsk_rrc_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6475
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0488_urban8_bpsk_rrc_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6249
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0489_urban8_bpsk_rrc_M32_snr5_ov1.paired.npz",
+      "bytes": 4796
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0490_urban8_bpsk_rrc_M32_snr10_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0491_urban8_bpsk_rrc_M32_snr10_ov0p25.paired.npz",
+      "bytes": 6920
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0492_urban8_bpsk_rrc_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6099
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0493_urban8_bpsk_rrc_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5842
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0494_urban8_bpsk_rrc_M32_snr10_ov1.paired.npz",
+      "bytes": 4800
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0495_urban8_bpsk_rrc_M32_snr15_ov0.paired.npz",
+      "bytes": 1590
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0496_urban8_bpsk_rrc_M32_snr15_ov0p25.paired.npz",
+      "bytes": 6703
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0497_urban8_bpsk_rrc_M32_snr15_ov0p5.paired.npz",
+      "bytes": 5855
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0498_urban8_bpsk_rrc_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5638
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260720_230547_086395_bpsk_parameter_sweep/condition_chunks/0499_urban8_bpsk_rrc_M32_snr15_ov1.paired.npz",
+      "bytes": 4373
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0000_smooth_complex_M256_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0001_smooth_complex_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 8885
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0002_smooth_complex_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 8160
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0003_smooth_complex_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 7659
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0004_smooth_complex_M256_snrm5_ov1.paired.npz",
+      "bytes": 5750
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0005_smooth_complex_M256_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0006_smooth_complex_M256_snr0_ov0p25.paired.npz",
+      "bytes": 7996
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0007_smooth_complex_M256_snr0_ov0p5.paired.npz",
+      "bytes": 7364
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0008_smooth_complex_M256_snr0_ov0p75.paired.npz",
+      "bytes": 7072
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0009_smooth_complex_M256_snr0_ov1.paired.npz",
+      "bytes": 5650
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0010_smooth_complex_M256_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0011_smooth_complex_M256_snr5_ov0p25.paired.npz",
+      "bytes": 7743
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0012_smooth_complex_M256_snr5_ov0p5.paired.npz",
+      "bytes": 7201
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0013_smooth_complex_M256_snr5_ov0p75.paired.npz",
+      "bytes": 6603
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0014_smooth_complex_M256_snr5_ov1.paired.npz",
+      "bytes": 5558
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0015_smooth_complex_M256_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0016_smooth_complex_M256_snr10_ov0p25.paired.npz",
+      "bytes": 7359
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0017_smooth_complex_M256_snr10_ov0p5.paired.npz",
+      "bytes": 6604
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0018_smooth_complex_M256_snr10_ov0p75.paired.npz",
+      "bytes": 6477
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0019_smooth_complex_M256_snr10_ov1.paired.npz",
+      "bytes": 5428
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0020_smooth_complex_M256_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0021_smooth_complex_M256_snr15_ov0p25.paired.npz",
+      "bytes": 7069
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0022_smooth_complex_M256_snr15_ov0p5.paired.npz",
+      "bytes": 6383
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0023_smooth_complex_M256_snr15_ov0p75.paired.npz",
+      "bytes": 6014
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0024_smooth_complex_M256_snr15_ov1.paired.npz",
+      "bytes": 4983
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0025_smooth_complex_M128_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0026_smooth_complex_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 8557
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0027_smooth_complex_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 8408
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0028_smooth_complex_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 7759
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0029_smooth_complex_M128_snrm5_ov1.paired.npz",
+      "bytes": 6332
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0030_smooth_complex_M128_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0031_smooth_complex_M128_snr0_ov0p25.paired.npz",
+      "bytes": 8124
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0032_smooth_complex_M128_snr0_ov0p5.paired.npz",
+      "bytes": 7648
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0033_smooth_complex_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6961
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0034_smooth_complex_M128_snr0_ov1.paired.npz",
+      "bytes": 5745
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0035_smooth_complex_M128_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0036_smooth_complex_M128_snr5_ov0p25.paired.npz",
+      "bytes": 7877
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0037_smooth_complex_M128_snr5_ov0p5.paired.npz",
+      "bytes": 7253
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0038_smooth_complex_M128_snr5_ov0p75.paired.npz",
+      "bytes": 7003
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0039_smooth_complex_M128_snr5_ov1.paired.npz",
+      "bytes": 5901
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0040_smooth_complex_M128_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0041_smooth_complex_M128_snr10_ov0p25.paired.npz",
+      "bytes": 7698
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0042_smooth_complex_M128_snr10_ov0p5.paired.npz",
+      "bytes": 7439
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0043_smooth_complex_M128_snr10_ov0p75.paired.npz",
+      "bytes": 6510
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0044_smooth_complex_M128_snr10_ov1.paired.npz",
+      "bytes": 5587
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0045_smooth_complex_M128_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0046_smooth_complex_M128_snr15_ov0p25.paired.npz",
+      "bytes": 7459
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0047_smooth_complex_M128_snr15_ov0p5.paired.npz",
+      "bytes": 6745
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0048_smooth_complex_M128_snr15_ov0p75.paired.npz",
+      "bytes": 6653
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0049_smooth_complex_M128_snr15_ov1.paired.npz",
+      "bytes": 5400
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0050_smooth_complex_M64_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0051_smooth_complex_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 8374
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0052_smooth_complex_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 8153
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0053_smooth_complex_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 8069
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0054_smooth_complex_M64_snrm5_ov1.paired.npz",
+      "bytes": 6351
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0055_smooth_complex_M64_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0056_smooth_complex_M64_snr0_ov0p25.paired.npz",
+      "bytes": 8662
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0057_smooth_complex_M64_snr0_ov0p5.paired.npz",
+      "bytes": 7712
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0058_smooth_complex_M64_snr0_ov0p75.paired.npz",
+      "bytes": 7114
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0059_smooth_complex_M64_snr0_ov1.paired.npz",
+      "bytes": 5813
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0060_smooth_complex_M64_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0061_smooth_complex_M64_snr5_ov0p25.paired.npz",
+      "bytes": 7895
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0062_smooth_complex_M64_snr5_ov0p5.paired.npz",
+      "bytes": 7152
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0063_smooth_complex_M64_snr5_ov0p75.paired.npz",
+      "bytes": 6908
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0064_smooth_complex_M64_snr5_ov1.paired.npz",
+      "bytes": 5731
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0065_smooth_complex_M64_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0066_smooth_complex_M64_snr10_ov0p25.paired.npz",
+      "bytes": 7886
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0067_smooth_complex_M64_snr10_ov0p5.paired.npz",
+      "bytes": 7243
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0068_smooth_complex_M64_snr10_ov0p75.paired.npz",
+      "bytes": 6706
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0069_smooth_complex_M64_snr10_ov1.paired.npz",
+      "bytes": 5759
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0070_smooth_complex_M64_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0071_smooth_complex_M64_snr15_ov0p25.paired.npz",
+      "bytes": 7673
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0072_smooth_complex_M64_snr15_ov0p5.paired.npz",
+      "bytes": 6916
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0073_smooth_complex_M64_snr15_ov0p75.paired.npz",
+      "bytes": 6556
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0074_smooth_complex_M64_snr15_ov1.paired.npz",
+      "bytes": 5747
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0075_smooth_complex_M32_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0076_smooth_complex_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 8169
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0077_smooth_complex_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 8020
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0078_smooth_complex_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 7815
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0079_smooth_complex_M32_snrm5_ov1.paired.npz",
+      "bytes": 6198
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0080_smooth_complex_M32_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0081_smooth_complex_M32_snr0_ov0p25.paired.npz",
+      "bytes": 8658
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0082_smooth_complex_M32_snr0_ov0p5.paired.npz",
+      "bytes": 8048
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0083_smooth_complex_M32_snr0_ov0p75.paired.npz",
+      "bytes": 7521
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0084_smooth_complex_M32_snr0_ov1.paired.npz",
+      "bytes": 6109
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0085_smooth_complex_M32_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0086_smooth_complex_M32_snr5_ov0p25.paired.npz",
+      "bytes": 8452
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0087_smooth_complex_M32_snr5_ov0p5.paired.npz",
+      "bytes": 7401
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0088_smooth_complex_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6831
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0089_smooth_complex_M32_snr5_ov1.paired.npz",
+      "bytes": 5749
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0090_smooth_complex_M32_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0091_smooth_complex_M32_snr10_ov0p25.paired.npz",
+      "bytes": 7937
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0092_smooth_complex_M32_snr10_ov0p5.paired.npz",
+      "bytes": 7007
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0093_smooth_complex_M32_snr10_ov0p75.paired.npz",
+      "bytes": 6557
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0094_smooth_complex_M32_snr10_ov1.paired.npz",
+      "bytes": 5376
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0095_smooth_complex_M32_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0096_smooth_complex_M32_snr15_ov0p25.paired.npz",
+      "bytes": 7895
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0097_smooth_complex_M32_snr15_ov0p5.paired.npz",
+      "bytes": 7005
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0098_smooth_complex_M32_snr15_ov0p75.paired.npz",
+      "bytes": 6649
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0099_smooth_complex_M32_snr15_ov1.paired.npz",
+      "bytes": 5641
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0100_smooth_magnitude_random_phase_M256_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0101_smooth_magnitude_random_phase_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 8250
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0102_smooth_magnitude_random_phase_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 7097
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0103_smooth_magnitude_random_phase_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 6606
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0104_smooth_magnitude_random_phase_M256_snrm5_ov1.paired.npz",
+      "bytes": 5066
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0105_smooth_magnitude_random_phase_M256_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0106_smooth_magnitude_random_phase_M256_snr0_ov0p25.paired.npz",
+      "bytes": 6896
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0107_smooth_magnitude_random_phase_M256_snr0_ov0p5.paired.npz",
+      "bytes": 6450
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0108_smooth_magnitude_random_phase_M256_snr0_ov0p75.paired.npz",
+      "bytes": 6031
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0109_smooth_magnitude_random_phase_M256_snr0_ov1.paired.npz",
+      "bytes": 4543
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0110_smooth_magnitude_random_phase_M256_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0111_smooth_magnitude_random_phase_M256_snr5_ov0p25.paired.npz",
+      "bytes": 6813
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0112_smooth_magnitude_random_phase_M256_snr5_ov0p5.paired.npz",
+      "bytes": 6357
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0113_smooth_magnitude_random_phase_M256_snr5_ov0p75.paired.npz",
+      "bytes": 5609
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0114_smooth_magnitude_random_phase_M256_snr5_ov1.paired.npz",
+      "bytes": 4437
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0115_smooth_magnitude_random_phase_M256_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0116_smooth_magnitude_random_phase_M256_snr10_ov0p25.paired.npz",
+      "bytes": 6465
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0117_smooth_magnitude_random_phase_M256_snr10_ov0p5.paired.npz",
+      "bytes": 5951
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0118_smooth_magnitude_random_phase_M256_snr10_ov0p75.paired.npz",
+      "bytes": 5281
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0119_smooth_magnitude_random_phase_M256_snr10_ov1.paired.npz",
+      "bytes": 4130
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0120_smooth_magnitude_random_phase_M256_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0121_smooth_magnitude_random_phase_M256_snr15_ov0p25.paired.npz",
+      "bytes": 6259
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0122_smooth_magnitude_random_phase_M256_snr15_ov0p5.paired.npz",
+      "bytes": 5453
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0123_smooth_magnitude_random_phase_M256_snr15_ov0p75.paired.npz",
+      "bytes": 5132
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0124_smooth_magnitude_random_phase_M256_snr15_ov1.paired.npz",
+      "bytes": 3968
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0125_smooth_magnitude_random_phase_M128_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0126_smooth_magnitude_random_phase_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 8429
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0127_smooth_magnitude_random_phase_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 7954
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0128_smooth_magnitude_random_phase_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 7596
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0129_smooth_magnitude_random_phase_M128_snrm5_ov1.paired.npz",
+      "bytes": 5761
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0130_smooth_magnitude_random_phase_M128_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0131_smooth_magnitude_random_phase_M128_snr0_ov0p25.paired.npz",
+      "bytes": 7450
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0132_smooth_magnitude_random_phase_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6877
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0133_smooth_magnitude_random_phase_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6180
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0134_smooth_magnitude_random_phase_M128_snr0_ov1.paired.npz",
+      "bytes": 5101
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0135_smooth_magnitude_random_phase_M128_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0136_smooth_magnitude_random_phase_M128_snr5_ov0p25.paired.npz",
+      "bytes": 6741
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0137_smooth_magnitude_random_phase_M128_snr5_ov0p5.paired.npz",
+      "bytes": 6249
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0138_smooth_magnitude_random_phase_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5964
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0139_smooth_magnitude_random_phase_M128_snr5_ov1.paired.npz",
+      "bytes": 4552
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0140_smooth_magnitude_random_phase_M128_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0141_smooth_magnitude_random_phase_M128_snr10_ov0p25.paired.npz",
+      "bytes": 6583
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0142_smooth_magnitude_random_phase_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5947
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0143_smooth_magnitude_random_phase_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5904
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0144_smooth_magnitude_random_phase_M128_snr10_ov1.paired.npz",
+      "bytes": 4599
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0145_smooth_magnitude_random_phase_M128_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0146_smooth_magnitude_random_phase_M128_snr15_ov0p25.paired.npz",
+      "bytes": 6376
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0147_smooth_magnitude_random_phase_M128_snr15_ov0p5.paired.npz",
+      "bytes": 5645
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0148_smooth_magnitude_random_phase_M128_snr15_ov0p75.paired.npz",
+      "bytes": 5395
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0149_smooth_magnitude_random_phase_M128_snr15_ov1.paired.npz",
+      "bytes": 4477
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0150_smooth_magnitude_random_phase_M64_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0151_smooth_magnitude_random_phase_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 8248
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0152_smooth_magnitude_random_phase_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 8079
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0153_smooth_magnitude_random_phase_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 7834
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0154_smooth_magnitude_random_phase_M64_snrm5_ov1.paired.npz",
+      "bytes": 6102
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0155_smooth_magnitude_random_phase_M64_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0156_smooth_magnitude_random_phase_M64_snr0_ov0p25.paired.npz",
+      "bytes": 8079
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0157_smooth_magnitude_random_phase_M64_snr0_ov0p5.paired.npz",
+      "bytes": 7268
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0158_smooth_magnitude_random_phase_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6750
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0159_smooth_magnitude_random_phase_M64_snr0_ov1.paired.npz",
+      "bytes": 5433
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0160_smooth_magnitude_random_phase_M64_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0161_smooth_magnitude_random_phase_M64_snr5_ov0p25.paired.npz",
+      "bytes": 7266
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0162_smooth_magnitude_random_phase_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6750
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0163_smooth_magnitude_random_phase_M64_snr5_ov0p75.paired.npz",
+      "bytes": 6094
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0164_smooth_magnitude_random_phase_M64_snr5_ov1.paired.npz",
+      "bytes": 5068
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0165_smooth_magnitude_random_phase_M64_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0166_smooth_magnitude_random_phase_M64_snr10_ov0p25.paired.npz",
+      "bytes": 6848
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0167_smooth_magnitude_random_phase_M64_snr10_ov0p5.paired.npz",
+      "bytes": 6387
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0168_smooth_magnitude_random_phase_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5981
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0169_smooth_magnitude_random_phase_M64_snr10_ov1.paired.npz",
+      "bytes": 4743
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0170_smooth_magnitude_random_phase_M64_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0171_smooth_magnitude_random_phase_M64_snr15_ov0p25.paired.npz",
+      "bytes": 6607
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0172_smooth_magnitude_random_phase_M64_snr15_ov0p5.paired.npz",
+      "bytes": 6183
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0173_smooth_magnitude_random_phase_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5692
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0174_smooth_magnitude_random_phase_M64_snr15_ov1.paired.npz",
+      "bytes": 4713
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0175_smooth_magnitude_random_phase_M32_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0176_smooth_magnitude_random_phase_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 8065
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0177_smooth_magnitude_random_phase_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7849
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0178_smooth_magnitude_random_phase_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 7602
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0179_smooth_magnitude_random_phase_M32_snrm5_ov1.paired.npz",
+      "bytes": 6111
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0180_smooth_magnitude_random_phase_M32_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0181_smooth_magnitude_random_phase_M32_snr0_ov0p25.paired.npz",
+      "bytes": 8227
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0182_smooth_magnitude_random_phase_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7741
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0183_smooth_magnitude_random_phase_M32_snr0_ov0p75.paired.npz",
+      "bytes": 7306
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0184_smooth_magnitude_random_phase_M32_snr0_ov1.paired.npz",
+      "bytes": 5841
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0185_smooth_magnitude_random_phase_M32_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0186_smooth_magnitude_random_phase_M32_snr5_ov0p25.paired.npz",
+      "bytes": 7699
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0187_smooth_magnitude_random_phase_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6812
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0188_smooth_magnitude_random_phase_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6341
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0189_smooth_magnitude_random_phase_M32_snr5_ov1.paired.npz",
+      "bytes": 5334
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0190_smooth_magnitude_random_phase_M32_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0191_smooth_magnitude_random_phase_M32_snr10_ov0p25.paired.npz",
+      "bytes": 6824
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0192_smooth_magnitude_random_phase_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6653
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0193_smooth_magnitude_random_phase_M32_snr10_ov0p75.paired.npz",
+      "bytes": 6056
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0194_smooth_magnitude_random_phase_M32_snr10_ov1.paired.npz",
+      "bytes": 5061
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0195_smooth_magnitude_random_phase_M32_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0196_smooth_magnitude_random_phase_M32_snr15_ov0p25.paired.npz",
+      "bytes": 6751
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0197_smooth_magnitude_random_phase_M32_snr15_ov0p5.paired.npz",
+      "bytes": 6275
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0198_smooth_magnitude_random_phase_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5918
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0199_smooth_magnitude_random_phase_M32_snr15_ov1.paired.npz",
+      "bytes": 4850
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0200_broadband_random_M256_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0201_broadband_random_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 8340
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0202_broadband_random_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 7141
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0203_broadband_random_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 6305
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0204_broadband_random_M256_snrm5_ov1.paired.npz",
+      "bytes": 4646
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0205_broadband_random_M256_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0206_broadband_random_M256_snr0_ov0p25.paired.npz",
+      "bytes": 6878
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0207_broadband_random_M256_snr0_ov0p5.paired.npz",
+      "bytes": 6059
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0208_broadband_random_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5787
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0209_broadband_random_M256_snr0_ov1.paired.npz",
+      "bytes": 4428
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0210_broadband_random_M256_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0211_broadband_random_M256_snr5_ov0p25.paired.npz",
+      "bytes": 6389
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0212_broadband_random_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5694
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0213_broadband_random_M256_snr5_ov0p75.paired.npz",
+      "bytes": 5296
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0214_broadband_random_M256_snr5_ov1.paired.npz",
+      "bytes": 4160
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0215_broadband_random_M256_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0216_broadband_random_M256_snr10_ov0p25.paired.npz",
+      "bytes": 6150
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0217_broadband_random_M256_snr10_ov0p5.paired.npz",
+      "bytes": 5501
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0218_broadband_random_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4941
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0219_broadband_random_M256_snr10_ov1.paired.npz",
+      "bytes": 3655
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0220_broadband_random_M256_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0221_broadband_random_M256_snr15_ov0p25.paired.npz",
+      "bytes": 5794
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0222_broadband_random_M256_snr15_ov0p5.paired.npz",
+      "bytes": 5176
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0223_broadband_random_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4560
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0224_broadband_random_M256_snr15_ov1.paired.npz",
+      "bytes": 3594
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0225_broadband_random_M128_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0226_broadband_random_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 8189
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0227_broadband_random_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 7939
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0228_broadband_random_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 7310
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0229_broadband_random_M128_snrm5_ov1.paired.npz",
+      "bytes": 5751
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0230_broadband_random_M128_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0231_broadband_random_M128_snr0_ov0p25.paired.npz",
+      "bytes": 7444
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0232_broadband_random_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6288
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0233_broadband_random_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6060
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0234_broadband_random_M128_snr0_ov1.paired.npz",
+      "bytes": 4869
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0235_broadband_random_M128_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0236_broadband_random_M128_snr5_ov0p25.paired.npz",
+      "bytes": 6545
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0237_broadband_random_M128_snr5_ov0p5.paired.npz",
+      "bytes": 6067
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0238_broadband_random_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5562
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0239_broadband_random_M128_snr5_ov1.paired.npz",
+      "bytes": 4718
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0240_broadband_random_M128_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0241_broadband_random_M128_snr10_ov0p25.paired.npz",
+      "bytes": 6325
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0242_broadband_random_M128_snr10_ov0p5.paired.npz",
+      "bytes": 5842
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0243_broadband_random_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5555
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0244_broadband_random_M128_snr10_ov1.paired.npz",
+      "bytes": 4452
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0245_broadband_random_M128_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0246_broadband_random_M128_snr15_ov0p25.paired.npz",
+      "bytes": 6169
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0247_broadband_random_M128_snr15_ov0p5.paired.npz",
+      "bytes": 5592
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0248_broadband_random_M128_snr15_ov0p75.paired.npz",
+      "bytes": 5184
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0249_broadband_random_M128_snr15_ov1.paired.npz",
+      "bytes": 4080
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0250_broadband_random_M64_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0251_broadband_random_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 8283
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0252_broadband_random_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 8208
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0253_broadband_random_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 7894
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0254_broadband_random_M64_snrm5_ov1.paired.npz",
+      "bytes": 6242
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0255_broadband_random_M64_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0256_broadband_random_M64_snr0_ov0p25.paired.npz",
+      "bytes": 8223
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0257_broadband_random_M64_snr0_ov0p5.paired.npz",
+      "bytes": 7038
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0258_broadband_random_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6314
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0259_broadband_random_M64_snr0_ov1.paired.npz",
+      "bytes": 5216
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0260_broadband_random_M64_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0261_broadband_random_M64_snr5_ov0p25.paired.npz",
+      "bytes": 7107
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0262_broadband_random_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6254
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0263_broadband_random_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5944
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0264_broadband_random_M64_snr5_ov1.paired.npz",
+      "bytes": 4673
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0265_broadband_random_M64_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0266_broadband_random_M64_snr10_ov0p25.paired.npz",
+      "bytes": 6669
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0267_broadband_random_M64_snr10_ov0p5.paired.npz",
+      "bytes": 6283
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0268_broadband_random_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5710
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0269_broadband_random_M64_snr10_ov1.paired.npz",
+      "bytes": 4637
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0270_broadband_random_M64_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0271_broadband_random_M64_snr15_ov0p25.paired.npz",
+      "bytes": 6325
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0272_broadband_random_M64_snr15_ov0p5.paired.npz",
+      "bytes": 5957
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0273_broadband_random_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5423
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0274_broadband_random_M64_snr15_ov1.paired.npz",
+      "bytes": 4571
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0275_broadband_random_M32_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0276_broadband_random_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 8211
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0277_broadband_random_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7910
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0278_broadband_random_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 7767
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0279_broadband_random_M32_snrm5_ov1.paired.npz",
+      "bytes": 6112
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0280_broadband_random_M32_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0281_broadband_random_M32_snr0_ov0p25.paired.npz",
+      "bytes": 8456
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0282_broadband_random_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7853
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0283_broadband_random_M32_snr0_ov0p75.paired.npz",
+      "bytes": 7156
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0284_broadband_random_M32_snr0_ov1.paired.npz",
+      "bytes": 5675
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0285_broadband_random_M32_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0286_broadband_random_M32_snr5_ov0p25.paired.npz",
+      "bytes": 8174
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0287_broadband_random_M32_snr5_ov0p5.paired.npz",
+      "bytes": 6867
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0288_broadband_random_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6189
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0289_broadband_random_M32_snr5_ov1.paired.npz",
+      "bytes": 5194
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0290_broadband_random_M32_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0291_broadband_random_M32_snr10_ov0p25.paired.npz",
+      "bytes": 7178
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0292_broadband_random_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6616
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0293_broadband_random_M32_snr10_ov0p75.paired.npz",
+      "bytes": 5992
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0294_broadband_random_M32_snr10_ov1.paired.npz",
+      "bytes": 4978
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0295_broadband_random_M32_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0296_broadband_random_M32_snr15_ov0p25.paired.npz",
+      "bytes": 6815
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0297_broadband_random_M32_snr15_ov0p5.paired.npz",
+      "bytes": 6283
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0298_broadband_random_M32_snr15_ov0p75.paired.npz",
+      "bytes": 5632
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0299_broadband_random_M32_snr15_ov1.paired.npz",
+      "bytes": 4635
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0300_multiband_M256_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0301_multiband_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 8459
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0302_multiband_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 7384
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0303_multiband_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 6899
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0304_multiband_M256_snrm5_ov1.paired.npz",
+      "bytes": 5211
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0305_multiband_M256_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0306_multiband_M256_snr0_ov0p25.paired.npz",
+      "bytes": 7347
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0307_multiband_M256_snr0_ov0p5.paired.npz",
+      "bytes": 6553
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0308_multiband_M256_snr0_ov0p75.paired.npz",
+      "bytes": 5838
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0309_multiband_M256_snr0_ov1.paired.npz",
+      "bytes": 4521
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0310_multiband_M256_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0311_multiband_M256_snr5_ov0p25.paired.npz",
+      "bytes": 6604
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0312_multiband_M256_snr5_ov0p5.paired.npz",
+      "bytes": 5944
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0313_multiband_M256_snr5_ov0p75.paired.npz",
+      "bytes": 5301
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0314_multiband_M256_snr5_ov1.paired.npz",
+      "bytes": 4287
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0315_multiband_M256_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0316_multiband_M256_snr10_ov0p25.paired.npz",
+      "bytes": 6460
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0317_multiband_M256_snr10_ov0p5.paired.npz",
+      "bytes": 5798
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0318_multiband_M256_snr10_ov0p75.paired.npz",
+      "bytes": 4971
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0319_multiband_M256_snr10_ov1.paired.npz",
+      "bytes": 4020
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0320_multiband_M256_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0321_multiband_M256_snr15_ov0p25.paired.npz",
+      "bytes": 6117
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0322_multiband_M256_snr15_ov0p5.paired.npz",
+      "bytes": 5614
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0323_multiband_M256_snr15_ov0p75.paired.npz",
+      "bytes": 4890
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0324_multiband_M256_snr15_ov1.paired.npz",
+      "bytes": 3698
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0325_multiband_M128_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0326_multiband_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 8416
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0327_multiband_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 7822
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0328_multiband_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 7472
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0329_multiband_M128_snrm5_ov1.paired.npz",
+      "bytes": 5717
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0330_multiband_M128_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0331_multiband_M128_snr0_ov0p25.paired.npz",
+      "bytes": 7877
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0332_multiband_M128_snr0_ov0p5.paired.npz",
+      "bytes": 6919
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0333_multiband_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6474
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0334_multiband_M128_snr0_ov1.paired.npz",
+      "bytes": 5124
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0335_multiband_M128_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0336_multiband_M128_snr5_ov0p25.paired.npz",
+      "bytes": 6782
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0337_multiband_M128_snr5_ov0p5.paired.npz",
+      "bytes": 6351
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0338_multiband_M128_snr5_ov0p75.paired.npz",
+      "bytes": 5782
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0339_multiband_M128_snr5_ov1.paired.npz",
+      "bytes": 4852
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0340_multiband_M128_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0341_multiband_M128_snr10_ov0p25.paired.npz",
+      "bytes": 6804
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0342_multiband_M128_snr10_ov0p5.paired.npz",
+      "bytes": 6303
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0343_multiband_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5434
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0344_multiband_M128_snr10_ov1.paired.npz",
+      "bytes": 4198
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0345_multiband_M128_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0346_multiband_M128_snr15_ov0p25.paired.npz",
+      "bytes": 6550
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0347_multiband_M128_snr15_ov0p5.paired.npz",
+      "bytes": 5972
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0348_multiband_M128_snr15_ov0p75.paired.npz",
+      "bytes": 5320
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0349_multiband_M128_snr15_ov1.paired.npz",
+      "bytes": 4323
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0350_multiband_M64_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0351_multiband_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 8432
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0352_multiband_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 8043
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0353_multiband_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 7673
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0354_multiband_M64_snrm5_ov1.paired.npz",
+      "bytes": 6094
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0355_multiband_M64_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0356_multiband_M64_snr0_ov0p25.paired.npz",
+      "bytes": 8389
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0357_multiband_M64_snr0_ov0p5.paired.npz",
+      "bytes": 7692
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0358_multiband_M64_snr0_ov0p75.paired.npz",
+      "bytes": 6915
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0359_multiband_M64_snr0_ov1.paired.npz",
+      "bytes": 5538
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0360_multiband_M64_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0361_multiband_M64_snr5_ov0p25.paired.npz",
+      "bytes": 7532
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0362_multiband_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6806
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0363_multiband_M64_snr5_ov0p75.paired.npz",
+      "bytes": 5948
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0364_multiband_M64_snr5_ov1.paired.npz",
+      "bytes": 5015
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0365_multiband_M64_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0366_multiband_M64_snr10_ov0p25.paired.npz",
+      "bytes": 7303
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0367_multiband_M64_snr10_ov0p5.paired.npz",
+      "bytes": 6270
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0368_multiband_M64_snr10_ov0p75.paired.npz",
+      "bytes": 5921
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0369_multiband_M64_snr10_ov1.paired.npz",
+      "bytes": 4787
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0370_multiband_M64_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0371_multiband_M64_snr15_ov0p25.paired.npz",
+      "bytes": 7209
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0372_multiband_M64_snr15_ov0p5.paired.npz",
+      "bytes": 6247
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0373_multiband_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5589
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0374_multiband_M64_snr15_ov1.paired.npz",
+      "bytes": 4545
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0375_multiband_M32_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0376_multiband_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 8333
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0377_multiband_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 7787
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0378_multiband_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 7739
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0379_multiband_M32_snrm5_ov1.paired.npz",
+      "bytes": 6121
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0380_multiband_M32_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0381_multiband_M32_snr0_ov0p25.paired.npz",
+      "bytes": 8536
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0382_multiband_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7930
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0383_multiband_M32_snr0_ov0p75.paired.npz",
+      "bytes": 7660
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0384_multiband_M32_snr0_ov1.paired.npz",
+      "bytes": 6081
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0385_multiband_M32_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0386_multiband_M32_snr5_ov0p25.paired.npz",
+      "bytes": 8413
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0387_multiband_M32_snr5_ov0p5.paired.npz",
+      "bytes": 7461
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0388_multiband_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6640
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0389_multiband_M32_snr5_ov1.paired.npz",
+      "bytes": 5148
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0390_multiband_M32_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0391_multiband_M32_snr10_ov0p25.paired.npz",
+      "bytes": 8371
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0392_multiband_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6992
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0393_multiband_M32_snr10_ov0p75.paired.npz",
+      "bytes": 6131
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0394_multiband_M32_snr10_ov1.paired.npz",
+      "bytes": 4973
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0395_multiband_M32_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0396_multiband_M32_snr15_ov0p25.paired.npz",
+      "bytes": 8004
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0397_multiband_M32_snr15_ov0p5.paired.npz",
+      "bytes": 6665
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0398_multiband_M32_snr15_ov0p75.paired.npz",
+      "bytes": 6114
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0399_multiband_M32_snr15_ov1.paired.npz",
+      "bytes": 4713
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0400_urban8_bpsk_rrc_M256_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0401_urban8_bpsk_rrc_M256_snrm5_ov0p25.paired.npz",
+      "bytes": 8237
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0402_urban8_bpsk_rrc_M256_snrm5_ov0p5.paired.npz",
+      "bytes": 7533
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0403_urban8_bpsk_rrc_M256_snrm5_ov0p75.paired.npz",
+      "bytes": 6892
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0404_urban8_bpsk_rrc_M256_snrm5_ov1.paired.npz",
+      "bytes": 5442
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0405_urban8_bpsk_rrc_M256_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0406_urban8_bpsk_rrc_M256_snr0_ov0p25.paired.npz",
+      "bytes": 7373
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0407_urban8_bpsk_rrc_M256_snr0_ov0p5.paired.npz",
+      "bytes": 6680
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0408_urban8_bpsk_rrc_M256_snr0_ov0p75.paired.npz",
+      "bytes": 6374
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0409_urban8_bpsk_rrc_M256_snr0_ov1.paired.npz",
+      "bytes": 4831
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0410_urban8_bpsk_rrc_M256_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0411_urban8_bpsk_rrc_M256_snr5_ov0p25.paired.npz",
+      "bytes": 6842
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0412_urban8_bpsk_rrc_M256_snr5_ov0p5.paired.npz",
+      "bytes": 6274
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0413_urban8_bpsk_rrc_M256_snr5_ov0p75.paired.npz",
+      "bytes": 5948
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0414_urban8_bpsk_rrc_M256_snr5_ov1.paired.npz",
+      "bytes": 4570
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0415_urban8_bpsk_rrc_M256_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0416_urban8_bpsk_rrc_M256_snr10_ov0p25.paired.npz",
+      "bytes": 6756
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0417_urban8_bpsk_rrc_M256_snr10_ov0p5.paired.npz",
+      "bytes": 6159
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0418_urban8_bpsk_rrc_M256_snr10_ov0p75.paired.npz",
+      "bytes": 5352
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0419_urban8_bpsk_rrc_M256_snr10_ov1.paired.npz",
+      "bytes": 4188
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0420_urban8_bpsk_rrc_M256_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0421_urban8_bpsk_rrc_M256_snr15_ov0p25.paired.npz",
+      "bytes": 6317
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0422_urban8_bpsk_rrc_M256_snr15_ov0p5.paired.npz",
+      "bytes": 5680
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0423_urban8_bpsk_rrc_M256_snr15_ov0p75.paired.npz",
+      "bytes": 5138
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0424_urban8_bpsk_rrc_M256_snr15_ov1.paired.npz",
+      "bytes": 4089
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0425_urban8_bpsk_rrc_M128_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0426_urban8_bpsk_rrc_M128_snrm5_ov0p25.paired.npz",
+      "bytes": 8399
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0427_urban8_bpsk_rrc_M128_snrm5_ov0p5.paired.npz",
+      "bytes": 7860
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0428_urban8_bpsk_rrc_M128_snrm5_ov0p75.paired.npz",
+      "bytes": 7718
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0429_urban8_bpsk_rrc_M128_snrm5_ov1.paired.npz",
+      "bytes": 5899
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0430_urban8_bpsk_rrc_M128_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0431_urban8_bpsk_rrc_M128_snr0_ov0p25.paired.npz",
+      "bytes": 7874
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0432_urban8_bpsk_rrc_M128_snr0_ov0p5.paired.npz",
+      "bytes": 7218
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0433_urban8_bpsk_rrc_M128_snr0_ov0p75.paired.npz",
+      "bytes": 6754
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0434_urban8_bpsk_rrc_M128_snr0_ov1.paired.npz",
+      "bytes": 5405
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0435_urban8_bpsk_rrc_M128_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0436_urban8_bpsk_rrc_M128_snr5_ov0p25.paired.npz",
+      "bytes": 7220
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0437_urban8_bpsk_rrc_M128_snr5_ov0p5.paired.npz",
+      "bytes": 6441
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0438_urban8_bpsk_rrc_M128_snr5_ov0p75.paired.npz",
+      "bytes": 6214
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0439_urban8_bpsk_rrc_M128_snr5_ov1.paired.npz",
+      "bytes": 4925
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0440_urban8_bpsk_rrc_M128_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0441_urban8_bpsk_rrc_M128_snr10_ov0p25.paired.npz",
+      "bytes": 6930
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0442_urban8_bpsk_rrc_M128_snr10_ov0p5.paired.npz",
+      "bytes": 6287
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0443_urban8_bpsk_rrc_M128_snr10_ov0p75.paired.npz",
+      "bytes": 5823
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0444_urban8_bpsk_rrc_M128_snr10_ov1.paired.npz",
+      "bytes": 4769
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0445_urban8_bpsk_rrc_M128_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0446_urban8_bpsk_rrc_M128_snr15_ov0p25.paired.npz",
+      "bytes": 6788
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0447_urban8_bpsk_rrc_M128_snr15_ov0p5.paired.npz",
+      "bytes": 6325
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0448_urban8_bpsk_rrc_M128_snr15_ov0p75.paired.npz",
+      "bytes": 5716
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0449_urban8_bpsk_rrc_M128_snr15_ov1.paired.npz",
+      "bytes": 4547
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0450_urban8_bpsk_rrc_M64_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0451_urban8_bpsk_rrc_M64_snrm5_ov0p25.paired.npz",
+      "bytes": 8333
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0452_urban8_bpsk_rrc_M64_snrm5_ov0p5.paired.npz",
+      "bytes": 7975
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0453_urban8_bpsk_rrc_M64_snrm5_ov0p75.paired.npz",
+      "bytes": 7764
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0454_urban8_bpsk_rrc_M64_snrm5_ov1.paired.npz",
+      "bytes": 6147
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0455_urban8_bpsk_rrc_M64_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0456_urban8_bpsk_rrc_M64_snr0_ov0p25.paired.npz",
+      "bytes": 8334
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0457_urban8_bpsk_rrc_M64_snr0_ov0p5.paired.npz",
+      "bytes": 7615
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0458_urban8_bpsk_rrc_M64_snr0_ov0p75.paired.npz",
+      "bytes": 7144
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0459_urban8_bpsk_rrc_M64_snr0_ov1.paired.npz",
+      "bytes": 5836
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0460_urban8_bpsk_rrc_M64_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0461_urban8_bpsk_rrc_M64_snr5_ov0p25.paired.npz",
+      "bytes": 7851
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0462_urban8_bpsk_rrc_M64_snr5_ov0p5.paired.npz",
+      "bytes": 6935
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0463_urban8_bpsk_rrc_M64_snr5_ov0p75.paired.npz",
+      "bytes": 6603
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0464_urban8_bpsk_rrc_M64_snr5_ov1.paired.npz",
+      "bytes": 5232
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0465_urban8_bpsk_rrc_M64_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0466_urban8_bpsk_rrc_M64_snr10_ov0p25.paired.npz",
+      "bytes": 7374
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0467_urban8_bpsk_rrc_M64_snr10_ov0p5.paired.npz",
+      "bytes": 6583
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0468_urban8_bpsk_rrc_M64_snr10_ov0p75.paired.npz",
+      "bytes": 6294
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0469_urban8_bpsk_rrc_M64_snr10_ov1.paired.npz",
+      "bytes": 5039
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0470_urban8_bpsk_rrc_M64_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0471_urban8_bpsk_rrc_M64_snr15_ov0p25.paired.npz",
+      "bytes": 7168
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0472_urban8_bpsk_rrc_M64_snr15_ov0p5.paired.npz",
+      "bytes": 6285
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0473_urban8_bpsk_rrc_M64_snr15_ov0p75.paired.npz",
+      "bytes": 5893
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0474_urban8_bpsk_rrc_M64_snr15_ov1.paired.npz",
+      "bytes": 4744
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0475_urban8_bpsk_rrc_M32_snrm5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0476_urban8_bpsk_rrc_M32_snrm5_ov0p25.paired.npz",
+      "bytes": 8340
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0477_urban8_bpsk_rrc_M32_snrm5_ov0p5.paired.npz",
+      "bytes": 8074
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0478_urban8_bpsk_rrc_M32_snrm5_ov0p75.paired.npz",
+      "bytes": 7708
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0479_urban8_bpsk_rrc_M32_snrm5_ov1.paired.npz",
+      "bytes": 6031
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0480_urban8_bpsk_rrc_M32_snr0_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0481_urban8_bpsk_rrc_M32_snr0_ov0p25.paired.npz",
+      "bytes": 8345
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0482_urban8_bpsk_rrc_M32_snr0_ov0p5.paired.npz",
+      "bytes": 7967
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0483_urban8_bpsk_rrc_M32_snr0_ov0p75.paired.npz",
+      "bytes": 7648
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0484_urban8_bpsk_rrc_M32_snr0_ov1.paired.npz",
+      "bytes": 6049
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0485_urban8_bpsk_rrc_M32_snr5_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0486_urban8_bpsk_rrc_M32_snr5_ov0p25.paired.npz",
+      "bytes": 8596
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0487_urban8_bpsk_rrc_M32_snr5_ov0p5.paired.npz",
+      "bytes": 7388
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0488_urban8_bpsk_rrc_M32_snr5_ov0p75.paired.npz",
+      "bytes": 6914
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0489_urban8_bpsk_rrc_M32_snr5_ov1.paired.npz",
+      "bytes": 5394
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0490_urban8_bpsk_rrc_M32_snr10_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0491_urban8_bpsk_rrc_M32_snr10_ov0p25.paired.npz",
+      "bytes": 8377
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0492_urban8_bpsk_rrc_M32_snr10_ov0p5.paired.npz",
+      "bytes": 6985
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0493_urban8_bpsk_rrc_M32_snr10_ov0p75.paired.npz",
+      "bytes": 6528
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0494_urban8_bpsk_rrc_M32_snr10_ov1.paired.npz",
+      "bytes": 5406
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0495_urban8_bpsk_rrc_M32_snr15_ov0.paired.npz",
+      "bytes": 1774
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0496_urban8_bpsk_rrc_M32_snr15_ov0p25.paired.npz",
+      "bytes": 8232
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0497_urban8_bpsk_rrc_M32_snr15_ov0p5.paired.npz",
+      "bytes": 6720
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0498_urban8_bpsk_rrc_M32_snr15_ov0p75.paired.npz",
+      "bytes": 6343
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260721_172703_080303_bpsk_parameter_sweep/condition_chunks/0499_urban8_bpsk_rrc_M32_snr15_ov1.paired.npz",
+      "bytes": 4969
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260724_121702_077301_bpsk_parameter_sweep_smoke/condition_chunks/0000_smooth_complex_M32_snr5_ov0p5.paired.npz",
+      "bytes": 1878
+    },
+    {
+      "path": "运行结果/频谱插值对齐/20260724_121702_077301_bpsk_parameter_sweep_smoke/condition_chunks/0001_urban8_bpsk_rrc_M32_snr5_ov0p5.paired.npz",
+      "bytes": 1884
+    }
+  ]
+}

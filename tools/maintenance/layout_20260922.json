@@ -1,0 +1,1218 @@
+{
+  "mapping": {
+    "brsr_tdoa/brsr_core.py": "research_code/brsr/stage_ab/brsr_core.py",
+    "brsr_tdoa/brsr_stage_b.py": "research_code/brsr/stage_ab/brsr_stage_b.py",
+    "brsr_tdoa/brsr_waveform.py": "research_code/brsr/stage_ab/brsr_waveform.py",
+    "brsr_tdoa/diagnose_stage_b_failures.py": "research_code/brsr/stage_ab/diagnose_stage_b_failures.py",
+    "brsr_tdoa/diagnose_stage_b_v2_profile.py": "research_code/brsr/stage_ab/diagnose_stage_b_v2_profile.py",
+    "brsr_tdoa/README.md": "research_code/brsr/stage_ab/README.md",
+    "brsr_tdoa/run_stage_a.py": "research_code/brsr/stage_ab/run_stage_a.py",
+    "brsr_tdoa/run_stage_b.py": "research_code/brsr/stage_ab/run_stage_b.py",
+    "brsr_tdoa/test_brsr_core.py": "research_code/brsr/stage_ab/test_brsr_core.py",
+    "brsr_tdoa/test_brsr_stage_b.py": "research_code/brsr/stage_ab/test_brsr_stage_b.py",
+    "brsr_tdoa/test_stage_b_failures.py": "research_code/brsr/stage_ab/test_stage_b_failures.py",
+    "brsr_tdoa/test_stage_b_v2_profile.py": "research_code/brsr/stage_ab/test_stage_b_v2_profile.py",
+    "brsr_tdoa/__init__.py": "research_code/brsr/stage_ab/__init__.py",
+    "brsr_route_feasibility/diagnose_quadrature.py": "research_code/brsr/stage1/diagnose_quadrature.py",
+    "brsr_route_feasibility/feasibility.py": "research_code/brsr/stage1/feasibility.py",
+    "brsr_route_feasibility/run_stage1.py": "research_code/brsr/stage1/run_stage1.py",
+    "brsr_route_feasibility/test_quadrature_diagnostic.py": "research_code/brsr/stage1/test_quadrature_diagnostic.py",
+    "brsr_route_feasibility/test_stage1.py": "research_code/brsr/stage1/test_stage1.py",
+    "brsr_route_feasibility/__init__.py": "research_code/brsr/stage1/__init__.py",
+    "brsr_stage2_rate_adaptive/diagnose_stage2a1_protocol.py": "research_code/brsr/stage2/diagnose_stage2a1_protocol.py",
+    "brsr_stage2_rate_adaptive/diagnose_stage2a_failures.py": "research_code/brsr/stage2/diagnose_stage2a_failures.py",
+    "brsr_stage2_rate_adaptive/README.md": "research_code/brsr/stage2/README.md",
+    "brsr_stage2_rate_adaptive/run_stage2a.py": "research_code/brsr/stage2/run_stage2a.py",
+    "brsr_stage2_rate_adaptive/run_stage2a1.py": "research_code/brsr/stage2/run_stage2a1.py",
+    "brsr_stage2_rate_adaptive/stage2a.py": "research_code/brsr/stage2/stage2a.py",
+    "brsr_stage2_rate_adaptive/stage2a1.py": "research_code/brsr/stage2/stage2a1.py",
+    "brsr_stage2_rate_adaptive/stage2a1_protocol.py": "research_code/brsr/stage2/stage2a1_protocol.py",
+    "brsr_stage2_rate_adaptive/test_stage2a.py": "research_code/brsr/stage2/test_stage2a.py",
+    "brsr_stage2_rate_adaptive/test_stage2a1.py": "research_code/brsr/stage2/test_stage2a1.py",
+    "brsr_stage2_rate_adaptive/test_stage2a1_protocol.py": "research_code/brsr/stage2/test_stage2a1_protocol.py",
+    "brsr_stage2_rate_adaptive/test_stage2a_failures.py": "research_code/brsr/stage2/test_stage2a_failures.py",
+    "brsr_stage2_rate_adaptive/__init__.py": "research_code/brsr/stage2/__init__.py",
+    "brsr_observability_certificate/audit_oracles.py": "research_code/brsr/observability/audit_oracles.py",
+    "brsr_observability_certificate/certificate.py": "research_code/brsr/observability/certificate.py",
+    "brsr_observability_certificate/features.py": "research_code/brsr/observability/features.py",
+    "brsr_observability_certificate/README.md": "research_code/brsr/observability/README.md",
+    "brsr_observability_certificate/run_certificate.py": "research_code/brsr/observability/run_certificate.py",
+    "brsr_observability_certificate/test_certificate.py": "research_code/brsr/observability/test_certificate.py",
+    "brsr_observability_certificate/__init__.py": "research_code/brsr/observability/__init__.py",
+    "brsr_state_oracle_certificate/certificate.py": "research_code/brsr/state_oracle/certificate.py",
+    "brsr_state_oracle_certificate/README.md": "research_code/brsr/state_oracle/README.md",
+    "brsr_state_oracle_certificate/run_certificate.py": "research_code/brsr/state_oracle/run_certificate.py",
+    "brsr_state_oracle_certificate/test_certificate.py": "research_code/brsr/state_oracle/test_certificate.py",
+    "brsr_state_oracle_certificate/__init__.py": "research_code/brsr/state_oracle/__init__.py",
+    "brsr_s1_precision_replication/README.md": "research_code/brsr/precision_replication/README.md",
+    "brsr_s1_precision_replication/replication.py": "research_code/brsr/precision_replication/replication.py",
+    "brsr_s1_precision_replication/run_replication.py": "research_code/brsr/precision_replication/run_replication.py",
+    "brsr_s1_precision_replication/test_replication.py": "research_code/brsr/precision_replication/test_replication.py",
+    "brsr_s1_precision_replication/__init__.py": "research_code/brsr/precision_replication/__init__.py",
+    "brsr_transition_regime/experiment.py": "research_code/brsr/transition_regime/experiment.py",
+    "brsr_transition_regime/README.md": "research_code/brsr/transition_regime/README.md",
+    "brsr_transition_regime/run_experiment.py": "research_code/brsr/transition_regime/run_experiment.py",
+    "brsr_transition_regime/test_experiment.py": "research_code/brsr/transition_regime/test_experiment.py",
+    "brsr_transition_regime/__init__.py": "research_code/brsr/transition_regime/__init__.py",
+    "np_nbq_dpd/core.py": "research_code/np_nbq_dpd/core.py",
+    "np_nbq_dpd/README.md": "research_code/np_nbq_dpd/README.md",
+    "np_nbq_dpd/run_stage0.py": "research_code/np_nbq_dpd/run_stage0.py",
+    "np_nbq_dpd/test_stage0.py": "research_code/np_nbq_dpd/test_stage0.py",
+    "np_nbq_dpd/__init__.py": "research_code/np_nbq_dpd/__init__.py",
+    "raptq_tdoa/core.py": "research_code/raptq/core.py",
+    "raptq_tdoa/diagnose_sparse_integrator.py": "research_code/raptq/diagnose_sparse_integrator.py",
+    "raptq_tdoa/diagnose_stage0_numerical.py": "research_code/raptq/diagnose_stage0_numerical.py",
+    "raptq_tdoa/README.md": "research_code/raptq/README.md",
+    "raptq_tdoa/recompute_stage0_sparse_amp_phase.py": "research_code/raptq/recompute_stage0_sparse_amp_phase.py",
+    "raptq_tdoa/relative_phase_rate.py": "research_code/raptq/relative_phase_rate.py",
+    "raptq_tdoa/run_relative_phase_rate.py": "research_code/raptq/run_relative_phase_rate.py",
+    "raptq_tdoa/run_stage0.py": "research_code/raptq/run_stage0.py",
+    "raptq_tdoa/sparse_integrator.py": "research_code/raptq/sparse_integrator.py",
+    "raptq_tdoa/test_relative_phase_rate.py": "research_code/raptq/test_relative_phase_rate.py",
+    "raptq_tdoa/test_sparse_correction.py": "research_code/raptq/test_sparse_correction.py",
+    "raptq_tdoa/test_sparse_integrator.py": "research_code/raptq/test_sparse_integrator.py",
+    "raptq_tdoa/test_stage0.py": "research_code/raptq/test_stage0.py",
+    "raptq_tdoa/__init__.py": "research_code/raptq/__init__.py",
+    "sitq_tdoa/core.py": "research_code/sitq/core.py",
+    "sitq_tdoa/diagnose_stage_a1_threshold_stability.py": "research_code/sitq/diagnose_stage_a1_threshold_stability.py",
+    "sitq_tdoa/README.md": "research_code/sitq/README.md",
+    "sitq_tdoa/run_stage_a.py": "research_code/sitq/run_stage_a.py",
+    "sitq_tdoa/test_stage_a.py": "research_code/sitq/test_stage_a.py",
+    "sitq_tdoa/test_stage_a1.py": "research_code/sitq/test_stage_a1.py",
+    "sitq_tdoa/__init__.py": "research_code/sitq/__init__.py",
+    "pasr_tdoa/pasr_core.py": "research_code/pasr/pasr_core.py",
+    "pasr_tdoa/README.md": "research_code/pasr/README.md",
+    "pasr_tdoa/run_pasr_tdoa.py": "research_code/pasr/run_pasr_tdoa.py",
+    "pasr_tdoa/test_pasr_core.py": "research_code/pasr/test_pasr_core.py",
+    "pasr_tdoa/__init__.py": "research_code/pasr/__init__.py",
+    "pfrs_frequency_mask/pfrs_continuous_tdoa_validation.py": "research_code/pfrs/pfrs_continuous_tdoa_validation.py",
+    "pfrs_frequency_mask/pfrs_finite_delay_selection.py": "research_code/pfrs/pfrs_finite_delay_selection.py",
+    "pfrs_frequency_mask/pfrs_fixed_mask_feasibility.py": "research_code/pfrs/pfrs_fixed_mask_feasibility.py",
+    "standalone_frequency_alignment/alignment_core.py": "research_code/frequency_alignment/alignment_core.py",
+    "standalone_frequency_alignment/experiment_config.py": "research_code/frequency_alignment/experiment_config.py",
+    "standalone_frequency_alignment/plot_alignment_results.py": "research_code/frequency_alignment/plot_alignment_results.py",
+    "standalone_frequency_alignment/plot_bpsk_parameter_sweep.py": "research_code/frequency_alignment/plot_bpsk_parameter_sweep.py",
+    "standalone_frequency_alignment/plot_interpolation_mechanism.py": "research_code/frequency_alignment/plot_interpolation_mechanism.py",
+    "standalone_frequency_alignment/project_adapter.py": "research_code/frequency_alignment/project_adapter.py",
+    "standalone_frequency_alignment/README.md": "research_code/frequency_alignment/README.md",
+    "standalone_frequency_alignment/run_bpsk_parameter_sweep.py": "research_code/frequency_alignment/run_bpsk_parameter_sweep.py",
+    "standalone_frequency_alignment/run_interpolation_alignment.py": "research_code/frequency_alignment/run_interpolation_alignment.py",
+    "standalone_frequency_alignment/test_alignment_core.py": "research_code/frequency_alignment/test_alignment_core.py",
+    "standalone_frequency_alignment/test_tzp_dense.py": "research_code/frequency_alignment/test_tzp_dense.py",
+    "standalone_frequency_alignment/tzp_dense.py": "research_code/frequency_alignment/tzp_dense.py",
+    "standalone_frequency_alignment/zhai_selection.py": "research_code/frequency_alignment/zhai_selection.py",
+    "standalone_frequency_alignment/__init__.py": "research_code/frequency_alignment/__init__.py",
+    "main.py": "research_code/dae_pipeline/main.py",
+    "model.py": "research_code/dae_pipeline/model.py",
+    "train.py": "research_code/dae_pipeline/train.py",
+    "evaluate.py": "research_code/dae_pipeline/evaluate.py",
+    "experiment_profiles.py": "research_code/dae_pipeline/experiment_profiles.py",
+    "replot.py": "research_code/dae_pipeline/replot.py",
+    "export_results.py": "research_code/dae_pipeline/export_results.py",
+    "diagnose_go_no_go.py": "research_code/dae_pipeline/diagnose_go_no_go.py",
+    "analyze_results.py": "research_code/dae_pipeline/analyze_results.py",
+    "compressed_tdoa.py": "research_code/v5_compressed_tdoa/compressed_tdoa.py",
+    "topk_localization.py": "research_code/v5_compressed_tdoa/topk_localization.py",
+    "diagnose_v5b_topk.py": "research_code/v5_compressed_tdoa/diagnose_v5b_topk.py",
+    "diagnose_v5b_topk_wls.py": "research_code/v5_compressed_tdoa/diagnose_v5b_topk_wls.py",
+    "evaluate_topk_fairness.py": "research_code/v5_compressed_tdoa/evaluate_topk_fairness.py",
+    "benchmark_fairness_complexity.py": "research_code/v5_compressed_tdoa/benchmark_fairness_complexity.py",
+    "signal_gen.py": "research_code/shared/signal_gen.py",
+    "baselines.py": "research_code/shared/baselines.py",
+    "task_baselines.py": "research_code/shared/task_baselines.py",
+    "experiment_cache.py": "research_code/shared/experiment_cache.py",
+    "experiment_integrity.py": "research_code/shared/experiment_integrity.py",
+    "audit_research_gates.py": "tools/audits/audit_research_gates.py",
+    "test_audit_research_gates.py": "tools/audits/test_audit_research_gates.py",
+    "validate_project_integrity.py": "tools/audits/validate_project_integrity.py"
+  },
+  "modules": {
+    "brsr_tdoa": "research_code.brsr.stage_ab",
+    "brsr_route_feasibility": "research_code.brsr.stage1",
+    "brsr_stage2_rate_adaptive": "research_code.brsr.stage2",
+    "brsr_observability_certificate": "research_code.brsr.observability",
+    "brsr_state_oracle_certificate": "research_code.brsr.state_oracle",
+    "brsr_s1_precision_replication": "research_code.brsr.precision_replication",
+    "brsr_transition_regime": "research_code.brsr.transition_regime",
+    "np_nbq_dpd": "research_code.np_nbq_dpd",
+    "raptq_tdoa": "research_code.raptq",
+    "sitq_tdoa": "research_code.sitq",
+    "pasr_tdoa": "research_code.pasr",
+    "pfrs_frequency_mask": "research_code.pfrs",
+    "standalone_frequency_alignment": "research_code.frequency_alignment",
+    "main": "research_code.dae_pipeline.main",
+    "model": "research_code.dae_pipeline.model",
+    "train": "research_code.dae_pipeline.train",
+    "evaluate": "research_code.dae_pipeline.evaluate",
+    "experiment_profiles": "research_code.dae_pipeline.experiment_profiles",
+    "replot": "research_code.dae_pipeline.replot",
+    "export_results": "research_code.dae_pipeline.export_results",
+    "diagnose_go_no_go": "research_code.dae_pipeline.diagnose_go_no_go",
+    "analyze_results": "research_code.dae_pipeline.analyze_results",
+    "compressed_tdoa": "research_code.v5_compressed_tdoa.compressed_tdoa",
+    "topk_localization": "research_code.v5_compressed_tdoa.topk_localization",
+    "diagnose_v5b_topk": "research_code.v5_compressed_tdoa.diagnose_v5b_topk",
+    "diagnose_v5b_topk_wls": "research_code.v5_compressed_tdoa.diagnose_v5b_topk_wls",
+    "evaluate_topk_fairness": "research_code.v5_compressed_tdoa.evaluate_topk_fairness",
+    "benchmark_fairness_complexity": "research_code.v5_compressed_tdoa.benchmark_fairness_complexity",
+    "signal_gen": "research_code.shared.signal_gen",
+    "baselines": "research_code.shared.baselines",
+    "task_baselines": "research_code.shared.task_baselines",
+    "experiment_cache": "research_code.shared.experiment_cache",
+    "experiment_integrity": "research_code.shared.experiment_integrity",
+    "audit_research_gates": "tools.audits.audit_research_gates",
+    "test_audit_research_gates": "tools.audits.test_audit_research_gates",
+    "validate_project_integrity": "tools.audits.validate_project_integrity",
+    "pfrs_continuous_tdoa_validation": "research_code.pfrs.pfrs_continuous_tdoa_validation",
+    "pfrs_finite_delay_selection": "research_code.pfrs.pfrs_finite_delay_selection",
+    "pfrs_fixed_mask_feasibility": "research_code.pfrs.pfrs_fixed_mask_feasibility",
+    "alignment_core": "research_code.frequency_alignment.alignment_core",
+    "experiment_config": "research_code.frequency_alignment.experiment_config",
+    "plot_alignment_results": "research_code.frequency_alignment.plot_alignment_results",
+    "plot_bpsk_parameter_sweep": "research_code.frequency_alignment.plot_bpsk_parameter_sweep",
+    "plot_interpolation_mechanism": "research_code.frequency_alignment.plot_interpolation_mechanism",
+    "project_adapter": "research_code.frequency_alignment.project_adapter",
+    "run_bpsk_parameter_sweep": "research_code.frequency_alignment.run_bpsk_parameter_sweep",
+    "run_interpolation_alignment": "research_code.frequency_alignment.run_interpolation_alignment",
+    "test_alignment_core": "research_code.frequency_alignment.test_alignment_core",
+    "test_tzp_dense": "research_code.frequency_alignment.test_tzp_dense",
+    "tzp_dense": "research_code.frequency_alignment.tzp_dense",
+    "zhai_selection": "research_code.frequency_alignment.zhai_selection"
+  },
+  "files": [
+    {
+      "old": "brsr_tdoa/brsr_core.py",
+      "new": "research_code/brsr/stage_ab/brsr_core.py",
+      "before_sha256": "d3f9682587f0618fb3b6863cbe59d64665bcfb0d619db809cb47fe22058a3090",
+      "after_sha256": "3c261802556bf5f649061bd86e79a0611eabb0b449c79ec29d3563d7869121af"
+    },
+    {
+      "old": "brsr_tdoa/brsr_stage_b.py",
+      "new": "research_code/brsr/stage_ab/brsr_stage_b.py",
+      "before_sha256": "45d37140f3c6daf3c82fd41554ec89ce07a0335478cc3325f0787d0e6ff5ca93",
+      "after_sha256": "59eb6f8eb98e80366ef483e8b14704fa8a96b07c74ec8aaca8b483dbbe1803e2"
+    },
+    {
+      "old": "brsr_tdoa/brsr_waveform.py",
+      "new": "research_code/brsr/stage_ab/brsr_waveform.py",
+      "before_sha256": "5e21e433668517b4ff78ee11ba2ec00a79a481125cabb403ba0cf089b8961566",
+      "after_sha256": "d9b7318ca7e85683f27ec17a6324ae73186f529b2cbd49c3559558a33228f023"
+    },
+    {
+      "old": "brsr_tdoa/diagnose_stage_b_failures.py",
+      "new": "research_code/brsr/stage_ab/diagnose_stage_b_failures.py",
+      "before_sha256": "40677da1269fefb02d859e1a5e71c129c04d8d61f87f5c70187b3b33216482cc",
+      "after_sha256": "4534698850c3eb7144f255aec59bf9c9ad635590461671639738eecc17cac353"
+    },
+    {
+      "old": "brsr_tdoa/diagnose_stage_b_v2_profile.py",
+      "new": "research_code/brsr/stage_ab/diagnose_stage_b_v2_profile.py",
+      "before_sha256": "8ad137c4b5927004107f60b31518ce001f42db1339112e3c91ed09c0511b1203",
+      "after_sha256": "9298e0aa75d1f5feb05d8a0d81ec48be7be84b7dd29c83f98c2d0e05305491c3"
+    },
+    {
+      "old": "brsr_tdoa/README.md",
+      "new": "research_code/brsr/stage_ab/README.md",
+      "before_sha256": "0108111769309785262f2b50b1a58eae05ad528055e7bc2b687927d2e090ccf5",
+      "after_sha256": "f69e76e7bd6d8b34e02102d28851696310e1ca4b1cbaae4efc8c995a10881f2e"
+    },
+    {
+      "old": "brsr_tdoa/run_stage_a.py",
+      "new": "research_code/brsr/stage_ab/run_stage_a.py",
+      "before_sha256": "bdee56bdae8b0ee7b9e95c30899bddedab8bf0c311b5eaf5fc5d3b6f2b489add",
+      "after_sha256": "50d9ce05445adf7defebdf68b9e57b688bf1c37bcc96698b5cff93525e5e5472"
+    },
+    {
+      "old": "brsr_tdoa/run_stage_b.py",
+      "new": "research_code/brsr/stage_ab/run_stage_b.py",
+      "before_sha256": "0f2737b57786ebcad8a1c66092a375a7099ce2de6b87f2b5706b56e6bde821d5",
+      "after_sha256": "a029449aef59553f5ea779d942aa77cdd8d2c9e396f5aae761397dae55c1b8f9"
+    },
+    {
+      "old": "brsr_tdoa/test_brsr_core.py",
+      "new": "research_code/brsr/stage_ab/test_brsr_core.py",
+      "before_sha256": "d0f0acbc6bd3bde3b8392133166cdc04257d1708a3eb3e04daa242df01cb7230",
+      "after_sha256": "8bc8d6ff6136822813804d2741a78201a87d0e469efc96ec4fce630e5b8a2ea2"
+    },
+    {
+      "old": "brsr_tdoa/test_brsr_stage_b.py",
+      "new": "research_code/brsr/stage_ab/test_brsr_stage_b.py",
+      "before_sha256": "7126877cd0e78a5a6acd509b996204d43b2a1f0f0eafa04d43e79085b262014f",
+      "after_sha256": "3b982989328926cd9d06c0dbd1b763d2cda942a18a9265c6dcf396c5763b5dff"
+    },
+    {
+      "old": "brsr_tdoa/test_stage_b_failures.py",
+      "new": "research_code/brsr/stage_ab/test_stage_b_failures.py",
+      "before_sha256": "b179489b102705215d87bf7db13cbefc76acad311419d4ee7bd6bc585b4c68b6",
+      "after_sha256": "87f911eaf726dbad5d7715eaaa469e7bcb48391371c7ca72becd51780eca7ca4"
+    },
+    {
+      "old": "brsr_tdoa/test_stage_b_v2_profile.py",
+      "new": "research_code/brsr/stage_ab/test_stage_b_v2_profile.py",
+      "before_sha256": "76fe167928b0b408b0c72a8996907abafbab826e78938acdee71ae75ce36d9b0",
+      "after_sha256": "8d589553a42866d2f969bdfdde89b4f3a76ac08d77cfe207e27213fb5f318023"
+    },
+    {
+      "old": "brsr_tdoa/__init__.py",
+      "new": "research_code/brsr/stage_ab/__init__.py",
+      "before_sha256": "cd2ba377ad0f5b0b93c7d44fcbc2090afb9562d64f1e63f263444babf9ecd6ba",
+      "after_sha256": "5f5e74b3866b55fe9fbf4006ba62c048b647e498257581c39c4872f727031b01"
+    },
+    {
+      "old": "brsr_route_feasibility/diagnose_quadrature.py",
+      "new": "research_code/brsr/stage1/diagnose_quadrature.py",
+      "before_sha256": "09da24d89dfa43ab697a92848126a9999d339977b271bc72ea3b1de24ab81e47",
+      "after_sha256": "bcc06805754ec50fde81f2cb45b12911f1e937fd077376e4e05b936bedaea457"
+    },
+    {
+      "old": "brsr_route_feasibility/feasibility.py",
+      "new": "research_code/brsr/stage1/feasibility.py",
+      "before_sha256": "39f8824fd2cf25555a50b0c93f38b65d0fca0eb7d9b6e5da73631feecc15314c",
+      "after_sha256": "1b163b2febf55ecd068bfdc4ac092a72bceefd7c10b2eced84239c04d30ca11a"
+    },
+    {
+      "old": "brsr_route_feasibility/run_stage1.py",
+      "new": "research_code/brsr/stage1/run_stage1.py",
+      "before_sha256": "9c3d2a183e88a7040d9e61b33d06b981739c58783ac0812357a533e76ef7d80b",
+      "after_sha256": "ad5d20ba1d0ade4d41c9e92d5aeae42f4f562ec71a76a760b254baf797c9a08a"
+    },
+    {
+      "old": "brsr_route_feasibility/test_quadrature_diagnostic.py",
+      "new": "research_code/brsr/stage1/test_quadrature_diagnostic.py",
+      "before_sha256": "398384de0490872f7d72fafede41cd6d35642ee95d56988b2b4223cc1f77b3fd",
+      "after_sha256": "e493bf171664ea810f9d53c503a4e65dd9ca883d7c1f2761d8697f1326ae3d68"
+    },
+    {
+      "old": "brsr_route_feasibility/test_stage1.py",
+      "new": "research_code/brsr/stage1/test_stage1.py",
+      "before_sha256": "ed6479d2efc3507caf07e98ec00a587fd7ad88b2f5952e2b3a1ba924cdb18e91",
+      "after_sha256": "12e584f1ecca88498d823f3310873cdbd576f9bd2bfa31e56b7d1aa8e70d4586"
+    },
+    {
+      "old": "brsr_route_feasibility/__init__.py",
+      "new": "research_code/brsr/stage1/__init__.py",
+      "before_sha256": "60920bd63d0ff6f3bbe57986ea7d22d28d23265e1e93391267ca8050b1a5db4c",
+      "after_sha256": "d4af2719be5f9099b9323b7644986c25614a7d78371fce7ef84d3deffefbb977"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/diagnose_stage2a1_protocol.py",
+      "new": "research_code/brsr/stage2/diagnose_stage2a1_protocol.py",
+      "before_sha256": "9255ee30fdb7745d593a5770793f0079eec570b167a6fe0970ab0dbcb60e4a71",
+      "after_sha256": "49b4320dc86161dc57e1b1387b0eb09012b943ba6ce5c7a2e0760945f8b335c0"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/diagnose_stage2a_failures.py",
+      "new": "research_code/brsr/stage2/diagnose_stage2a_failures.py",
+      "before_sha256": "da84f4b9cb474ac6049ded3281575fd0d1da7e0e6ce3d92bb59308edfa5f3d20",
+      "after_sha256": "ef9efba7a10128a13d3d8022239a2bf7e31465218f8bc6db094e998e9dfddab7"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/README.md",
+      "new": "research_code/brsr/stage2/README.md",
+      "before_sha256": "1f185b795b5cad401f72b9ecc8894f782f49711952aef5458f23ed49abe95173",
+      "after_sha256": "11e5fe3df96d8a5df6328f5c1f4941e46daffacb4274cfadbdf38eb816ef61ef"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/run_stage2a.py",
+      "new": "research_code/brsr/stage2/run_stage2a.py",
+      "before_sha256": "5f07f0ba90a1e85042447e3ef4f55dc251e17ad2ce46a170b1cd1790cae04d08",
+      "after_sha256": "6a9fbcdca8025f78cff2ae0af12b4392395b50671bfc16a2000eb73050d1320e"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/run_stage2a1.py",
+      "new": "research_code/brsr/stage2/run_stage2a1.py",
+      "before_sha256": "fac9a6b77a34da9165b611525e7ec0353c08bfd43e0dcc451ad6c7ef70ecbcff",
+      "after_sha256": "ed2b6faa6b3b5f0990b2de7203e0fb519116626d37d3222b27bad8a20af436fb"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/stage2a.py",
+      "new": "research_code/brsr/stage2/stage2a.py",
+      "before_sha256": "ee7171675c47bc30c866b066f5084b2787d9cb91978fccbc236031e4f73d3f97",
+      "after_sha256": "ec35b4984ea032eaae2b60c01245c3a4d75650e238392badcb2a094441f1fb44"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/stage2a1.py",
+      "new": "research_code/brsr/stage2/stage2a1.py",
+      "before_sha256": "c433d7eedbc5fc7d5a5ff592243e024af964401792639890d5d31f894b1a3930",
+      "after_sha256": "f6f4eaaf26a24707f9ef6469e2962ff90456a1fe375d60a19e211cf8ed36cd6b"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/stage2a1_protocol.py",
+      "new": "research_code/brsr/stage2/stage2a1_protocol.py",
+      "before_sha256": "bdb3be23eb50e244bad19f0b1f06005ec586b6490e75902bd1ddad9f0bef434b",
+      "after_sha256": "711ad53b52108d72f7c22a135a1b56d64b54aa07b055ab61b80a7f78fc99e4c8"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/test_stage2a.py",
+      "new": "research_code/brsr/stage2/test_stage2a.py",
+      "before_sha256": "d2498c1a721ec1881c378afb30f61d32b12f5311295283d9bffbb9df13115dc9",
+      "after_sha256": "88bd73469b10431614153c4ab2794acc716b2b4338f915e98dd57a5c38ef9d0d"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/test_stage2a1.py",
+      "new": "research_code/brsr/stage2/test_stage2a1.py",
+      "before_sha256": "64edcca363b28ee102de11aecb28bcd709adbcc3dd6e73ff228f24bd5e83bdd9",
+      "after_sha256": "ac2880a1cc645ec7a2a8c7f496e2e93c47fa4a115fa307fdbd360333ed0a02a3"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/test_stage2a1_protocol.py",
+      "new": "research_code/brsr/stage2/test_stage2a1_protocol.py",
+      "before_sha256": "369501e6954670e91284ff6dae3ad2dbe8aba88af310114a66ad3a2d8731d871",
+      "after_sha256": "041e0ca3f370d55d5e8d54c923d9803d9668eaffd497c3795dcb5c52842500c4"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/test_stage2a_failures.py",
+      "new": "research_code/brsr/stage2/test_stage2a_failures.py",
+      "before_sha256": "20d0d87e68d4030c7e1cd59b172d38d18096def9943297b3f53f722b85c6fa28",
+      "after_sha256": "fd3c666ef514ab3b899e020fe4d417b72e3b09e8323f4ee01f735dddb4a979d6"
+    },
+    {
+      "old": "brsr_stage2_rate_adaptive/__init__.py",
+      "new": "research_code/brsr/stage2/__init__.py",
+      "before_sha256": "b138686db942672657b0841169aac9b202a4804a14aaaecd159285256ffcb9f1",
+      "after_sha256": "65127f1ec6a06d521e135934c5e8f92d006f8b292f2a7c70b931e1af014d76ae"
+    },
+    {
+      "old": "brsr_observability_certificate/audit_oracles.py",
+      "new": "research_code/brsr/observability/audit_oracles.py",
+      "before_sha256": "3d07cfcfccad4e19f0f7ab4dcea3ace951176304d311dacce0308c94a45b3112",
+      "after_sha256": "6c8581640e72aed16c2453eded0675cde244677050ac01a14cbd9b1c8a2dfebc"
+    },
+    {
+      "old": "brsr_observability_certificate/certificate.py",
+      "new": "research_code/brsr/observability/certificate.py",
+      "before_sha256": "990827dedbd969a47bf081ea45725956d1b92c1fafceb30e6753d9f18f6e331a",
+      "after_sha256": "abf7af7d92f209626a5137ee835ee623d92c699c4c737e80e64ba3494587ba6a"
+    },
+    {
+      "old": "brsr_observability_certificate/features.py",
+      "new": "research_code/brsr/observability/features.py",
+      "before_sha256": "197d765c8e283890301521e798fc73853d04b944aca0e6f369010ca406cfa306",
+      "after_sha256": "104014ffd2019fd08233776bc5b86813de1f33103572bb6dd92088114bb431fb"
+    },
+    {
+      "old": "brsr_observability_certificate/README.md",
+      "new": "research_code/brsr/observability/README.md",
+      "before_sha256": "9c550c2d2ceb12596dced27f062542616b181d087cfb464c7374ec23a5b40237",
+      "after_sha256": "8dcccb117b94842d84350f07754e87d10af5e96dddf98125c29d37f15c37472a"
+    },
+    {
+      "old": "brsr_observability_certificate/run_certificate.py",
+      "new": "research_code/brsr/observability/run_certificate.py",
+      "before_sha256": "6212a40a2e0e6f41bf6cafdd1a0c1fb7d735187e25734346ac3ed3a284963286",
+      "after_sha256": "f48d95431ed8db9ebcd14aae12e51cae44bc281c22fea9df4ec1e377538ffb04"
+    },
+    {
+      "old": "brsr_observability_certificate/test_certificate.py",
+      "new": "research_code/brsr/observability/test_certificate.py",
+      "before_sha256": "8a188bd93f97cf5fdd73a5d197ef6c331ec46c477f87d5b96a452d6723b8d483",
+      "after_sha256": "42fb44e6cf5a95dddb7267db7e6143cb5d995ada056cf8e9621fc32577be66dd"
+    },
+    {
+      "old": "brsr_observability_certificate/__init__.py",
+      "new": "research_code/brsr/observability/__init__.py",
+      "before_sha256": "7c1dc25fcd40fb53254d6f41b2e426be32ad9ecd111b25313e5991e9e9b961e0",
+      "after_sha256": "e1ab47a0a5f3a9260e48dfff29ce177a3d639223f1725aa88131bd85b095413b"
+    },
+    {
+      "old": "brsr_state_oracle_certificate/certificate.py",
+      "new": "research_code/brsr/state_oracle/certificate.py",
+      "before_sha256": "931479c47adf06c979b435b9ea028e75b2cd9f6f91b1be97824d1c9d13b6c665",
+      "after_sha256": "56e36eb3631707f534f5da46bdd72f3d9f74baa57b819bc01c864fa7f52bcd9b"
+    },
+    {
+      "old": "brsr_state_oracle_certificate/README.md",
+      "new": "research_code/brsr/state_oracle/README.md",
+      "before_sha256": "4b39585f3792b7f7eb783af5ec0b05c97afe33270d3a3dd904f15a2df8c460ac",
+      "after_sha256": "0a53bdab8a08803210e71908a67af59f8137798890332d7e40b679ae1e6e0ec1"
+    },
+    {
+      "old": "brsr_state_oracle_certificate/run_certificate.py",
+      "new": "research_code/brsr/state_oracle/run_certificate.py",
+      "before_sha256": "857a93929f32298eceb7e4b44c98b9df9697085bf0aa8a6bdd742ec18929e080",
+      "after_sha256": "8c1965cbe4b0e0fc49cd648d0c08e0e96b57c49f33d032283bb9a464ca4fb615"
+    },
+    {
+      "old": "brsr_state_oracle_certificate/test_certificate.py",
+      "new": "research_code/brsr/state_oracle/test_certificate.py",
+      "before_sha256": "3ed362d6b42b82c10da68cca7d9aef8084592a354f20fb964447b5c51391f9eb",
+      "after_sha256": "f9b55eed1a062c6749018c63b799c1a724d4673ac3846557a6dc3fa417139a1a"
+    },
+    {
+      "old": "brsr_state_oracle_certificate/__init__.py",
+      "new": "research_code/brsr/state_oracle/__init__.py",
+      "before_sha256": "1ee487494b69ce84765adcdea4abb96fc6beec89acbd2f485de951812729e1ad",
+      "after_sha256": "36067fada08f730b45dc473ff9ec9df849fad1b23ea419a7db14db2a8244bb38"
+    },
+    {
+      "old": "brsr_s1_precision_replication/README.md",
+      "new": "research_code/brsr/precision_replication/README.md",
+      "before_sha256": "b0616c584dfbc709f67b0d95197cecf50a47f4eaa234a2d8845c2894e11a5ea9",
+      "after_sha256": "39f80f8c6dc8e5efcba5d2712931767de7696890b348838bf44fb33382c31c18"
+    },
+    {
+      "old": "brsr_s1_precision_replication/replication.py",
+      "new": "research_code/brsr/precision_replication/replication.py",
+      "before_sha256": "b916bf216ab137379ca1c4382b1896e565ebad38a477220a5b7a247764e4e979",
+      "after_sha256": "eb7dc6d83c324cadcfa4a1058fef67eb0be7af030674a73f365b6c9f70f0c39c"
+    },
+    {
+      "old": "brsr_s1_precision_replication/run_replication.py",
+      "new": "research_code/brsr/precision_replication/run_replication.py",
+      "before_sha256": "d1e22e4f48ac5ea2df11187403ed9c7137655c3046df092aaf493bfcc325223e",
+      "after_sha256": "77ba360ae60affc9f0611f7c7239998d725c0095807e7308c3a7c938f54f9276"
+    },
+    {
+      "old": "brsr_s1_precision_replication/test_replication.py",
+      "new": "research_code/brsr/precision_replication/test_replication.py",
+      "before_sha256": "f3559078dc498031e80630ca4ae6e7699f30d0ce0281d4c89b9ba5bb43060854",
+      "after_sha256": "a8361544563911d025b55d180bce32728b51022848670ee7326d976f30d86280"
+    },
+    {
+      "old": "brsr_s1_precision_replication/__init__.py",
+      "new": "research_code/brsr/precision_replication/__init__.py",
+      "before_sha256": "3764cb4a71b83da1aa2df8c76c9504ae8e577907a769d999d30ff9eb759c6dc8",
+      "after_sha256": "e535f64f188fecdcb820b7ae19fcd6855a3b635e3e341420fdda3747ab5d5424"
+    },
+    {
+      "old": "brsr_transition_regime/experiment.py",
+      "new": "research_code/brsr/transition_regime/experiment.py",
+      "before_sha256": "c3b6b82996575778074650c3602584ccae9b9cf7de13069df8024599da136756",
+      "after_sha256": "7b105c5e5cda116e2bb46e1f87b412b23d9e304ccec52b9c9ba65730e674d864"
+    },
+    {
+      "old": "brsr_transition_regime/README.md",
+      "new": "research_code/brsr/transition_regime/README.md",
+      "before_sha256": "519b468a8ae36850defa54ae6cc8c94ea9e724ea9b870e5a29b593a99529b942",
+      "after_sha256": "519b468a8ae36850defa54ae6cc8c94ea9e724ea9b870e5a29b593a99529b942"
+    },
+    {
+      "old": "brsr_transition_regime/run_experiment.py",
+      "new": "research_code/brsr/transition_regime/run_experiment.py",
+      "before_sha256": "b866b0559461aef789af709fad533ff770c1013ec8291d3396b6694d60a86bce",
+      "after_sha256": "f74e9eeb2c9aa8f46827d878a15e7806f2799bbc999f5d66dab7ace14bea288c"
+    },
+    {
+      "old": "brsr_transition_regime/test_experiment.py",
+      "new": "research_code/brsr/transition_regime/test_experiment.py",
+      "before_sha256": "30f55d488e6c807b5e6b0ae9277dfb235ea19949f6b5b82b5d34e8c37905b721",
+      "after_sha256": "e19ed15863d53f502650e238e5707cd87ef0fbeb2a4a07c3164738587ad5c973"
+    },
+    {
+      "old": "brsr_transition_regime/__init__.py",
+      "new": "research_code/brsr/transition_regime/__init__.py",
+      "before_sha256": "4934a236f0c3cdcd8407d7155f536fd7ec954456298815ec479375d2fd837ec0",
+      "after_sha256": "530ca903dec1ca5129445d6755892bf94f4e27567abcd3d272f008a434b3f20c"
+    },
+    {
+      "old": "np_nbq_dpd/core.py",
+      "new": "research_code/np_nbq_dpd/core.py",
+      "before_sha256": "a0d2bf19e96a7fa7cad21445f67d0e614a75b82788ae9f912ab8be37a092289f",
+      "after_sha256": "b74c07e8bfdca8ff1a84600f69340a76e39b2b887bc632106a22d0fe1802c88e"
+    },
+    {
+      "old": "np_nbq_dpd/README.md",
+      "new": "research_code/np_nbq_dpd/README.md",
+      "before_sha256": "f7d40216d47f4cf483cb9dbe5ed636a103dfdc5a6b37ff9337be663a3b5b38bc",
+      "after_sha256": "a04bea81d112538658504c239c771b1cbeb8cb598d61517774c687b505a42e66"
+    },
+    {
+      "old": "np_nbq_dpd/run_stage0.py",
+      "new": "research_code/np_nbq_dpd/run_stage0.py",
+      "before_sha256": "d714b20212d3d1c9bc704bc69b268c47b6358b5d97622517d3548965929b28ac",
+      "after_sha256": "b5aa9d26937dc12a39cbf1feb2b65eed92558737f46feb883f6c8e4f4ab948dc"
+    },
+    {
+      "old": "np_nbq_dpd/test_stage0.py",
+      "new": "research_code/np_nbq_dpd/test_stage0.py",
+      "before_sha256": "b04370e40c80b199b9da7e0ca3dd35883f88858eed6c5e34214170d18cebd7a0",
+      "after_sha256": "caea4273d715efcbb435f3b2725a265a92aac869cc53fa2f9e93f91e19baf393"
+    },
+    {
+      "old": "np_nbq_dpd/__init__.py",
+      "new": "research_code/np_nbq_dpd/__init__.py",
+      "before_sha256": "a24c9b8a3ac52cc26f2d177f8a20df6c65df0132f18582f4bd165ed7400929e3",
+      "after_sha256": "1b9f05e0881945d82254c66712d5fc753c6a516256a7b364f6879c331ad9d595"
+    },
+    {
+      "old": "raptq_tdoa/core.py",
+      "new": "research_code/raptq/core.py",
+      "before_sha256": "7d4c8f31622043cb12237f73af94d126309a77621ab617a1f475e011a94ae5df",
+      "after_sha256": "90edbc43156ac9e0d056f7e18a49a425e6c29bf24b2c77e251af2fff7f60074f"
+    },
+    {
+      "old": "raptq_tdoa/diagnose_sparse_integrator.py",
+      "new": "research_code/raptq/diagnose_sparse_integrator.py",
+      "before_sha256": "cf5d3ccaede6abb022d907361a3d2502a3d241bbec7ec5b90cc4aec26360b535",
+      "after_sha256": "82c9bafcb7bc6a31b79a772c084760cba2f48330c931aac5884aeb31d9115084"
+    },
+    {
+      "old": "raptq_tdoa/diagnose_stage0_numerical.py",
+      "new": "research_code/raptq/diagnose_stage0_numerical.py",
+      "before_sha256": "8e34828458fba21c65f992713a123f8b1772bce7ba39561af69e8cd817b9dd34",
+      "after_sha256": "59248d662ddf2e38d6d255ecfd19c85427ad3dd36aa0468fbcc18353f6f8bef4"
+    },
+    {
+      "old": "raptq_tdoa/README.md",
+      "new": "research_code/raptq/README.md",
+      "before_sha256": "5e32172ac1f37e60c17391112dcec2c4e001baae4ad16eb6ff1897e734978743",
+      "after_sha256": "28accb2663eee165e1e83a1764c4a69d8ad5e0b4547ff4c8e999ef78f4139b0a"
+    },
+    {
+      "old": "raptq_tdoa/recompute_stage0_sparse_amp_phase.py",
+      "new": "research_code/raptq/recompute_stage0_sparse_amp_phase.py",
+      "before_sha256": "0290b08b3158cd783a3ffc0c2ad5e72d47c9d807e088a642083ebc2c0869984f",
+      "after_sha256": "aa7cd4e70b7506ec29e656cf8c41758f3c45279e6fb133eecefd7bd44ecc0c11"
+    },
+    {
+      "old": "raptq_tdoa/relative_phase_rate.py",
+      "new": "research_code/raptq/relative_phase_rate.py",
+      "before_sha256": "635b4c59eb51060ba57df70a12252c4c27418a9d129f67bae1c24e43125e7bdd",
+      "after_sha256": "1cda9f417b0b58775db71cd5e14e490cc04478dbb8aacdc04a9c395a7804e367"
+    },
+    {
+      "old": "raptq_tdoa/run_relative_phase_rate.py",
+      "new": "research_code/raptq/run_relative_phase_rate.py",
+      "before_sha256": "73dcbdd0bdb3a2b902aa2aed50b2f4908b6e75bf3062d1f12bf877290375f51c",
+      "after_sha256": "036d1b55ca121e45adc8d83b3236856a025185b1c2f52c25517d276fc5073d22"
+    },
+    {
+      "old": "raptq_tdoa/run_stage0.py",
+      "new": "research_code/raptq/run_stage0.py",
+      "before_sha256": "06c27ac7de62ad8cf364f470af08a43fb58ea8aba6dd5c6085b0a006ad5d374b",
+      "after_sha256": "84ee52a76dc6576eabaffa21795c606f6911988333f954d2f0030cbada9a4c0e"
+    },
+    {
+      "old": "raptq_tdoa/sparse_integrator.py",
+      "new": "research_code/raptq/sparse_integrator.py",
+      "before_sha256": "61d5512a07456acf7cc11ed6949df22fe4bbd6293cca4fb338582dd6163397f3",
+      "after_sha256": "f0bd66795db4afbb635b48b29206b53c0a34fc5bdfdbbf9a8b63b40d6516b89c"
+    },
+    {
+      "old": "raptq_tdoa/test_relative_phase_rate.py",
+      "new": "research_code/raptq/test_relative_phase_rate.py",
+      "before_sha256": "b7c2d87f9f3754639ce832a4ee170b2fb7fc1195bc0300abbaeeaa85947d5ecf",
+      "after_sha256": "5734e35b7e31775971bca03834760b20cd12c811d3d38098cb23344610535105"
+    },
+    {
+      "old": "raptq_tdoa/test_sparse_correction.py",
+      "new": "research_code/raptq/test_sparse_correction.py",
+      "before_sha256": "1cf28a8f3bb222a157a00967ba69c090a61f37b97e45293082a06dd2b140f961",
+      "after_sha256": "4baf62cc625f0b82ca1ba64452e7572ba452999c79566c52e2d309087d076087"
+    },
+    {
+      "old": "raptq_tdoa/test_sparse_integrator.py",
+      "new": "research_code/raptq/test_sparse_integrator.py",
+      "before_sha256": "56cf2558e57e902ee3b9fc3530abe1522c86f23fcbdd6f94635ab2108ab51771",
+      "after_sha256": "7925090a0ea0a8a6c4c1812fcabafd6ad4645be700913046edc92548f365f987"
+    },
+    {
+      "old": "raptq_tdoa/test_stage0.py",
+      "new": "research_code/raptq/test_stage0.py",
+      "before_sha256": "8428eda2a8374bae802b02b54a12d21a13f27f5abb5c26097c6415a78fcf5410",
+      "after_sha256": "5480a5ec3d19f26759f19ecbfb1e3ba39e7ae364844ac7ba5aa6dbf7464859a0"
+    },
+    {
+      "old": "raptq_tdoa/__init__.py",
+      "new": "research_code/raptq/__init__.py",
+      "before_sha256": "772227444a4234e77aa80bd05bec4445101a862b761da2d99cbfabaf80f15858",
+      "after_sha256": "0c3659dd776198db7d0a77b057689b71bacb589eb7d057c7bcd55e2fe86a1d26"
+    },
+    {
+      "old": "sitq_tdoa/core.py",
+      "new": "research_code/sitq/core.py",
+      "before_sha256": "a9c5c0c6a47f3b0ec5e65b97401d1a80ae45801a6bb03bc2678c0fa389c9b743",
+      "after_sha256": "a73f10d29606b54f1484e6663e532279b47ceda5ecc2ff0508c25bccfcac1034"
+    },
+    {
+      "old": "sitq_tdoa/diagnose_stage_a1_threshold_stability.py",
+      "new": "research_code/sitq/diagnose_stage_a1_threshold_stability.py",
+      "before_sha256": "ddb1b2edccfdd2d0cd7163de15ef526e63c4666a6b28a1bbc6053849cddee6cc",
+      "after_sha256": "35c15478eee0130d41dc452208623025736f50c7c67694e545e0ef1453c1eb45"
+    },
+    {
+      "old": "sitq_tdoa/README.md",
+      "new": "research_code/sitq/README.md",
+      "before_sha256": "7c84d50247061b78218924334613a99ed671fc26b8862843926d347505790a79",
+      "after_sha256": "9301db0e2f56cb2369306caa0ad69a9e15473ac847dfb42dd8e0a642b851a54e"
+    },
+    {
+      "old": "sitq_tdoa/run_stage_a.py",
+      "new": "research_code/sitq/run_stage_a.py",
+      "before_sha256": "6a4d1bbc09b3a9d5842288e88e277b3c27fa3c367529a6552c77d1f221383bea",
+      "after_sha256": "316822124437b5b4f77c1c6fd744db9e21d46b4b52da35e5edabc1df62894bfe"
+    },
+    {
+      "old": "sitq_tdoa/test_stage_a.py",
+      "new": "research_code/sitq/test_stage_a.py",
+      "before_sha256": "179ea13112fc12b5553548b3ba6d354505d94007b0ecc5a4bb496ec3c544b8be",
+      "after_sha256": "db1444bdf6a3f096f1f76a6f82793bb18dcb960e08df8a17a74542bb744ca39b"
+    },
+    {
+      "old": "sitq_tdoa/test_stage_a1.py",
+      "new": "research_code/sitq/test_stage_a1.py",
+      "before_sha256": "8aa8a3002065d6662f5af995bc8f7df90742aca5be092ca872e74352903f967f",
+      "after_sha256": "8aff452c5884a6d8eaf16333544ebb78e613125f54e711e650fca0d20357aed9"
+    },
+    {
+      "old": "sitq_tdoa/__init__.py",
+      "new": "research_code/sitq/__init__.py",
+      "before_sha256": "b35d63a822fc235ec15b35abb86edba56b400bf2909cbe81a91397a67734b8ad",
+      "after_sha256": "f4d17b792e33f0c7ff196744e7da4e7e7ecbed5512cf96d613e9fa7bb7e98ce8"
+    },
+    {
+      "old": "pasr_tdoa/pasr_core.py",
+      "new": "research_code/pasr/pasr_core.py",
+      "before_sha256": "1a66361ef4fedd4188eb02b59168df9e7de79c0597989216bcdd22b8446e1f07",
+      "after_sha256": "b99da88d6f3655e3039601dab3dfb28a51650a3ef05163b9ef29ba50319ef6e3"
+    },
+    {
+      "old": "pasr_tdoa/README.md",
+      "new": "research_code/pasr/README.md",
+      "before_sha256": "dc52255cce5f8f72bb55f837d59b86f01392b84f58ed4083ab6a07a00e5bd683",
+      "after_sha256": "32675e1741916e979ae09a7cecc0eaa5bf39de04f6cb725fc4af6b43dc9a992f"
+    },
+    {
+      "old": "pasr_tdoa/run_pasr_tdoa.py",
+      "new": "research_code/pasr/run_pasr_tdoa.py",
+      "before_sha256": "1c9738edeebfcc1d8f3dc4e08e17b63af0ccf937820eede05b078ea1d7508588",
+      "after_sha256": "b6ad2bd8590ca302786c9681d4a4e2dbf592ff8dd3f986bde4a9954e234f2f9f"
+    },
+    {
+      "old": "pasr_tdoa/test_pasr_core.py",
+      "new": "research_code/pasr/test_pasr_core.py",
+      "before_sha256": "4ff4ca01c7b268f633172fb274fe3a362a3f307d5865e33d4d02137765a488da",
+      "after_sha256": "914bfd7987becfd10bd7cb1c1b90539e4e5271f231df33a9176db73e151422a4"
+    },
+    {
+      "old": "pasr_tdoa/__init__.py",
+      "new": "research_code/pasr/__init__.py",
+      "before_sha256": "676ad6a12033f9ef595d9ad5291bcb382b46ae3690104c706ac32027a1ce56bb",
+      "after_sha256": "85cd3f8e8470b9611723b5a09e60a445729d632328bfdd1c81196f7bf496f38f"
+    },
+    {
+      "old": "pfrs_frequency_mask/pfrs_continuous_tdoa_validation.py",
+      "new": "research_code/pfrs/pfrs_continuous_tdoa_validation.py",
+      "before_sha256": "0bc8e745667644a3c2e825f7c6f797b8dde184d480732020868bb757f96aa03b",
+      "after_sha256": "b7445dd1c17244f27acca336fdcdfb8a09e0c850f961ca0b5f454d1128807194"
+    },
+    {
+      "old": "pfrs_frequency_mask/pfrs_finite_delay_selection.py",
+      "new": "research_code/pfrs/pfrs_finite_delay_selection.py",
+      "before_sha256": "fc31f86406485d425b4b85fbaa7987b26820259255ebc09d52ca1065d30635e6",
+      "after_sha256": "5da2b39b99cb23a004a7f0223a7efa74b601b780e592dec17841e545e87d5bcc"
+    },
+    {
+      "old": "pfrs_frequency_mask/pfrs_fixed_mask_feasibility.py",
+      "new": "research_code/pfrs/pfrs_fixed_mask_feasibility.py",
+      "before_sha256": "070d2343e38119429492853ee81c1befea692e2ac237cd33b6a34165fbd6c07c",
+      "after_sha256": "78a63ae7b4ac3ace37f9f67734b1e468ff9f7b0cf2243c0d426c4f1f093a090f"
+    },
+    {
+      "old": "standalone_frequency_alignment/alignment_core.py",
+      "new": "research_code/frequency_alignment/alignment_core.py",
+      "before_sha256": "40dddc408bcd41de1af493c844dc0767c64eb3e6e880bb32405ea5cb2e920fca",
+      "after_sha256": "434fd2ec81d669fe45594070d29e310830b94315219ca59136328e9ef9f3ef8a"
+    },
+    {
+      "old": "standalone_frequency_alignment/experiment_config.py",
+      "new": "research_code/frequency_alignment/experiment_config.py",
+      "before_sha256": "6f8da5194aab65540571994400385c599714597d67baa57d6bd4b209567ca9a6",
+      "after_sha256": "3e3b10fd9d9ac4a851599f569c399e6a73e33fe1b241c0b26809050f3953aebf"
+    },
+    {
+      "old": "standalone_frequency_alignment/plot_alignment_results.py",
+      "new": "research_code/frequency_alignment/plot_alignment_results.py",
+      "before_sha256": "a65c9f294a08f47d55bf100de636e60bf1d6c5750f941c4cca11b6cc2ae549d2",
+      "after_sha256": "824891cdf3859be0fd31857e25b221126cc5db929be26a5688bd938af584a7cd"
+    },
+    {
+      "old": "standalone_frequency_alignment/plot_bpsk_parameter_sweep.py",
+      "new": "research_code/frequency_alignment/plot_bpsk_parameter_sweep.py",
+      "before_sha256": "ed8e64d1cdce0a3ebf7d2564b44ce74acb3de1e4224c47a51bfb2285b079a4c6",
+      "after_sha256": "33b290cd6473e4d171bcf86bf833d71e475873b564c5c9915810ac24ca46d9c8"
+    },
+    {
+      "old": "standalone_frequency_alignment/plot_interpolation_mechanism.py",
+      "new": "research_code/frequency_alignment/plot_interpolation_mechanism.py",
+      "before_sha256": "f1b5c69b49c2423093c109a1d001afbd894a203a27a6d17f65463c35b0e36f0c",
+      "after_sha256": "e705c9222638a6f705ee897124efd0a199a71a5f98be900f5e45b7cb745cd0a3"
+    },
+    {
+      "old": "standalone_frequency_alignment/project_adapter.py",
+      "new": "research_code/frequency_alignment/project_adapter.py",
+      "before_sha256": "20ab1faaa47f643f1b6e78f1c299913f2e09a4fce618a0865a62534588aea999",
+      "after_sha256": "44f5320e6963b743d3589e4df1388d47cc71ca414b92c717a6a9e400af6a0205"
+    },
+    {
+      "old": "standalone_frequency_alignment/README.md",
+      "new": "research_code/frequency_alignment/README.md",
+      "before_sha256": "d1a62134b2920df96b59d86270acb7685276ebf98c4434ad9080374b6336f9fe",
+      "after_sha256": "2f3d5ae88933709aaee338bdcc3457ef6d9efa6503d1c71738087c74aed2716e"
+    },
+    {
+      "old": "standalone_frequency_alignment/run_bpsk_parameter_sweep.py",
+      "new": "research_code/frequency_alignment/run_bpsk_parameter_sweep.py",
+      "before_sha256": "1892905da5f66c53ac6166cc29b3d681a9c0ae681ef968238455e137bc796b93",
+      "after_sha256": "7d72eb4586795fb5cbd20353d986988b14e06959bc8f5218694a624a0472d789"
+    },
+    {
+      "old": "standalone_frequency_alignment/run_interpolation_alignment.py",
+      "new": "research_code/frequency_alignment/run_interpolation_alignment.py",
+      "before_sha256": "a8da543124a39c4544f0980fddd41057af8e4f8cd4ba6bfc79170ef469b434b2",
+      "after_sha256": "002b3d8c5c5410997008486e09c21cc92667867bf7c1811854e8ac873e72363b"
+    },
+    {
+      "old": "standalone_frequency_alignment/test_alignment_core.py",
+      "new": "research_code/frequency_alignment/test_alignment_core.py",
+      "before_sha256": "f5d383e2958ec99af8f1e08debd081995ccad0c19667d7d65d8aff94c5c96537",
+      "after_sha256": "67f74204c4e065d2133c1ad1298a6adc1d8044266ab408f96fa2126e6c4b124d"
+    },
+    {
+      "old": "standalone_frequency_alignment/test_tzp_dense.py",
+      "new": "research_code/frequency_alignment/test_tzp_dense.py",
+      "before_sha256": "d4cfb18437f7999cf4dbf4059939395661a003b0fc4f16c0c01e6828209f2fbf",
+      "after_sha256": "4421eeb3787f0746e373acbe1f235e9e85df5a175be2c4af85d4012b6795a1a3"
+    },
+    {
+      "old": "standalone_frequency_alignment/tzp_dense.py",
+      "new": "research_code/frequency_alignment/tzp_dense.py",
+      "before_sha256": "1badeef99902a2a82ece7d109e2ecacd8f1f2d09d3dfd794c780092875e3cc9c",
+      "after_sha256": "be0d473892768279ba7904f39e1e87d6f7e77adadf46c8ca59b20362a893ae0b"
+    },
+    {
+      "old": "standalone_frequency_alignment/zhai_selection.py",
+      "new": "research_code/frequency_alignment/zhai_selection.py",
+      "before_sha256": "c9d5cccc96a9405fae22891f7c26478d443b921e5acb1ecd6db139035e230969",
+      "after_sha256": "18a3f9b09d84194fed8406d06134242cc3dfe536bcee9bf1bb649572ea8237ba"
+    },
+    {
+      "old": "standalone_frequency_alignment/__init__.py",
+      "new": "research_code/frequency_alignment/__init__.py",
+      "before_sha256": "063ed351229b89c2b94cde6db101ec66a603285ea9c8269bac3427e9644b75de",
+      "after_sha256": "310f5f2d2a5a3d1cca5da494698e2eaf3714815f5b71dbd021860353e9241802"
+    },
+    {
+      "old": "main.py",
+      "new": "research_code/dae_pipeline/main.py",
+      "before_sha256": "3ba2ff8b633d41d47b0ebff289c86a0418b690ced507e2ef23bed3c9fe1bb47c",
+      "after_sha256": "b9814e95f4fc0db4a54500c27ba09daf90dcad6e6244cd57a35a4865567c92bd"
+    },
+    {
+      "old": "model.py",
+      "new": "research_code/dae_pipeline/model.py",
+      "before_sha256": "e8d66ec4ef94d5035c1603f415e4a12c67b22198efed33efa6b0758ef691513e",
+      "after_sha256": "3c330eeb1a7503c01f140787e257ca54e1011b13fb4fec0fcf0517f7c11f0a53"
+    },
+    {
+      "old": "train.py",
+      "new": "research_code/dae_pipeline/train.py",
+      "before_sha256": "adb581bd77f13abea93a5626fd6ab8d543d7acdb9c8f2a5115ac89397174b280",
+      "after_sha256": "e303e12627b06b218cce9112e7dc40cc6a418a570a0265450efcea2a574fd504"
+    },
+    {
+      "old": "evaluate.py",
+      "new": "research_code/dae_pipeline/evaluate.py",
+      "before_sha256": "0c59a3454d03bb65f73d9d139e64bdb0c37b787e9ec8eedba230312f7fb44f07",
+      "after_sha256": "0cde13be9e6804818df6db3abf0b95ed7f1d1e0f54058b836a66a44008b9662f"
+    },
+    {
+      "old": "experiment_profiles.py",
+      "new": "research_code/dae_pipeline/experiment_profiles.py",
+      "before_sha256": "0843b6b8c4fda035acfbe8d415fdc91dba1e14410010c46547d17135c5cd244f",
+      "after_sha256": "21136d16bbac4361a1103c5a6f090572a3d077f76346cd834899b0138d9db0b2"
+    },
+    {
+      "old": "replot.py",
+      "new": "research_code/dae_pipeline/replot.py",
+      "before_sha256": "cba41471b0b88c328716d81ce37af164eb5b8eb100f05ee822109f85894697d4",
+      "after_sha256": "5715b68a8478bb5c6939884a9773cdcf565208d48ba0deace71e0c1650416080"
+    },
+    {
+      "old": "export_results.py",
+      "new": "research_code/dae_pipeline/export_results.py",
+      "before_sha256": "493f6ad99a3ce03f8e0cb3b8d4e495b565ba02ab5d1fd35b2e86ce6008ec3bb8",
+      "after_sha256": "943de09342155838df4653e7a871e95b23caeb37bc5ff30c20444976bd074df5"
+    },
+    {
+      "old": "diagnose_go_no_go.py",
+      "new": "research_code/dae_pipeline/diagnose_go_no_go.py",
+      "before_sha256": "5c9a830402163a10937404d8daad11ce3d29bfb543426d95e4c6d5d02a6728e7",
+      "after_sha256": "5ce20f3687036a0eaa5a47d3aeeefd4111d08f1516a75ca7ef63e846e2c9c302"
+    },
+    {
+      "old": "analyze_results.py",
+      "new": "research_code/dae_pipeline/analyze_results.py",
+      "before_sha256": "8a8e575e7d4feb4587fdb99352a2e0492d28fac3be18ee8d44c0b46197736cef",
+      "after_sha256": "2d6272905af9f340a6f97737f9a90b57d984823b9d536af71a56cd6fb129f2dc"
+    },
+    {
+      "old": "compressed_tdoa.py",
+      "new": "research_code/v5_compressed_tdoa/compressed_tdoa.py",
+      "before_sha256": "f1fcbe24185ee30b53bbd6d1223508dac8683c69b770109b85953780c4a98546",
+      "after_sha256": "ffe2a5bd09abf6abae6555720055d67b1da5860cc68a91040361685af1e27f75"
+    },
+    {
+      "old": "topk_localization.py",
+      "new": "research_code/v5_compressed_tdoa/topk_localization.py",
+      "before_sha256": "538fe204ee0e4fa17ffe616eb401eade24853de4d1104bd17c992051d02476b1",
+      "after_sha256": "196585f453b818b16b064171c9a4366489b07644af58c908280e9a82e1603254"
+    },
+    {
+      "old": "diagnose_v5b_topk.py",
+      "new": "research_code/v5_compressed_tdoa/diagnose_v5b_topk.py",
+      "before_sha256": "f8596a26f84e60f205ad13c0cea0f904701d85302b675fd815dff4127283bbe8",
+      "after_sha256": "61d2e8ba73b9c6ed8021e0643938bb83c985948fb0d09f17eb67f759490cbd7d"
+    },
+    {
+      "old": "diagnose_v5b_topk_wls.py",
+      "new": "research_code/v5_compressed_tdoa/diagnose_v5b_topk_wls.py",
+      "before_sha256": "51409ba4b7971da3f5b028e7723b1908a367a00dc74fa0609e2b9016fd87a08d",
+      "after_sha256": "0c8e4e5842bef8b8c606c5855b34ec5dc744d9441c2cc29c91f110ac8ccb8fd0"
+    },
+    {
+      "old": "evaluate_topk_fairness.py",
+      "new": "research_code/v5_compressed_tdoa/evaluate_topk_fairness.py",
+      "before_sha256": "63ede6a701d77db0c251d4555e7a37b3579f430ab720f256ce64d7ad2de1a1c8",
+      "after_sha256": "5921303f9939be9ab1e9e04b6310cb23ed7bff1e43df588b4c8a1821c8de905b"
+    },
+    {
+      "old": "benchmark_fairness_complexity.py",
+      "new": "research_code/v5_compressed_tdoa/benchmark_fairness_complexity.py",
+      "before_sha256": "7acc481d3c94edd53a2ad5ff8397debd38df720446fd718a9d8c89189e44333f",
+      "after_sha256": "976d4a074d06a6dd740d7445edcb98b3d721d32fe0c17bef9a27647d5d0a6e2c"
+    },
+    {
+      "old": "signal_gen.py",
+      "new": "research_code/shared/signal_gen.py",
+      "before_sha256": "f4f08a7bb2f1acb950cdc075fecbcff48327047f258947503bc01a90c0a043bb",
+      "after_sha256": "cb03c99b2d3aa456d73883d688d45e0b0592f925c6db662a53ae2d1ff6c636de"
+    },
+    {
+      "old": "baselines.py",
+      "new": "research_code/shared/baselines.py",
+      "before_sha256": "e3de4945133311fe5db6ca282ad35e7dacf711dfbb357cad16b222c94d08a3ed",
+      "after_sha256": "a0457f840d359d2d28be8b6ab7e4762b3aa3380d6a77d2a11314f849d9cfb10c"
+    },
+    {
+      "old": "task_baselines.py",
+      "new": "research_code/shared/task_baselines.py",
+      "before_sha256": "54d86e072c5239b58a97dbedbeee012c122d7f4b8e193e8a92f1053b551cf9d4",
+      "after_sha256": "5568ba93a7d4dd28fa1fdfa6cf4bee5bcaec78caa63681e9cd75c460e1e976c2"
+    },
+    {
+      "old": "experiment_cache.py",
+      "new": "research_code/shared/experiment_cache.py",
+      "before_sha256": "60d43b6010fc1a4b0b7801e7d16f103d374e34e5154e62f8087d783c86374617",
+      "after_sha256": "d4c3c468db95eaf653b00a672da107ef6e8c8460e850465244cfa62e2e6e6a59"
+    },
+    {
+      "old": "experiment_integrity.py",
+      "new": "research_code/shared/experiment_integrity.py",
+      "before_sha256": "62efd26978cb8fd8850dc2c8035f235b6ea744d7643422105665f9441a8de83f",
+      "after_sha256": "2ea23d38d5fb3095efa82e481e85215f01f1a01496e3b10f895b315af01bf330"
+    },
+    {
+      "old": "audit_research_gates.py",
+      "new": "tools/audits/audit_research_gates.py",
+      "before_sha256": "89bf0c47bfcd326e71e5568dd4d00661f76a816d3185087aa6491b6cb3d03f0c",
+      "after_sha256": "5a90a52617910a201663464a9e78e74cf9a70cd29ce9d7d584439ca314e78bbd"
+    },
+    {
+      "old": "test_audit_research_gates.py",
+      "new": "tools/audits/test_audit_research_gates.py",
+      "before_sha256": "027b197800c15ad8c05023b6194168b136e4531010871fe7753bdbc5e969051e",
+      "after_sha256": "de84aea7264dc5af68f4264b852fd41e10f230a5272a7379407ee646392b6e8d"
+    },
+    {
+      "old": "validate_project_integrity.py",
+      "new": "tools/audits/validate_project_integrity.py",
+      "before_sha256": "c7738b1cc21eb9799602742af6b4ba2d61e75cf48dd7fbf797121956f819180e",
+      "after_sha256": "a07e1250cb904b5ede5127679434981a02fbef01bf5da3fa383ccdf2088c3b49"
+    }
+  ],
+  "entries": {
+    "运行入口/brsr/stage_ab/diagnose_stage_b_failures.py": "research_code/brsr/stage_ab/diagnose_stage_b_failures.py",
+    "运行入口/brsr/stage_ab/diagnose_stage_b_v2_profile.py": "research_code/brsr/stage_ab/diagnose_stage_b_v2_profile.py",
+    "运行入口/brsr/stage_ab/run_stage_a.py": "research_code/brsr/stage_ab/run_stage_a.py",
+    "运行入口/brsr/stage_ab/run_stage_b.py": "research_code/brsr/stage_ab/run_stage_b.py",
+    "运行入口/brsr/stage1/diagnose_quadrature.py": "research_code/brsr/stage1/diagnose_quadrature.py",
+    "运行入口/brsr/stage1/run_stage1.py": "research_code/brsr/stage1/run_stage1.py",
+    "运行入口/brsr/stage2/diagnose_stage2a1_protocol.py": "research_code/brsr/stage2/diagnose_stage2a1_protocol.py",
+    "运行入口/brsr/stage2/diagnose_stage2a_failures.py": "research_code/brsr/stage2/diagnose_stage2a_failures.py",
+    "运行入口/brsr/stage2/run_stage2a.py": "research_code/brsr/stage2/run_stage2a.py",
+    "运行入口/brsr/stage2/run_stage2a1.py": "research_code/brsr/stage2/run_stage2a1.py",
+    "运行入口/brsr/observability/audit_oracles.py": "research_code/brsr/observability/audit_oracles.py",
+    "运行入口/brsr/observability/run_certificate.py": "research_code/brsr/observability/run_certificate.py",
+    "运行入口/brsr/state_oracle/run_certificate.py": "research_code/brsr/state_oracle/run_certificate.py",
+    "运行入口/brsr/precision_replication/run_replication.py": "research_code/brsr/precision_replication/run_replication.py",
+    "运行入口/brsr/transition_regime/run_experiment.py": "research_code/brsr/transition_regime/run_experiment.py",
+    "运行入口/np_nbq_dpd/run_stage0.py": "research_code/np_nbq_dpd/run_stage0.py",
+    "运行入口/raptq/diagnose_sparse_integrator.py": "research_code/raptq/diagnose_sparse_integrator.py",
+    "运行入口/raptq/diagnose_stage0_numerical.py": "research_code/raptq/diagnose_stage0_numerical.py",
+    "运行入口/raptq/recompute_stage0_sparse_amp_phase.py": "research_code/raptq/recompute_stage0_sparse_amp_phase.py",
+    "运行入口/raptq/run_relative_phase_rate.py": "research_code/raptq/run_relative_phase_rate.py",
+    "运行入口/raptq/run_stage0.py": "research_code/raptq/run_stage0.py",
+    "运行入口/sitq/diagnose_stage_a1_threshold_stability.py": "research_code/sitq/diagnose_stage_a1_threshold_stability.py",
+    "运行入口/sitq/run_stage_a.py": "research_code/sitq/run_stage_a.py",
+    "运行入口/pasr/run_pasr_tdoa.py": "research_code/pasr/run_pasr_tdoa.py",
+    "运行入口/pfrs/pfrs_continuous_tdoa_validation.py": "research_code/pfrs/pfrs_continuous_tdoa_validation.py",
+    "运行入口/pfrs/pfrs_finite_delay_selection.py": "research_code/pfrs/pfrs_finite_delay_selection.py",
+    "运行入口/pfrs/pfrs_fixed_mask_feasibility.py": "research_code/pfrs/pfrs_fixed_mask_feasibility.py",
+    "运行入口/frequency_alignment/plot_bpsk_parameter_sweep.py": "research_code/frequency_alignment/plot_bpsk_parameter_sweep.py",
+    "运行入口/frequency_alignment/plot_interpolation_mechanism.py": "research_code/frequency_alignment/plot_interpolation_mechanism.py",
+    "运行入口/frequency_alignment/run_bpsk_parameter_sweep.py": "research_code/frequency_alignment/run_bpsk_parameter_sweep.py",
+    "运行入口/frequency_alignment/run_interpolation_alignment.py": "research_code/frequency_alignment/run_interpolation_alignment.py",
+    "运行入口/dae_pipeline/main.py": "research_code/dae_pipeline/main.py",
+    "运行入口/dae_pipeline/replot.py": "research_code/dae_pipeline/replot.py",
+    "运行入口/dae_pipeline/export_results.py": "research_code/dae_pipeline/export_results.py",
+    "运行入口/dae_pipeline/diagnose_go_no_go.py": "research_code/dae_pipeline/diagnose_go_no_go.py",
+    "运行入口/dae_pipeline/analyze_results.py": "research_code/dae_pipeline/analyze_results.py",
+    "运行入口/v5_compressed_tdoa/diagnose_v5b_topk.py": "research_code/v5_compressed_tdoa/diagnose_v5b_topk.py",
+    "运行入口/v5_compressed_tdoa/diagnose_v5b_topk_wls.py": "research_code/v5_compressed_tdoa/diagnose_v5b_topk_wls.py",
+    "运行入口/v5_compressed_tdoa/evaluate_topk_fairness.py": "research_code/v5_compressed_tdoa/evaluate_topk_fairness.py",
+    "运行入口/v5_compressed_tdoa/benchmark_fairness_complexity.py": "research_code/v5_compressed_tdoa/benchmark_fairness_complexity.py"
+  },
+  "changed_document_paths": [
+    "修改记录.md",
+    "实验结果记录.md",
+    "对话上下文.md",
+    "当前任务.md",
+    "research_code/brsr/observability/README.md",
+    "research_code/brsr/precision_replication/README.md",
+    "research_code/brsr/stage2/README.md",
+    "research_code/brsr/stage_ab/README.md",
+    "research_code/brsr/state_oracle/README.md",
+    "research_code/frequency_alignment/README.md",
+    "research_code/np_nbq_dpd/README.md",
+    "research_code/pasr/README.md",
+    "research_code/raptq/README.md",
+    "research_code/sitq/README.md"
+  ],
+  "metadata_updates": {
+    "运行结果/BRSR/BRSR_OBSERVABILITY_20260730_144448_smoke/manifest.json": [
+      "aea62855467b37e5d5665933238c83e0e798b38158e19b08caea05908a88a5b7",
+      "65a8e487a4e0ca8541c4ed0cbd1de54f388db01103c9ebcd6fa2f9332895c756"
+    ],
+    "运行结果/BRSR/BRSR_OBSERVABILITY_20260730_153403_development/manifest.json": [
+      "837268f2e3dc95e12ac18a5df5691fd235e9dc3b61a79c28eb1487094e92c104",
+      "562feea112ff6ab1d945dc274316c8fdcd93c8884f08b55c4fbc8060f8121871"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_QUADRATURE_20260723_184532_diagnostic/manifest.json": [
+      "84a02385d26c923022a92b2cef62cf51bcf6fc4c6184a882587f16246dd93b88",
+      "a2ee3c92c034166bc1b932d45a9aeed57c508246734c6a63348d2bc9c9993843"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_QUADRATURE_20260724_130434_smoke/manifest.json": [
+      "4ea51c96071aed097bf8b040f2e87d8c6dade7379ba9134d856305fffbd8fb69",
+      "0ee6204322ead7f5682db03dc22364e0bc4a722e3264c9d14551d8db1cf11bce"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_QUADRATURE_20260724_130434_smoke/recommendation.json": [
+      "15fc5f05e8f3002d342cf0e096920ac89f681047fbdf5e6664d9963b2580c77a",
+      "9b3c3a30a54cb4eb6988a3b6cdfc6e559113f19263879e157215f5f2797e1d89"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_QUADRATURE_20260724_132340_diagnostic/manifest.json": [
+      "8312097f33cb2cea195c28f6f1e82f887919a80074e2fab1954dab078130e179",
+      "414c88a006c70108766582f4b5f334e697e7238d874ed12ad1aac872fde7ad3c"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_QUADRATURE_20260724_132340_diagnostic/recommendation.json": [
+      "a8511c59f6a8bbb8d96f5a2ffa6e39bb9c25a389dc93f92549720ecc5447832f",
+      "d8328ea73340f0fd06a17b6411d6eaf118a5c163b51e6c715d1bb8d396b91486"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_STAGE1_20260723_170115_development/manifest.json": [
+      "3cb464df9b92a5686790533279937a8696318076092071e01b3c2c763b15c56b",
+      "b73a289aae215b41b9b264f442d8186a734fc1026e067fbbfccfb097868d4b2b"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_STAGE1_20260724_133720_smoke/manifest.json": [
+      "4f775f8631555cb8974de1785c88f53357b4054668a378e86045213fc1bee78b",
+      "fa03183f39d57afb7bec5c640ee96ab13bc2aea989e785b8a1586aef82afb453"
+    ],
+    "运行结果/BRSR/BRSR_ROUTE_STAGE1_20260724_134327_development/manifest.json": [
+      "703ef50abd68546ccb8104e4ede7ded4a839096778744deac33a25423cd44121",
+      "20bed7ab7dc957afd522644e1920c0e25fb914d5efde39479364be0f374275f4"
+    ],
+    "运行结果/BRSR/BRSR_S1_PRECISION_20260731_175641_smoke/manifest.json": [
+      "2ede44b580410b4d36963680b115c2cb34a467e3ff2541cb71788e2b7ccc69d4",
+      "b687712dd3c01a466837ee19caea60861aa3bb8df1c1925b74d5d2f499a112d2"
+    ],
+    "运行结果/BRSR/BRSR_S1_PRECISION_20260731_180044_development/manifest.json": [
+      "dca832fc346a3b41530c97cac82425ae10ff256e79d611ecd8ad1d1a658acbdf",
+      "05eeb0c97f2aeae17e5fc155942601d28675bdf517af1aca693457fd1073a09d"
+    ],
+    "运行结果/BRSR/BRSR_S1_PRECISION_20260731_182000_development/manifest.json": [
+      "d0d4b3ea4a9edb592be8f064c6fbb5eccd3e62d8d6a82b2164f4539aa08290d5",
+      "c079ff0cd1ca9cf39825cf958f7088bf637d55c2eb5a7fbe0a5a9b48f56d95a3"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_20260727_113929_smoke/manifest.json": [
+      "d7887076a0827e630532b915f36943e71b414c36ea47513ca0481eecbde86e33",
+      "3a198f9b67f10ffa93e115d4d1708ded3efc6a37ed098e99cac322ad1c11f81a"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_20260727_114421_smoke/manifest.json": [
+      "4d9f7dda9406ca6ca49bb490b6214c5eaf9efec5252355763334898bdd72ed9c",
+      "b11f58d950072e81fda5bb013cad85f159543a1b8e2acf000c16d30142779a20"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_20260727_115123_development/manifest.json": [
+      "3035fd78fa7182df8f15a33161a538b4e99980e7eee95de3e29a9830938fee80",
+      "d5bb58b93239e95393d8f46a4d8abdf322217cfe6d270f8b96254aa37d1a7658"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_PROTOCOL_20260727_161344_diagnostic/manifest.json": [
+      "c567a238853fc9761c814682ac854de329e91c18c2afc36720a2e85447d84847",
+      "28b992249ae469a2597b05c71879549f50cdccfc725ac49c40bac756a1b1906f"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_PROTOCOL_20260727_161344_diagnostic/protocol_decision.json": [
+      "d10c9147ef7b41802eed394ec28b3471b86dc054034028e41fe14ea69939d334",
+      "1d9d98f53eb63b9d285d9096fac8bb17652de0433f4b957eba625fc3db40efdd"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_PROTOCOL_20260727_161528_diagnostic/manifest.json": [
+      "dc2a226f61e3d5796ca5a3bd25c5251ff366206fbd34de4a570feda9ea4471c8",
+      "abe660b676eb3d5872f08220bbb6344ee7cc17ace4bd6a9426af9324bc0080b8"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A1_PROTOCOL_20260727_161528_diagnostic/protocol_decision.json": [
+      "d10c9147ef7b41802eed394ec28b3471b86dc054034028e41fe14ea69939d334",
+      "1d9d98f53eb63b9d285d9096fac8bb17652de0433f4b957eba625fc3db40efdd"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151156_smoke/gate_decision.json": [
+      "5d91d35970b6478af555670a7ed4a23945b7f1625f223d818183d75f8666f804",
+      "811117d40f44fdbedddb823bd303442d2c56ce00c9a89afe72f4b19c3571af5f"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151156_smoke/manifest.json": [
+      "e90afcdc74d8dd43d7e3120b57f4db27c6d755df9ce7e476125d051a9034773c",
+      "21e7e792d189bf6b79239017976c6d82cd02874a24a02ae5879bb7d7a027e34d"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151516_smoke/gate_decision.json": [
+      "3c318cefde1bf93f086d64e3aaeff65a5a16677306be57e9db907589fcc751a3",
+      "642e87e1d69e4a360d8c12f15884ab60bb31410843f976053b2553c4b321076e"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151516_smoke/manifest.json": [
+      "53c744229cad3a9fe3519cbd44ee3b563bc0633764c80ed72aa4b0f65b13b6c1",
+      "10275fe5ef0d697e150319f9a28679685c9c6d143368523c35bf109cfaa0ac57"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151830_smoke/gate_decision.json": [
+      "3c318cefde1bf93f086d64e3aaeff65a5a16677306be57e9db907589fcc751a3",
+      "642e87e1d69e4a360d8c12f15884ab60bb31410843f976053b2553c4b321076e"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_151830_smoke/manifest.json": [
+      "57ca63eef0c80b734f2a9a9be083b60196b7c9581590b3c2bae29cc863ee0738",
+      "01c629d46e5644f0713c63507a8a558428a763dee9ff3260ff11ab7943cbead5"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_153144_development/gate_decision.json": [
+      "57567322119152871e17d4bf6b660b888765da1f5c8c9ccc9d82fc34c1dd7d8b",
+      "40ed86c8f754d6763ebe434c31f4461f46352c0101e2d4e56afd1f287b37c78a"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_20260724_153144_development/manifest.json": [
+      "d4fafcf3c0ed006a948e3a93fd5fd18b9609777fcf023b2a2fa5eb0e8a499865",
+      "0591c17654fcb1b47d519486d99ffd87170ae5c738142f0049be5903cbbc9ef6"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_094752_smoke/diagnostic_decision.json": [
+      "15ef3aedcb1a8dfe085e923773419c223b507ef51b7d508bea7c8dfc6bef92bf",
+      "0ef774012281e7a56ea890f56549cd2677383273f5d1001c91c542fd9c98435c"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_094752_smoke/manifest.json": [
+      "5f68c8fd0a2532860b07c14bf1c60f9ac0f07ff77aba48f86e524617222906a3",
+      "b57b6b8db5089acd9c5910162c409ef9e03c2b6756e18d75a93c1a57395a2c12"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_094812_diagnostic/diagnostic_decision.json": [
+      "3d1b30b92195fc494891705a6728496cbf840d56527903447b6cdeb86580dc46",
+      "d0ff4082e35fe0a8e426857a013653e5d3c22f6984006438c729e3ee2bdfe548"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_094812_diagnostic/manifest.json": [
+      "028096d712b9c49c0d71b9befcfe3dd1934ce72a2f29b8fcd4759257d8b928ac",
+      "4e20fe948eb49bb0f1a912dc4a7623370c3a355f28170eb75b0758d28757cb20"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_095121_diagnostic/diagnostic_decision.json": [
+      "9dbbe7c928e3516ce1dbfc5c3107409dd487aeede2f3b1dd29025a83f3c2ecb2",
+      "586295b4a96ebaacaa3774e192ca7edcd4f276fa963b9dee34fd2a8b94b5d75c"
+    ],
+    "运行结果/BRSR/BRSR_STAGE2A_FAILURE_20260727_095121_diagnostic/manifest.json": [
+      "80e871565ed8f6fb07311801c6c1461a33ab299eee5c4beba394d9d07bf8c8c0",
+      "7fa39ca93ba29609330e0ee30705cb3fa2c5a06962105e0efd67d2de12a49ae2"
+    ],
+    "运行结果/BRSR/BRSR_STAGE_B_20260718_173940_development/manifest.json": [
+      "5a8c5eb33ca7d207604a16b3e58f87c5999b31c4ea297c3e93958e04efaa70b1",
+      "dbd0467596978760e45824e72dda39530944514915d48b3db773916ea25a40cd"
+    ],
+    "运行结果/BRSR/BRSR_STAGE_B_DIAG_20260720_180002_diagnostic/manifest.json": [
+      "a67662e4eaa803884e475b427356ad6894f8ac496e00131a9c0ae9bd932508d5",
+      "8957acf5567032b2ae625a3498cd98e5ed209cd35bb8b33b7fc4a41f67823e47"
+    ],
+    "运行结果/BRSR/BRSR_STAGE_B_V2_STEP1_20260722_192558_research/manifest.json": [
+      "849ea8bf3a5f27f9ca0b56d287d021fad41aab13ad1c22485d4baf1820dfb65e",
+      "44a32bf43c9b947572b89321eccc40fb5561aadc566e15f67f675b6f8b9a94af"
+    ],
+    "运行结果/BRSR/BRSR_STATE_ORACLE_20260731_164622_smoke/manifest.json": [
+      "b5b1cb8a1383648be00bbfeb5d2594b41628c34527211130d26dd08db5343a83",
+      "5b89e575a26aa3738ae17fc86e940e398dae74f2b4628b9fbeb9c0ed5e038794"
+    ],
+    "运行结果/BRSR/BRSR_STATE_ORACLE_20260731_170154_development/manifest.json": [
+      "c42288c35675ff2294981d0ef78df18b11b51b475bc2a38243668587287c4023",
+      "3aeb683fcd6236708c894d03ca46d45819e946c0fd19be6fe75466ff87cb88f3"
+    ],
+    "运行结果/BRSR/BRSR_TRANSITION_20260801_174253_smoke/manifest.json": [
+      "e060c895a17a4bf2f15048d5f333a3b21a95b99d86e8e114f7e7677294cce5db",
+      "96159f25a947de1130513e614c96a6193435cd8b48e589d6bd586cd77452bcb0"
+    ],
+    "运行结果/BRSR/BRSR_TRANSITION_20260802_175247_development/manifest.json": [
+      "aba69f061d74101308e3fe67746993dbb6ec2c40bb10e78a41fe78ec73b7113b",
+      "9c3dc57c00a73c1963b7dbfe3d5cc6a33534c65851c649b1fe96703135117f49"
+    ],
+    "运行结果/NP_NBQ_DPD/NP_NBQ_STAGE0_20260819_165042_development/manifest.json": [
+      "d4909f68f7d07b5b3a41df075010646820bbd5c4b183d9c6fc6182d50ffc7ba4",
+      "19c4fb0a99e94b82cb3a9ac3767b947aa17bccb96df081b5264a6112bcea01fe"
+    ],
+    "运行结果/RAPTQ/RAPTQ_RELATIVE_PHASE_RATE_20260813_165407_development/config_manifest.json": [
+      "9a3c5de83d83c073cabfa4de2074348f99f04657bf8b219cc3c571c4efecc014",
+      "6f010802d6ac49f3ad8a91d3b48e8963ee19bcd9959d8a262fff3bf6b4c9b0ff"
+    ],
+    "运行结果/RAPTQ/RAPTQ_SPARSE_INTEGRATOR_20260813_102100_development/config_manifest.json": [
+      "55d0b0e22c2fcc398573f434767db2ce5dbec96d639a8ea96b1afb371acd7ba7",
+      "6af84e7d6998f6ba143548b96beaed806f9610a9a2dce7a2786dbd56226fee76"
+    ],
+    "运行结果/RAPTQ/RAPTQ_STAGE0_NUMERICAL_20260805_115458_development/config_manifest.json": [
+      "60f9b33f79305523aa3655956a2d4df2652b39215a4cc3ce922b2b3e5e29d25b",
+      "0e3373daabebb5300041fa73d4a40fd5ba3649e238bcce954b265c13c7c56faf"
+    ],
+    "运行结果/RAPTQ/RAPTQ_STAGE0_SPARSE_CORRECTION_20260813_150041_development/config_manifest.json": [
+      "a8d2a330b0ef5fd90c5807beaaa9ac263067243e8c358a3be4fca01887184a80",
+      "6315855c54089fc1233d483f60b506e828b48c31f3edfb09252106ef72e8001a"
+    ],
+    "运行结果/SITQ/SITQ_STAGE_A1_20260803_140306_diagnostic/config_manifest.json": [
+      "fd6bb3b4a23217e2dfc888eebfba66580d72787a942e872a7727adf5653da680",
+      "9f9eae3007e5245b44380b98e72141aa709dc0d9b1eb5162b3a7b100370aa3ec"
+    ],
+    "运行结果/SITQ/SITQ_STAGE_A_20260803_132419_development/config_manifest.json": [
+      "9cc7bd99b209feeef0223c6e2b3a6b9a11305e723440a0115ece40d4590013b8",
+      "aa6f830d980b1f20a8f1ffc1cdf75f3cbe81a33ad9dab810429fed2a9a121c3b"
+    ],
+    "运行结果/研究门禁审计/20260723_140409_只读回溯审计/audit_manifest.json": [
+      "dfde435063ca926b79ba7846e5bd1f992f079466799613e27ff0060d335ad0ca",
+      "db832e30310acf4658dfb2b8bfa36001b6193fc4dfa033d4147d67068b68e36e"
+    ],
+    "运行结果/研究门禁审计/GATE_AUDIT_20260727_162324_readonly/audit_manifest.json": [
+      "41dde24a3cec15cdbe053112df47bceadec9f1a5a84578c93fc734ff13ada6be",
+      "292d0ce458fb06cd948b1584677b5df97099dc00ca84283c9a1e9850d2326250"
+    ],
+    "运行结果/BRSR/BRSR_STAGE_A_20260717_183435_research/manifest.json": [
+      "cb91c8d4d1fe1e17dd271c0f10a3e0c35b9bc2c1220e3eec781fbe9020dfda3c",
+      "b987a6eb4576128a0e720c20512bd7e4f31c40963c972785904410af48793c55"
+    ],
+    "运行结果/PASR/PASR_20260716_193437_research/pasr_manifest.json": [
+      "b60631e84fba5981a30393f683a60f21a5fd376d1c62d6283cab5803c3b626ba",
+      "255e6b92ad57a01fb2a6bb5b00e8203a6b1226d76ca2b0d5b240181005494487"
+    ],
+    "运行结果/压缩域TDOA_V5/20260709_120019_V5B专家门控/tables/topk_fairness/fair_topk_dev_manifest.json": [
+      "5793c611c6cc792d7989bf4d489fb5ff7ff00402af5bded740020618d73f8322",
+      "1300c461056fbb35464107d5f7a44d2f69eeaf5d0a3ed939c89c7dd6152547b2"
+    ],
+    "运行结果/压缩域TDOA_V5/20260711_154042_V5B_Shared64严格CR16/tables/topk_fairness/fair_native_dev_multi_pool_manifest.json": [
+      "9224da09d01bcc9086ff41cfab25adc75589f44e7098673fd51db81f9d31211a",
+      "2c9206b885154405c88975bb8ac242b39475690d1066cede72a05b73fca2ea4b"
+    ]
+  },
+  "hash_update_rounds": 3,
+  "normalized_hashes_updated": true,
+  "fingerprint_aliases": {
+    "3277fed06fcd171fe2478f0da5148d085415bf3882dd6ef2e8d1881d68b3b003": "194ad53f41a1e0eea141e9bf7d5d08241362a3e489d810528ee48e26d597a942",
+    "03e2745f35ffc3cc068ec385f77c010417f5ca9c5f082165035e54bd5b8e71ad": "194ad53f41a1e0eea141e9bf7d5d08241362a3e489d810528ee48e26d597a942",
+    "c308e68ccf38ec5bf61c4398cdda91e27678f620f71602f52f395e01bb0720d0": "e836b053266d127e2e5d53734ae67addc20a1e262b9985e50951eec91fa0f6b7",
+    "98e1570f1ea091155f11a6ba0e7add41ad1afa22bb46140a93acca0e593c1626": "e836b053266d127e2e5d53734ae67addc20a1e262b9985e50951eec91fa0f6b7"
+  }
+}
